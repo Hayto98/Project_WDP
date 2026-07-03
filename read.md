@@ -31,27 +31,64 @@ Hệ thống được thiết kế và xây dựng nhằm đạt được các m
 
 ---
 
-### 4. ĐỐI TƯỢNG SỬ DỤNG (ACTORS)
-Hệ thống hướng tới việc phục vụ toàn diện cho 4 nhóm đối tượng chính trong môi trường học thuật:
-1. **Sinh viên:**
-   * Tìm kiếm tài liệu tham khảo chính thống, nhanh chóng.
-   * Khám phá các chủ đề nghiên cứu phù hợp với năng lực và sở thích.
-   * Theo dõi các xu hướng công nghệ mới nổi phục vụ làm đồ án, luận văn.
-2. **Giảng viên:**
-   * Theo dõi sự phát triển tổng thể của các lĩnh vực nghiên cứu chuyên sâu.
-   * Hỗ trợ, định hướng và dẫn dắt sinh viên lựa chọn đề tài tốt nghiệp có tính thực tiễn cao.
-   * Phân tích mức độ phổ biến, mức độ bão hòa của các chủ đề nghiên cứu.
-3. **Nhà nghiên cứu:**
-   * Khám phá các hướng đi mới, mang tính tiên phong.
-   * Phân tích sâu sắc sự tiến hóa của các công nghệ cốt lõi.
-   * Xác định chính xác các khoảng trống nghiên cứu để thực hiện đề tài cấp cơ sở/cấp bộ.
-   * Theo dõi các công trình mới nhất từ các đồng nghiệp thuộc cùng lĩnh vực chuyên môn.
-4. **Quản trị viên (Admin):**
-   * Quản lý thông tin và phân quyền người dùng hệ thống.
-   * Quản lý các cổng kết nối nguồn dữ liệu nghiên cứu đầu vào.
-   * Cấu hình, bảo trì và tối ưu hóa Research Corpus.
-   * Theo dõi nhật ký hoạt động nhằm duy trì tính ổn định của hệ thống.
+### 4. ĐỐI TƯỢNG SỬ DỤNG & PHÂN QUYỀN (ACTORS & RBAC)
 
+Hệ thống phân biệt **hai lớp khái niệm**:
+
+| Lớp | Số lượng | Mục đích |
+| :--- | :--- | :--- |
+| **Persona (đối tượng nghiệp vụ)** | 4 nhóm | Mô tả *ai* sử dụng hệ thống và *mục đích* sử dụng |
+| **Role hệ thống (RBAC)** | **2 role** | Kiểm soát *quyền truy cập* trong code và cơ sở dữ liệu (BR-039, FR-011) |
+
+#### 4.1. Role hệ thống (RBAC)
+
+Mỗi tài khoản có một hoặc nhiều role, lưu trong `users.roles`. Giai đoạn hiện tại chỉ triển khai **2 role**:
+
+| Role | Mô tả | Quyền truy cập |
+| :--- | :--- | :--- |
+| **Student** | Người dùng học thuật | Tìm kiếm, xem chi tiết bài báo, phân tích xu hướng, Research Gap, dashboard, thư viện cá nhân, theo dõi chủ đề, thông báo, hỗ trợ AI |
+| **Admin** | Quản trị viên hệ thống | Toàn bộ quyền **Student** + dashboard quản trị, giám sát thu thập dữ liệu, xem log, cấu hình nguồn dữ liệu, vận hành Research Corpus, xử lý phản hồi người dùng |
+
+**Xác thực:** Đăng ký/đăng nhập bằng email và mật khẩu (hash bcrypt). Role được load cùng profile ngay khi đăng nhập (BR-039). Không tích hợp OAuth/SSO hay LMS/SIS trong giai đoạn này (§5.9).
+
+#### 4.2. Persona nghiệp vụ → Role hệ thống
+
+Bốn nhóm đối tượng dưới đây là **persona mô tả nhu cầu sử dụng**, không phải role riêng trong RBAC:
+
+| Persona | Role RBAC | Ghi chú |
+| :--- | :--- | :--- |
+| Sinh viên | **Student** | Cùng quyền với Giảng viên và Nhà nghiên cứu |
+| Giảng viên | **Student** | Không có role `Instructor` riêng |
+| Nhà nghiên cứu | **Student** | Không có role `Researcher` riêng |
+| Quản trị viên | **Admin** | Tài khoản được gán role `Admin` |
+
+#### 4.3. Nhu cầu sử dụng theo persona
+
+**Persona: Sinh viên** *(Role: Student)*
+
+* Tìm kiếm tài liệu tham khảo chính thống, nhanh chóng.
+* Khám phá các chủ đề nghiên cứu phù hợp với năng lực và sở thích.
+* Theo dõi các xu hướng công nghệ mới nổi phục vụ làm đồ án, luận văn.
+
+**Persona: Giảng viên** *(Role: Student)*
+
+* Theo dõi sự phát triển tổng thể của các lĩnh vực nghiên cứu chuyên sâu.
+* Hỗ trợ, định hướng và dẫn dắt sinh viên lựa chọn đề tài tốt nghiệp có tính thực tiễn cao.
+* Phân tích mức độ phổ biến, mức độ bão hòa của các chủ đề nghiên cứu.
+
+**Persona: Nhà nghiên cứu** *(Role: Student)*
+
+* Khám phá các hướng đi mới, mang tính tiên phong.
+* Phân tích sâu sắc sự tiến hóa của các công nghệ cốt lõi.
+* Xác định chính xác các khoảng trống nghiên cứu để thực hiện đề tài cấp cơ sở/cấp bộ.
+* Theo dõi các công trình mới nhất từ các đồng nghiệp thuộc cùng lĩnh vực chuyên môn.
+
+**Persona: Quản trị viên** *(Role: Admin)*
+
+* Quản lý thông tin và phân quyền người dùng hệ thống (gán role Student/Admin).
+* Quản lý các cổng kết nối nguồn dữ liệu nghiên cứu đầu vào.
+* Cấu hình, bảo trì và tối ưu hóa Research Corpus.
+* Theo dõi nhật ký hoạt động nhằm duy trì tính ổn định của hệ thống.
 ---
 
 ### 5. PHẠM VI DỰ ÁN (SCOPE OF PROJECT)
@@ -66,7 +103,7 @@ Dưới đây là bảng phân định chi tiết phạm vi tính năng được
 | **4** | **Sáng tạo nội dung** | - Đề xuất và gợi ý tên đề tài hoặc từ khóa mang tính chất định hướng nghiên cứu cho người dùng. | - **Không** ứng dụng AI để tự động soạn thảo, viết nội dung bài báo khoa học hay luận văn thay cho người dùng. |
 | **5** | **Phân tích xu hướng & Khoảng trống** | - Thống kê định lượng số lượng công bố theo thời gian.<br>- Xác định các chủ đề đang tăng trưởng nóng và đánh giá tốc độ phát triển của từng nhánh lĩnh vực.<br>- Phát hiện **Research Gap** bằng cách so sánh mật độ công bố giữa các chủ đề để tìm ra vùng dữ liệu tiềm năng ít người khai thác. | - **Không** thực hiện phân tích NLP (Natural Language Processing) trên văn bản toàn văn (full-text) do rào cản bản quyền dữ liệu. |
 | **6** | **Trực quan hóa & Dashboard** | - Xây dựng hệ thống đồ thị, biểu đồ trực quan hóa dữ liệu biến động xu hướng theo thời gian.<br>- Cung cấp Dashboard tổng quan hiển thị các thông số đo lường học thuật cho người dùng. | *(Đã bao hàm trọn vẹn trong phạm vi phát triển)* |
-| **7** | **Quản lý người dùng & Thư viện** | - Cung cấp không gian lưu trữ cá nhân (Thư viện cá nhân) giúp lưu bài báo, phân loại theo bộ sưu tập.<br>- Tính năng đăng ký theo dõi từ khóa/lĩnh vực và nhận thông báo tự động khi có bài báo mới cập nhật.<br>- Phân hệ Admin quản lý tài khoản, dữ liệu và trạng thái hệ thống. | - **Không** hỗ trợ các tính năng cộng tác nhóm nghiên cứu thời gian thực (như chia sẻ bộ sưu tập dùng chung, bình luận chéo giữa các tài khoản). |
+| **7** | **Quản lý người dùng & Thư viện** | - Phân quyền **RBAC** với 2 role: `Student` (sinh viên, giảng viên, nhà nghiên cứu) và `Admin` (quản trị viên).<br>- Cung cấp không gian lưu trữ cá nhân (Thư viện cá nhân) giúp lưu bài báo, phân loại theo bộ sưu tập.<br>- Tính năng đăng ký theo dõi từ khóa/lĩnh vực và nhận thông báo tự động khi có bài báo mới cập nhật.<br>- Phân hệ Admin quản lý tài khoản, dữ liệu và trạng thái hệ thống. | - **Không** tạo role riêng cho Giảng viên/Nhà nghiên cứu (Instructor, Researcher, v.v.).<br>- **Không** hỗ trợ các tính năng cộng tác nhóm nghiên cứu thời gian thực (như chia sẻ bộ sưu tập dùng chung, bình luận chéo giữa các tài khoản). |
 | **8** | **Hỗ trợ AI** | - Sử dụng mô hình ngôn ngữ lớn để tóm tắt bài báo (dựa trên Abstract), gợi ý các tài liệu liên quan, giải thích thuật ngữ chuyên ngành khó và gợi ý hướng nghiên cứu tiếp theo từ abstract. | - **Không** phân tích AI sâu hơn ngoài phạm vi vùng dữ liệu metadata và abstract được phê duyệt hệ thống. |
 | **9** | **Tích hợp & Mở rộng** | - Hệ thống hoạt động độc lập, tập trung xử lý dữ liệu học thuật được định nghĩa sẵn. | - **Không** cào hoặc thu thập dữ liệu từ các nguồn phi học thuật (như Blog, Mạng xã hội, Diễn đàn, Tài liệu nội bộ).<br>- **Không** tích hợp trực tiếp với các hệ thống quản lý đào tạo đại học (LMS, SIS) hoặc các công cụ quản lý trích dẫn bên thứ ba (Mendeley, Zotero, EndNote, Overleaf).<br>- **Không** cung cấp API công khai (Public API) cho các bên ngoài khai thác trong giai đoạn này. |
 | **10** | **Tính năng nâng cao** | - Phân tích dựa trên số lượng bài báo được xuất bản theo các chiều thời gian và từ khóa. | - **Không** hỗ trợ xây dựng và phân tích mạng lưới trích dẫn sâu (Citation Network, đồng trích dẫn, tính toán thời gian thực chỉ số h-index, Impact Factor). |
