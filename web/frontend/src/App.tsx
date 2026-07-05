@@ -3,22 +3,35 @@ import { Sidebar, NAV } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { useTheme } from "./hooks/useTheme";
+import { AdminPage } from "./pages/AdminPage";
 import { FollowPage } from "./pages/FollowPage";
 import { GapPage } from "./pages/GapPage";
+import { HomePage } from "./pages/HomePage";
 import { LibraryPage } from "./pages/LibraryPage";
+import { NotificationPage } from "./pages/NotificationPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SearchPage } from "./pages/SearchPage";
 import { TrendsPage } from "./pages/TrendsPage";
+import { WorkspacePage } from "./pages/WorkspacePage";
 
 export default function App() {
   const { theme, toggle } = useTheme();
-  const route = useHashRoute("overview");
+  const route = useHashRoute("home");
+
+  if (route === "admin") {
+    return <AdminPage theme={theme} toggle={toggle} />;
+  }
+  if (route === "home") {
+    return <HomePage theme={theme} toggle={toggle} />;
+  }
 
   return (
     <div className="app">
       <Sidebar active={route} />
       {route === "search" ? (
         <SearchPage theme={theme} toggle={toggle} />
+      ) : route === "notifications" ? (
+        <NotificationPage theme={theme} toggle={toggle} />
       ) : route === "trends" ? (
         <TrendsPage theme={theme} toggle={toggle} />
       ) : route === "gap" ? (
@@ -27,6 +40,8 @@ export default function App() {
         <LibraryPage theme={theme} toggle={toggle} />
       ) : route === "follow" ? (
         <FollowPage theme={theme} toggle={toggle} />
+      ) : route === "workspace" ? (
+        <WorkspacePage theme={theme} toggle={toggle} />
       ) : route === "overview" ? (
         <OverviewPage theme={theme} toggle={toggle} />
       ) : (

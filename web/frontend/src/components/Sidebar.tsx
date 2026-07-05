@@ -10,8 +10,10 @@ import {
 
 export const NAV = [
   { id: "overview", label: "Tổng quan", icon: IconGrid },
+  { id: "notifications", label: "Thông báo", icon: IconBell },
   { id: "search", label: "Tìm kiếm", icon: IconSearch },
   { id: "trends", label: "Phân tích xu hướng", icon: IconTrend },
+  { id: "workspace", label: "Workspace", icon: IconGrid },
   { id: "gap", label: "Research Gap", icon: IconGap },
   { id: "library", label: "Thư viện", icon: IconLibrary },
   { id: "follow", label: "Theo dõi", icon: IconBell },
@@ -20,14 +22,14 @@ export const NAV = [
 export function Sidebar({ active }: { active: string }) {
   return (
     <nav className="sidebar" aria-label="Điều hướng chính">
-      <div className="sidebar__brand">
+      <a className="sidebar__brand" href="#home">
         <span className="sidebar__logo" aria-hidden>
           <IconTelescope />
         </span>
         <span className="sidebar__brand-text">
           Research<strong>Trends</strong>
         </span>
-      </div>
+      </a>
 
       <ul className="sidebar__nav">
         {NAV.map((n) => {
@@ -49,10 +51,6 @@ export function Sidebar({ active }: { active: string }) {
       </ul>
 
       <div className="sidebar__foot">
-        <a className="navlink navlink--admin" href="#admin">
-          <IconGrid width={19} height={19} />
-          <span>Phân hệ Admin</span>
-        </a>
         <div className="userchip">
           <span className="userchip__avatar" aria-hidden>
             MT
