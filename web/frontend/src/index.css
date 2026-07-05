@@ -69,8 +69,19 @@
   --s-7: 48px;
 
   /* --- Type --- */
-  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-body: 1rem;
+  --text-lead: 1.125rem;
+  --text-title: 1.375rem;
+  --text-heading: 1.75rem;
+  --text-display: clamp(3rem, 6.4vw, 5.75rem);
+  --leading-tight: 1.08;
+  --leading-title: 1.2;
+  --leading-body: 1.6;
+  --tracking-tight: -0.03em;
 
   /* --- Motion --- */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -153,10 +164,12 @@ html {
 body {
   min-height: 100vh;
   font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--ink);
   background: var(--bg);
+  font-kerning: normal;
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background var(--dur-2) var(--ease-out),
@@ -167,10 +180,10 @@ h1,
 h2,
 h3,
 h4 {
-  font-weight: 600;
-  line-height: 1.2;
+  font-weight: 700;
+  line-height: var(--leading-title);
   text-wrap: balance;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-tight);
 }
 
 button {

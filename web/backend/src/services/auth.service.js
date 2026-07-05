@@ -1,0 +1,141 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const { jwt: jwtConfig } = require('../config/env');
+
+/**
+ * Generate JWT tokens for a user.
+ */
+function generateTokens(user) {
+  const payload = { id: user._id, email: user.email, roles: user.roles };
+
+  const accessToken = jwt.sign(payload, jwtConfig.secret, {
+    expiresIn: jwtConfig.expiresIn,
+  });
+
+  const refreshToken = jwt.sign(payload, jwtConfig.refreshSecret, {
+    expiresIn: jwtConfig.refreshExpiresIn,
+  });
+
+  return { accessToken, refreshToken };
+}
+
+/**
+ * Register a new user.
+ */
+async function register({ email, password, full_name }) {
+  const existing = await User.findOne({ email: email.toLowerCase() });
+  if (existing) {
+    throw Object.assign(new Error('Email already registered'), { statusCode: 409 });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const password_hash = await bcrypt.hash(password, salt);
+
+  const user = await User.create({
+    email: email.toLowerCase(),
+    password_hash,
+    full_name,
+    roles: ['Student'],
+    status: 'Active',
+  });
+
+  const tokens = generateTokens(user);
+
+  return {
+    user: {
+      id: user._id,
+      email: user.email,
+      full_name: user.full_name,
+      roles: user.roles,
+      status: user.status,
+    },
+    ...tokens,
+  };
+}
+
+/**
+ * Login with email + password.
+ */
+async function login({ email, password }) {
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) {
+    throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
+  }
+
+  if (user.status === 'Banned') {
+    throw Object.assign(new Error('Account is banned'), { statusCode: 403 });
+  }
+
+  const valid = await bcrypt.compare(password, user.password_hash);
+  if (!valid) {
+    throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
+  }
+
+  const tokens = generateTokens(user);
+
+  return {
+    user: {
+      id: user._id,
+      email: user.email,
+      full_name: user.full_name,
+      roles: user.roles,
+      status: user.status,
+    },
+    ...tokens,
+  };
+}
+
+/**
+ * Get current user profile (including embedded data).
+ */
+async function getProfile(userId) {
+  const user = await User.findById(userId).select('-password_hash');
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+  return user;
+}
+
+/**
+ * Update current user profile.
+ */
+async function updateProfile(userId, updates) {
+  const allowed = {};
+  if (updates.full_name) allowed.full_name = updates.full_name;
+  if (updates.email) allowed.email = updates.email.toLowerCase();
+
+  const user = await User.findByIdAndUpdate(userId, allowed, {
+    new: true,
+    runValidators: true,
+  }).select('-password_hash');
+
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+  return user;
+}
+
+/**
+ * Update dashboard layout.
+ */
+async function updateDashboardLayout(userId, layout) {
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { dashboard_layout: layout },
+    { new: true },
+  ).select('dashboard_layout');
+
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+  return user.dashboard_layout;
+}
+
+module.exports = {
+  register,
+  login,
+  getProfile,
+  updateProfile,
+  updateDashboardLayout,
+};
