@@ -13,6 +13,8 @@ import { OverviewPage } from "./pages/OverviewPage";
 import { SearchPage } from "./pages/SearchPage";
 import { TrendsPage } from "./pages/TrendsPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
 
 export default function App() {
   const { theme, toggle } = useTheme();
@@ -20,6 +22,12 @@ export default function App() {
 
   if (route === "admin") {
     return <AdminPage theme={theme} toggle={toggle} />;
+  }
+  if (route === "login") {
+    return <LoginPage theme={theme} toggle={toggle} />;
+  }
+  if (route === "register") {
+    return <RegisterPage theme={theme} toggle={toggle} />;
   }
   if (route === "home") {
     return <HomePage theme={theme} toggle={toggle} />;
