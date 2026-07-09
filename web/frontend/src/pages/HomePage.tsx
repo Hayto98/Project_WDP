@@ -13,6 +13,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import type { Theme } from "../hooks/useTheme";
 import { useReveal } from "../hooks/useReveal";
 import { WelcomeScreen } from "../components/WelcomeScreen";
+import { Footer } from "../components/Footer";
 
 interface Props {
   theme: Theme;
@@ -261,6 +262,8 @@ export function HomePage({ theme, toggle }: Props) {
           </a>
         </div>
       </section>
+      
+      <Footer />
     </main>
     </>
   );
