@@ -1,10 +1,10 @@
 import { useRef, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Points, PointMaterial, Sparkles, Float, Sphere, MeshDistortMaterial, Text } from "@react-three/drei";
-import { EffectComposer, Bloom, DepthOfField, ChromaticAberration, Noise, Vignette } from "@react-three/postprocessing";
+import { Points, PointMaterial, Sparkles, Float, Sphere, MeshDistortMaterial, Text } from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 
-const aberrationOffset = new THREE.Vector2(0.002, 0.002);
+// Scene Components
 
 function Core() {
   const materialRef = useRef<any>(null!);
@@ -39,7 +39,7 @@ function Core() {
 
 function Swarm() {
   const ref = useRef<THREE.Group>(null!);
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (ref.current) {
       ref.current.rotation.x -= delta * 0.05;
       ref.current.rotation.y += delta * 0.07;
