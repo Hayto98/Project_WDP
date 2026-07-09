@@ -2,12 +2,7 @@ import { useState } from "react";
 import { IconTelescope } from "../components/icons";
 import "./Auth.css";
 
-interface Props {
-  theme?: any;
-  toggle?: () => void;
-}
-
-export function LoginPage({ theme }: Props) {
+export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 

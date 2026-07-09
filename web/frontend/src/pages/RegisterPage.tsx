@@ -1,12 +1,7 @@
 import { useState } from "react";
 import "./Auth.css";
 
-interface Props {
-  theme?: any;
-  toggle?: () => void;
-}
-
-export function RegisterPage({ theme }: Props) {
+export function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

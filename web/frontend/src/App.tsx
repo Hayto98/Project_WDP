@@ -24,10 +24,10 @@ export default function App() {
     return <AdminPage theme={theme} toggle={toggle} />;
   }
   if (route === "login") {
-    return <LoginPage theme={theme} toggle={toggle} />;
+    return <LoginPage />;
   }
   if (route === "register") {
-    return <RegisterPage theme={theme} toggle={toggle} />;
+    return <RegisterPage />;
   }
   if (route === "home") {
     return <HomePage theme={theme} toggle={toggle} />;
