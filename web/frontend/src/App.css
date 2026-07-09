@@ -17,19 +17,7 @@
   position: relative;
 }
 
-/* Intro Animation (UI Reveal) */
-.home-site > *:not(.network-scene-wrapper) {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(40px);
-  transition: opacity 2s var(--ease-fluid), transform 2s var(--ease-fluid);
-  transition-delay: 1s; /* Wait for 3D camera zoom to settle */
-}
-.home-site.is-entered > *:not(.network-scene-wrapper) {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
+
 
 /* Base Motion Easing: Cubic Bezier (Fluid Dynamics) */
 :root {

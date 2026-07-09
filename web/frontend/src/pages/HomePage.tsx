@@ -12,8 +12,6 @@ import {
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { Theme } from "../hooks/useTheme";
 import { useReveal } from "../hooks/useReveal";
-import { NetworkScene } from "../components/NetworkScene";
-import { LoadingScreen } from "../components/LoadingScreen";
 import { WelcomeScreen } from "../components/WelcomeScreen";
 
 interface Props {
@@ -54,15 +52,19 @@ const MODULES = [
 
 export function HomePage({ theme, toggle }: Props) {
   const revealRef = useReveal();
-  const [step, setStep] = useState<"loading" | "welcome" | "entered">("loading");
+  const [showWelcome, setShowWelcome] = useState(() => {
+    return !sessionStorage.getItem("hasSeenWelcome");
+  });
+
+  const handleWelcomeComplete = () => {
+    sessionStorage.setItem("hasSeenWelcome", "true");
+    setShowWelcome(false);
+  };
 
   return (
     <>
-      {step === "loading" && <LoadingScreen onLoaded={() => setStep("welcome")} />}
-      {step === "welcome" && <WelcomeScreen onEnter={() => setStep("entered")} />}
-      
-      <main className={`home-site ${step === "entered" ? "is-entered" : ""}`} ref={revealRef}>
-        <NetworkScene entered={step === "entered"} />
+      {showWelcome && <WelcomeScreen onEnter={handleWelcomeComplete} />}
+      <main className="home-site" ref={revealRef}>
         <nav className="home-nav" aria-label="Điều hướng trang giới thiệu">
         <a className="home-brand group" href="#home">
           <span className="home-brand__mark transition-transform duration-700 ease-fluid group-hover:scale-105" aria-hidden>
@@ -259,7 +261,7 @@ export function HomePage({ theme, toggle }: Props) {
           </a>
         </div>
       </section>
-      </main>
+    </main>
     </>
   );
 }
