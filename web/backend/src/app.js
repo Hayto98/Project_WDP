@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const connectDB = require('./config/database');
 const { port, corsOrigin, nodeEnv } = require('./config/env');
 const { apiLimiter } = require('./middleware/rateLimiter.middleware');
+const { logAction } = require('./utils/systemLogger');
 
 // Route imports
 const authRoutes = require('./routes/auth.routes');
@@ -22,6 +23,7 @@ const workspaceRoutes = require('./routes/workspace.routes');
 const collaborationRoutes = require('./routes/collaboration.routes');
 const adminRoutes = require('./routes/admin.routes');
 const feedbackRoutes = require('./routes/feedback.routes');
+const { startScheduler } = require('./services/scheduler.service');
 
 const app = express();
 
@@ -69,6 +71,11 @@ app.use((_req, res) => {
 /* ── Global Error Handler ── */
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err);
+  logAction('SystemError', null, null, {
+    message: err.message,
+    stack: nodeEnv === 'production' ? undefined : err.stack,
+    statusCode: err.statusCode || 500,
+  });
   res.status(err.statusCode || 500).json({
     success: false,
     error: {
@@ -94,6 +101,12 @@ async function start() {
     console.log(`🚀 WDP Backend running on port ${port} [${nodeEnv}]`);
     console.log(`   Health: http://localhost:${port}/api/health`);
     console.log(`   API:    http://localhost:${port}/api/v1`);
+    if (nodeEnv !== 'test') {
+      const scheduler = startScheduler();
+      if (scheduler.started) {
+        console.log(`   Scheduler: crawler ${Math.round(scheduler.queueMs / 60000)}m, reports ${Math.round(scheduler.reportMs / 60000)}m`);
+      }
+    }
   });
 }
 

@@ -5,12 +5,14 @@ const DataSource = require('../models/DataSource');
 const { importOpenAlexByQuery } = require('../services/openalex.service');
 const { importArxivByQuery } = require('../services/arxiv.service');
 const { importCrossrefByQuery } = require('../services/crossref.service');
+const { logAction } = require('../utils/systemLogger');
+const { notifyJobComplete } = require('../services/notification.service');
 
 const IMMEDIATE_SYNC_SOURCES = ['OpenAlex', 'arXiv', 'Crossref'];
 
 async function search(req, res) {
   try {
-    const { papers, page, limit, total } = await paperService.searchPapers(req.query);
+    const { papers, page, limit, total } = await paperService.searchPapers(req.query, req.user?.id || null);
     return ApiResponse.paginated(res, papers, page, limit, total);
   } catch (err) {
     return ApiResponse.error(res, err.message, err.statusCode || 500);
@@ -120,6 +122,14 @@ async function requestCorpusSync(req, res) {
           source_total: result.sourceTotal,
         };
         await job.save();
+        logAction('BatchJob', req.user?.id || null, sourceName, {
+          query,
+          maxRecords,
+          imported: result.imported,
+          skipped: result.skipped,
+          sourceTotal: result.sourceTotal,
+        });
+        notifyJobComplete(req.user?.id, job);
       } catch (err) {
         job.status = 'failed';
         job.progress = 100;
@@ -127,6 +137,13 @@ async function requestCorpusSync(req, res) {
         job.duration_seconds = Math.max(1, Math.round((job.completed_at - now) / 1000));
         job.error_message = err.message;
         await job.save();
+        logAction('BatchJob', req.user?.id || null, sourceName, {
+          query,
+          maxRecords,
+          success: false,
+          error: err.message,
+        });
+        notifyJobComplete(req.user?.id, job);
         throw err;
       }
     }

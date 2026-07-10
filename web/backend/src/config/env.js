@@ -31,9 +31,16 @@ module.exports = {
   // Academic source APIs
   sources: {
     openAlexApiUrl: process.env.OPENALEX_API_URL || 'https://api.openalex.org',
-    semanticScholarApiKey: process.env.SEMANTIC_SCHOLAR_API_KEY || '',
-    ieeeXploreApiKey: process.env.IEEE_XPLORE_API_KEY || '',
     openAlexMailto: process.env.OPENALEX_MAILTO || '',
+    externalApiTimeoutMs: parseInt(process.env.EXTERNAL_API_TIMEOUT_MS, 10) || 30000,
+    semanticScholarApiUrl: process.env.SEMANTIC_SCHOLAR_API_URL || 'https://api.semanticscholar.org/graph/v1',
+    semanticScholarApiKey: process.env.SEMANTIC_SCHOLAR_API_KEY || '',
+    crossrefApiUrl: process.env.CROSSREF_API_URL || 'https://api.crossref.org',
     crossrefMailto: process.env.CROSSREF_MAILTO || '',
+    ieeeApiUrl: process.env.IEEE_API_URL || 'https://ieeexploreapi.ieee.org',
+    ieeeApiKey: process.env.IEEE_API_KEY || process.env.IEEE_XPLORE_API_KEY || '',
+    ieeeXploreApiKey: process.env.IEEE_XPLORE_API_KEY || process.env.IEEE_API_KEY || '',
+    exaApiUrl: process.env.EXA_API_URL || 'https://api.exa.ai',
+    exaApiKey: process.env.EXA_API_KEY || '',
   },
 };

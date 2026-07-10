@@ -1,5 +1,5 @@
 import type { PaperResult } from "../data/searchSample";
-import type { DashboardData, TrendPoint, TrendSeries } from "../data/types";
+import type { AiInsight, DashboardData, TrendPoint, TrendSeries } from "../data/types";
 import {
   TREND_TOPICS,
   type CoocEdge,
@@ -20,6 +20,7 @@ import type { FollowAlert, FollowSubject, FollowType } from "../data/followSampl
 import type { NotificationItem } from "../data/notificationSample";
 import type {
   CollaborationInvite,
+  ResearcherProfile,
   Workspace,
   WorkspaceActivity,
   WorkspaceItem,
@@ -45,6 +46,8 @@ interface ApiEnvelope<T> {
     message: string;
   };
 }
+
+type ApiRequestInit = RequestInit & { _isRetry?: boolean };
 
 export interface AuthUser {
   id: string;
@@ -80,13 +83,38 @@ export function storeAuth(result: AuthResult) {
   localStorage.setItem(USER_KEY, JSON.stringify(result.user));
 }
 
+export function storeCurrentUser(user: AuthUser) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function refreshAuthTokens() {
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!refreshToken) return null;
+
+  const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ refreshToken }),
+    cache: "no-store",
+  });
+  const payload = (await res.json()) as ApiEnvelope<AuthResult>;
+  if (!res.ok || !payload.success) return null;
+  storeAuth(payload.data);
+  return payload.data.accessToken;
+}
+
+function redirectToLogin() {
+  clearAuth();
+  if (window.location.hash !== "#login") window.location.hash = "login";
+}
+
+async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   const token = getAccessToken();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -100,12 +128,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
   if (!res.ok || !payload.success) {
+    if (res.status === 401 && !init._isRetry && path !== "/auth/refresh" && path !== "/auth/login") {
+      const nextToken = await refreshAuthTokens().catch(() => null);
+      if (nextToken) {
+        return request<T>(path, { ...init, _isRetry: true });
+      }
+      redirectToLogin();
+    }
     throw new Error(payload.error?.message ?? `API request failed: ${res.status}`);
   }
   return payload.data;
 }
 
-async function requestWithMeta<T>(path: string, init: RequestInit = {}) {
+async function requestWithMeta<T>(path: string, init: ApiRequestInit = {}) {
   const token = getAccessToken();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -119,6 +154,13 @@ async function requestWithMeta<T>(path: string, init: RequestInit = {}) {
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
   if (!res.ok || !payload.success) {
+    if (res.status === 401 && !init._isRetry) {
+      const nextToken = await refreshAuthTokens().catch(() => null);
+      if (nextToken) {
+        return requestWithMeta<T>(path, { ...init, _isRetry: true });
+      }
+      redirectToLogin();
+    }
     throw new Error(payload.error?.message ?? `API request failed: ${res.status}`);
   }
   return { data: payload.data, meta: payload.meta };
@@ -171,6 +213,113 @@ function normalizeFollowType(value: unknown): FollowType {
   return "keyword";
 }
 
+function denormalizeFollowType(type: FollowType) {
+  return type === "field" ? "Field" : type === "author" ? "Author" : "Keyword";
+}
+
+function mapAdminJob(job: any): AdminJob {
+  return {
+    id: asId(job._id),
+    name: job.name,
+    source: job.source_name,
+    status: job.status,
+    progress: Number(job.progress ?? 0),
+    records: Number(job.records_processed ?? 0),
+    startedAt: formatWhen(job.started_at ?? job.created_at),
+    duration: job.duration_seconds ? `${Math.round(job.duration_seconds / 60)} phút` : "—",
+    owner: typeof job.owner === "string" ? job.owner : job.owner?.full_name ?? "Scheduler",
+    query: job.query ?? "",
+    maxRecords: Number(job.max_records ?? 25),
+    imported: Number(job.result?.imported ?? job.records_processed ?? 0),
+    skipped: Number(job.result?.skipped ?? 0),
+    sourceTotal: Number(job.result?.source_total ?? 0),
+    errorMessage: job.error_message ?? "",
+  };
+}
+
+function mapDataSource(source: any): DataSource {
+  return {
+    id: asId(source._id),
+    name: source.name,
+    status: source.enabled ? (source.last_sync_status === "failed" || source.last_sync_status === "Failed" ? "degraded" : "active") : "paused",
+    coverage: source.coverage ?? "0%",
+    lastSync: formatWhen(source.last_sync_at),
+    latency: source.latency ?? "—",
+    errorRate: source.error_rate ?? "0%",
+    enabled: Boolean(source.enabled),
+    errorMessage: source.last_error ?? "",
+  };
+}
+
+function mapFollowSubject(subject: any): FollowSubject {
+  return {
+    id: subject.follow_id,
+    label: subject.value,
+    type: normalizeFollowType(subject.type),
+    active: Boolean(subject.active),
+    newPapers: Number(subject.newPapers ?? 0),
+    papers7d: Number(subject.papers7d ?? 0),
+    rule: {
+      frequency: subject.rule?.frequency ?? "daily",
+      threshold: subject.rule?.threshold ?? "all",
+      email: Boolean(subject.rule?.email),
+      inApp: subject.rule?.in_app ?? subject.rule?.inApp ?? true,
+      exclude: subject.rule?.exclude ?? [],
+    },
+  };
+}
+
+function mapFollowAlert(alert: any): FollowAlert {
+  return {
+    id: asId(alert._id),
+    subjectId: alert.follow_id ?? "all",
+    paperId: asId(alert.related_paper_ids?.[0] ?? alert.papers?.[0]?._id),
+    when: formatWhen(alert.created_at),
+    unread: !alert.is_read,
+    priority: alert.priority === "normal" ? "medium" : alert.priority ?? "low",
+    reason: alert.content ?? alert.title ?? "Paper mới khớp mục theo dõi",
+  };
+}
+
+function mapWorkspace(workspace: any): Workspace {
+  return {
+    id: asId(workspace._id),
+    name: workspace.name,
+    description: workspace.description ?? "",
+    active: Boolean(workspace.active),
+  };
+}
+
+function mapWorkspaceItem(item: any, workspaceId: string): WorkspaceItem {
+  return {
+    id: asId(item._id),
+    workspaceId,
+    kind: item.kind,
+    title: item.title,
+    status: item.status,
+    assigneeId: asId(item.assignee_id),
+    paperId: asId(item.paper_id),
+    due: item.due || "Chưa đặt",
+    comments: (item.comments ?? []).map((comment: any) => comment.content ?? String(comment)),
+    note: item.note ?? "",
+  };
+}
+
+function mapInvite(invite: any): CollaborationInvite {
+  return {
+    id: asId(invite._id),
+    workspaceId: asId(invite.workspace_id),
+    researcherId: asId(invite.invitee_user_id),
+    inviteeEmail: invite.invitee_email ?? "",
+    inviteeName: invite.invitee_name,
+    direction: invite.direction ?? "outgoing",
+    topic: invite.topic ?? "Nghiên cứu chung",
+    message: invite.message ?? "",
+    status: invite.status ?? "pending",
+    sentAt: formatWhen(invite.sent_at ?? invite.created_at),
+  };
+}
+
 function toSearchParams(params: Record<string, string | number | undefined>) {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -196,6 +345,22 @@ export const authApi = {
     });
     storeAuth(result);
     return result;
+  },
+  async me() {
+    return request<AuthUser>("/auth/me");
+  },
+  async logout() {
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } finally {
+      clearAuth();
+    }
+  },
+  async changePassword(currentPassword: string, newPassword: string) {
+    return request<{ message: string }>("/auth/change-password", {
+      method: "PUT",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
   },
 };
 
@@ -258,6 +423,12 @@ export const paperApi = {
 export const dashboardApi = {
   async overview(): Promise<DashboardData> {
     const data = await request<any>("/dashboard/overview");
+    let ai = data.ai ?? { summary: "", directions: [], evidence: [] };
+    try {
+      ai = await aiApi.insights();
+    } catch {
+      // Keep cached report AI if the live LLM endpoint is unavailable.
+    }
     return {
       updatedAt: data.updatedAt ? new Date(data.updatedAt).toLocaleString("vi-VN") : "",
       kpis: data.kpis ?? [],
@@ -267,9 +438,44 @@ export const dashboardApi = {
       gapAspects: data.gapAspects ?? [],
       gaps: data.gaps ?? [],
       trending: data.trending ?? [],
-      ai: data.ai ?? { summary: "", directions: [], evidence: [] },
+      ai,
       followed: data.followed ?? [],
       notifications: data.notifications ?? [],
+    };
+  },
+};
+
+export const aiApi = {
+  summarize(payload: {
+    title?: string;
+    abstract?: string;
+    year?: number;
+    source?: string;
+    keywords?: string[];
+  }) {
+    return request<{ summary: string; provider?: string; model?: string }>("/ai/summarize", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  explainTerm(payload: { term: string; context?: string }) {
+    return request<{ term: string; explanation: string; provider?: string; model?: string }>("/ai/explain-term", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  suggestDirections(payload: { field?: string; gaps?: GapItem[] }) {
+    return request<{ directions: AiInsight["directions"]; provider?: string; model?: string }>("/ai/suggest-directions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  async insights(): Promise<AiInsight> {
+    const data = await request<AiInsight & { provider?: string; model?: string }>("/ai/insights");
+    return {
+      summary: data.summary ?? "",
+      directions: data.directions ?? [],
+      evidence: data.evidence ?? [],
     };
   },
 };

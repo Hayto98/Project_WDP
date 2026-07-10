@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { jwt: jwtConfig } = require('../config/env');
+const { logAction } = require('../utils/systemLogger');
 
 /**
  * Generate JWT tokens for a user.
@@ -60,19 +61,23 @@ async function register({ email, password, full_name }) {
 async function login({ email, password }) {
   const user = await User.findOne({ email: email.toLowerCase() });
   if (!user) {
+    logAction('Login', null, null, { success: false, email, reason: 'User not found' });
     throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
   }
 
   if (user.status === 'Banned') {
+    logAction('Login', user._id, null, { success: false, email, reason: 'Account banned' });
     throw Object.assign(new Error('Account is banned'), { statusCode: 403 });
   }
 
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) {
+    logAction('Login', user._id, null, { success: false, email, reason: 'Wrong password' });
     throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
   }
 
   const tokens = generateTokens(user);
+  logAction('Login', user._id, null, { success: true, email });
 
   return {
     user: {
@@ -84,6 +89,50 @@ async function login({ email, password }) {
     },
     ...tokens,
   };
+}
+
+async function refreshSession(refreshToken) {
+  let decoded;
+  try {
+    decoded = jwt.verify(refreshToken, jwtConfig.refreshSecret);
+  } catch {
+    throw Object.assign(new Error('Invalid refresh token'), { statusCode: 401, code: 'UNAUTHORIZED' });
+  }
+
+  const user = await User.findById(decoded.id);
+  if (!user || user.status !== 'Active') {
+    throw Object.assign(new Error('User is not active'), { statusCode: 401, code: 'UNAUTHORIZED' });
+  }
+
+  const tokens = generateTokens(user);
+  return {
+    user: {
+      id: user._id,
+      email: user.email,
+      full_name: user.full_name,
+      roles: user.roles,
+      status: user.status,
+    },
+    ...tokens,
+  };
+}
+
+async function changePassword(userId, { currentPassword, newPassword }) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) {
+    throw Object.assign(new Error('Current password is incorrect'), { statusCode: 400, code: 'VALIDATION_ERROR' });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  user.password_hash = await bcrypt.hash(newPassword, salt);
+  await user.save();
+
+  return { message: 'Password changed successfully' };
 }
 
 /**
@@ -135,6 +184,8 @@ async function updateDashboardLayout(userId, layout) {
 module.exports = {
   register,
   login,
+  refreshSession,
+  changePassword,
   getProfile,
   updateProfile,
   updateDashboardLayout,

@@ -19,6 +19,24 @@ async function login(req, res) {
   }
 }
 
+async function refresh(req, res) {
+  try {
+    const result = await authService.refreshSession(req.body.refreshToken);
+    return ApiResponse.success(res, result);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500, err.code || 'INTERNAL_ERROR');
+  }
+}
+
+async function changePassword(req, res) {
+  try {
+    const result = await authService.changePassword(req.user.id, req.body);
+    return ApiResponse.success(res, result);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500, err.code || 'INTERNAL_ERROR');
+  }
+}
+
 async function logout(_req, res) {
   // For JWT, logout is client-side (delete token).
   // Server-side: could blacklist token in Redis (future enhancement).
@@ -52,4 +70,13 @@ async function updateDashboardLayout(req, res) {
   }
 }
 
-module.exports = { register, login, logout, getMe, updateProfile, updateDashboardLayout };
+module.exports = {
+  register,
+  login,
+  refresh,
+  changePassword,
+  logout,
+  getMe,
+  updateProfile,
+  updateDashboardLayout,
+};

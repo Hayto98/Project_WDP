@@ -1,17 +1,10 @@
 const ApiResponse = require('../utils/apiResponse');
-
-/**
- * AI endpoints — placeholder implementations.
- * Actual LLM integration will be added once API is confirmed (FR-009 open question).
- * Results are NOT stored in MongoDB (BR-033, BR-035).
- */
+const aiService = require('../services/ai.service');
 
 async function summarize(req, res) {
   try {
-    const { abstract, title } = req.body;
-    // TODO: Call LLM API to summarize
-    const summary = `[AI Tóm tắt] ${title}: ${abstract ? abstract.substring(0, 200) + '...' : 'Không có abstract.'}`;
-    return ApiResponse.success(res, { summary });
+    const result = await aiService.summarizePaper(req.body);
+    return ApiResponse.success(res, result);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
   }
@@ -19,10 +12,8 @@ async function summarize(req, res) {
 
 async function explainTerm(req, res) {
   try {
-    const { term } = req.body;
-    // TODO: Call LLM API to explain
-    const explanation = `[AI Giải thích] "${term}": Đang chờ tích hợp LLM API.`;
-    return ApiResponse.success(res, { term, explanation });
+    const result = await aiService.explainTerm(req.body);
+    return ApiResponse.success(res, result);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
   }
@@ -30,15 +21,8 @@ async function explainTerm(req, res) {
 
 async function suggestDirections(req, res) {
   try {
-    const { field, gaps } = req.body;
-    // TODO: Call LLM API with gap data to suggest research directions
-    const directions = [
-      {
-        topic: `Hướng nghiên cứu mới trong ${field || 'lĩnh vực đã chọn'}`,
-        rationale: 'Đang chờ tích hợp LLM API để phân tích chi tiết.',
-      },
-    ];
-    return ApiResponse.success(res, { directions });
+    const result = await aiService.suggestDirections(req.body);
+    return ApiResponse.success(res, result);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
   }
@@ -46,12 +30,7 @@ async function suggestDirections(req, res) {
 
 async function getInsights(req, res) {
   try {
-    // TODO: Generate AI insights from gap analysis data
-    const insights = {
-      summary: 'Đang chờ tích hợp LLM API.',
-      directions: [],
-      evidence: [],
-    };
+    const insights = await aiService.getInsights(req.query);
     return ApiResponse.success(res, insights);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);

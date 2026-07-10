@@ -1,5 +1,5 @@
 import "./App.css";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar, NAV } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -16,13 +16,37 @@ import { TrendsPage } from "./pages/TrendsPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
-import { getCurrentUser } from "./lib/api";
+import { authApi, getAccessToken, getCurrentUser, storeCurrentUser, type AuthUser } from "./lib/api";
 
 export default function App() {
   const { theme, toggle } = useTheme();
   const route = useHashRoute("home");
-  const currentUser = getCurrentUser();
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getCurrentUser());
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
+
+  useEffect(() => {
+    let alive = true;
+    if (!getAccessToken()) {
+      setCurrentUser(null);
+      return () => {
+        alive = false;
+      };
+    }
+
+    authApi.me()
+      .then((user) => {
+        if (!alive) return;
+        storeCurrentUser(user);
+        setCurrentUser(user);
+      })
+      .catch(() => {
+        if (alive) setCurrentUser(null);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (isAdmin && route !== "admin" && route !== "login" && route !== "register") {
@@ -48,6 +72,9 @@ export default function App() {
   }
   if (route === "home") {
     return <HomePage theme={theme} toggle={toggle} />;
+  }
+  if (!currentUser) {
+    return <LoginPage />;
   }
 
   return (

@@ -15,7 +15,7 @@ const sourceRefSchema = new Schema(
   {
     source_name: {
       type: String,
-      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore'],
+      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'Exa'],
       required: true,
     },
     external_id: { type: String, required: true },
