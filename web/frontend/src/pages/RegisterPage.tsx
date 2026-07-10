@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { authApi } from "../lib/api";
 import "./Auth.css";
 
 export function RegisterPage() {
@@ -6,12 +7,23 @@ export function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [toastMessage, setToastMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleRegister = () => {
-    setToastMessage('Đăng ký thành công! Đang chuyển hướng...');
-    setTimeout(() => {
-      window.location.hash = "login";
-    }, 2000);
+  const handleRegister = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await authApi.register(name.trim(), email.trim(), password);
+      setToastMessage("Đăng ký thành công! Đang chuyển hướng...");
+      setTimeout(() => {
+        window.location.hash = "overview";
+      }, 800);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể đăng ký. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,6 +65,7 @@ export function RegisterPage() {
               className="auth-input"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              required
             />
           </div>
 
@@ -64,6 +77,7 @@ export function RegisterPage() {
               className="auth-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
           </div>
 
@@ -75,15 +89,19 @@ export function RegisterPage() {
               className="auth-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              required
             />
           </div>
+
+          {error && <p className="auth-subtitle" role="alert">{error}</p>}
 
           <div style={{ marginTop: '16px' }}>
             <button 
               type="submit"
               className="auth-btn auth-btn--primary"
+              disabled={loading}
             >
-              Đăng ký
+              {loading ? "Đang đăng ký..." : "Đăng ký"}
             </button>
           </div>
         </form>

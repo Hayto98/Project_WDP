@@ -8,7 +8,7 @@ const dataSourceSchema = new Schema(
       required: true,
       unique: true,
       trim: true,
-      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'ACM Digital Library'],
+      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore'],
     },
     api_endpoint: { type: String, required: true, trim: true },
     enabled: { type: Boolean, default: true },

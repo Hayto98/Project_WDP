@@ -63,10 +63,10 @@ const TRENDING = [
     title: "Graph Neural Networks for Materials Discovery: A Benchmark Study",
     authors: "R. Duarte, H. Nakamura +5",
     year: 2024,
-    source: "ACM Digital Library",
+    source: "OpenAlex",
     field: "Graph Neural Networks",
     views30d: 2740,
-    url: "https://dl.acm.org/",
+    url: "https://openalex.org/",
   },
   {
     id: "p4",

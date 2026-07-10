@@ -4,8 +4,9 @@ const { authenticate, optionalAuth } = require('../middleware/auth.middleware');
 
 const router = Router();
 
-router.get('/search', authenticate, ctrl.search);
+router.get('/search', optionalAuth, ctrl.search);
 router.get('/trending', authenticate, ctrl.getTrending);
+router.post('/sync-request', optionalAuth, ctrl.requestCorpusSync);
 router.get('/:id', optionalAuth, ctrl.getById);
 
 module.exports = router;

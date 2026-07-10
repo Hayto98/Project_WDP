@@ -2,9 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { formatInt } from "../lib/format";
+import { paperApi } from "../lib/api";
 import {
-  FIELDS,
-  PAPERS,
   RELATED_KEYWORDS,
   SOURCES,
   TYPES,
@@ -24,7 +23,6 @@ import {
 type Scope = "all" | "title" | "author";
 type SortKey = "relevance" | "year" | "citations";
 type CondOp = "AND" | "OR" | "NOT";
-type Demo = "auto" | "loading" | "empty" | "error";
 
 interface Condition {
   id: number;
@@ -32,7 +30,7 @@ interface Condition {
   term: string;
 }
 
-const YEAR_MIN = 2015;
+const YEAR_MIN = 1990;
 const YEAR_MAX = 2025;
 const PAGE_SIZE = 5;
 
@@ -58,7 +56,6 @@ export function SearchPage({ theme, toggle }: Props) {
   const [submitted, setSubmitted] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [conditions, setConditions] = useState<Condition[]>([]);
-  const [fields, setFields] = useState<Set<string>>(new Set());
   const [sources, setSources] = useState<Set<string>>(new Set());
   const [types, setTypes] = useState<Set<string>>(new Set());
   const [yearFrom, setYearFrom] = useState(YEAR_MIN);
@@ -68,134 +65,144 @@ export function SearchPage({ theme, toggle }: Props) {
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [demo, setDemo] = useState<Demo>("auto");
+  const [searchNonce, setSearchNonce] = useState(0);
   const [facetsOpen, setFacetsOpen] = useState(false);
+  const [remoteResults, setRemoteResults] = useState<PaperResult[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
+  const [searchError, setSearchError] = useState("");
+  const [syncNotice, setSyncNotice] = useState("");
+  const [syncingRequest, setSyncingRequest] = useState(false);
 
   const condId = useRef(1);
-  const loadTimer = useRef<number | undefined>(undefined);
+  const searchRunId = useRef(0);
+  const autoSyncKeys = useRef(new Set<string>());
 
-  const runSearch = (q: string) => {
+  const runSearch = (q: string, options: { resetPage?: boolean } = {}) => {
     setSubmitted(q);
     setHasSearched(true);
-    setPage(1);
-    setLoading(true);
-    setDemo("auto");
-    window.clearTimeout(loadTimer.current);
-    loadTimer.current = window.setTimeout(() => setLoading(false), 480);
+    if (options.resetPage ?? true) setPage(1);
+    setSearchNonce((value) => value + 1);
+    setSearchError("");
   };
-
-  useEffect(() => () => window.clearTimeout(loadTimer.current), []);
 
   // Re-filter briefly when facets/sort change after an initial search.
   useEffect(() => {
     if (!hasSearched) return;
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, sources, types, yearFrom, yearTo, conditions, sort]);
+  }, [sources, types, yearFrom, yearTo, conditions, sort]);
+
+  const andTerms = useMemo(() => conditions.filter((c) => c.op === "AND" && c.term.trim()), [conditions]);
+  const orTerms = useMemo(() => conditions.filter((c) => c.op === "OR" && c.term.trim()), [conditions]);
+  const notTerms = useMemo(() => conditions.filter((c) => c.op === "NOT" && c.term.trim()), [conditions]);
+  const andTermsParam = useMemo(() => andTerms.map((condition) => condition.term.trim()).join(","), [andTerms]);
+  const orTermsParam = useMemo(() => orTerms.map((condition) => condition.term.trim()).join(","), [orTerms]);
+  const notTermsParam = useMemo(() => notTerms.map((condition) => condition.term.trim()).join(","), [notTerms]);
+
+  useEffect(() => {
+    if (!hasSearched) return;
+    const runId = ++searchRunId.current;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    const isCurrent = () => searchRunId.current === runId;
+    setLoading(true);
+    setSearchError("");
+    const sortParam = sort === "year" ? "year_desc" : sort === "citations" ? "citations" : "relevance";
+    paperApi
+      .search({
+        q: submitted,
+        scope,
+        andTerms: andTermsParam,
+        orTerms: orTermsParam,
+        notTerms: notTermsParam,
+        sources: [...sources].join(","),
+        types: [...types].join(","),
+        yearFrom,
+        yearTo,
+        sort: sortParam,
+        page,
+        limit: PAGE_SIZE,
+      }, { signal: controller.signal })
+      .then(({ papers, meta }) => {
+        if (!isCurrent()) return;
+        setRemoteResults(papers);
+        setTotalResults(meta?.total ?? papers.length);
+      })
+      .catch((err) => {
+        if (!isCurrent()) return;
+        setRemoteResults([]);
+        setTotalResults(0);
+        setSearchError(
+          err instanceof DOMException && err.name === "AbortError"
+            ? "Tìm kiếm quá lâu. Vui lòng thử bỏ bớt bộ lọc hoặc thử lại sau."
+            : err instanceof Error
+              ? err.message
+              : "Không thể tìm kiếm dữ liệu.",
+        );
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (isCurrent()) setLoading(false);
+      });
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [hasSearched, searchNonce, submitted, scope, andTermsParam, orTermsParam, notTermsParam, sources, types, yearFrom, yearTo, sort, page]);
 
   const queryTokens = useMemo(
     () => submitted.toLowerCase().split(/\s+/).filter(Boolean),
     [submitted],
   );
-  const andTerms = conditions.filter((c) => c.op === "AND" && c.term.trim());
-  const orTerms = conditions.filter((c) => c.op === "OR" && c.term.trim());
-  const notTerms = conditions.filter((c) => c.op === "NOT" && c.term.trim());
-
   const highlightTerms = useMemo(
     () => [...queryTokens, ...andTerms.map((c) => c.term), ...orTerms.map((c) => c.term)],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [submitted, conditions],
   );
 
-  const results = useMemo(() => {
-    const haystackFor = (p: PaperResult) => {
-      if (scope === "title") return p.title.toLowerCase();
-      if (scope === "author") return p.authors.join(" ").toLowerCase();
-      return [p.title, p.authors.join(" "), p.abstract, p.keywords.join(" "), p.fields.join(" ")]
-        .join(" ")
-        .toLowerCase();
-    };
-    const count = (hay: string, term: string) => {
-      const t = term.toLowerCase().trim();
-      if (!t) return 0;
-      let n = 0;
-      let i = hay.indexOf(t);
-      while (i !== -1) {
-        n += 1;
-        i = hay.indexOf(t, i + t.length);
-      }
-      return n;
-    };
-
-    const matched = PAPERS.filter((p) => {
-      const hay = haystackFor(p);
-      const title = p.title.toLowerCase();
-      // facets
-      if (fields.size && !p.fields.some((f) => fields.has(f))) return false;
-      if (sources.size && !sources.has(p.source)) return false;
-      if (types.size && !types.has(p.type)) return false;
-      if (p.year < yearFrom || p.year > yearTo) return false;
-      // NOT conditions always exclude
-      for (const c of notTerms) if (hay.includes(c.term.toLowerCase().trim())) return false;
-      // base: every query token + every AND term present
-      const base =
-        queryTokens.every((t) => hay.includes(t)) &&
-        andTerms.every((c) => hay.includes(c.term.toLowerCase().trim()));
-      const orHit =
-        orTerms.length > 0 && orTerms.some((c) => hay.includes(c.term.toLowerCase().trim()));
-      if (!(base || orHit)) return false;
-      // stash score
-      let score = 0;
-      for (const t of [...queryTokens, ...andTerms.map((c) => c.term), ...orTerms.map((c) => c.term)]) {
-        score += count(title, t) * 3 + count(hay, t);
-      }
-      (p as PaperResult & { _score?: number })._score = score + p.citations / 1000;
-      return true;
-    });
-
-    matched.sort((a, b) => {
-      if (sort === "year") return b.year - a.year || b.citations - a.citations;
-      if (sort === "citations") return b.citations - a.citations;
-      const sa = (a as PaperResult & { _score?: number })._score ?? 0;
-      const sb = (b as PaperResult & { _score?: number })._score ?? 0;
-      return sb - sa || b.citations - a.citations;
-    });
-    return matched;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submitted, scope, conditions, fields, sources, types, yearFrom, yearTo, sort]);
+  const results = remoteResults;
 
   const activeFilterCount =
-    fields.size +
     sources.size +
     types.size +
     (yearFrom !== YEAR_MIN || yearTo !== YEAR_MAX ? 1 : 0);
-
-  const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
-  const pageItems = results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
+  const pageItems = results;
 
   const status: "landing" | "loading" | "results" | "empty" | "error" =
-    demo === "loading"
-      ? "loading"
-      : demo === "empty"
-        ? "empty"
-        : demo === "error"
+    !hasSearched
+      ? "landing"
+      : loading
+        ? "loading"
+        : searchError
           ? "error"
-          : !hasSearched
-            ? "landing"
-            : loading
-              ? "loading"
-              : results.length === 0
-                ? "empty"
-                : "results";
+          : results.length === 0
+            ? "empty"
+            : "results";
+  const selectedSyncSource = sources.has("Crossref") ? "Crossref" : sources.has("arXiv") ? "arXiv" : "OpenAlex";
+  const canSyncSelectedSource =
+    (status === "results" || status === "empty") &&
+    Boolean((submitted.trim() || query.trim())) &&
+    (sources.has("OpenAlex") || sources.has("arXiv") || sources.has("Crossref"));
+  const paginationPages = useMemo(() => {
+    const windowSize = 10;
+    const start = Math.max(1, Math.min(page - 5, Math.max(1, totalPages - windowSize + 1)));
+    const end = Math.min(totalPages, start + windowSize - 1);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [page, totalPages]);
+  const paginationWindowEnd = paginationPages[paginationPages.length - 1] ?? totalPages;
 
   const toggleSet = (set: Set<string>, key: string, apply: (s: Set<string>) => void) => {
     const next = new Set(set);
-    next.has(key) ? next.delete(key) : next.add(key);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
     apply(next);
   };
 
   const clearFilters = () => {
-    setFields(new Set());
     setSources(new Set());
     setTypes(new Set());
     setYearFrom(YEAR_MIN);
@@ -212,7 +219,11 @@ export function SearchPage({ theme, toggle }: Props) {
   const toggleSaved = (id: string) =>
     setSaved((s) => {
       const next = new Set(s);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
 
@@ -220,6 +231,52 @@ export function SearchPage({ theme, toggle }: Props) {
     setQuery(kw);
     runSearch(kw);
   };
+
+  const requestCorpusSync = async () => {
+    const term = submitted.trim() || query.trim();
+    if (!term) return;
+    setSyncingRequest(true);
+    setSyncNotice("");
+    try {
+      const job = await paperApi.requestSync(term, selectedSyncSource, 50, {
+        yearFrom,
+        yearTo,
+        types: [...types].join(","),
+      });
+      setSyncNotice(
+        `Đã tải thêm ${selectedSyncSource}: import ${formatInt(job.result?.imported ?? job.records_processed ?? 0)} bài, bỏ qua ${formatInt(job.result?.skipped ?? 0)} bài trùng.`,
+      );
+      runSearch(term, { resetPage: false });
+    } catch (err) {
+      setSyncNotice(err instanceof Error ? err.message : "Không gửi được yêu cầu đồng bộ.");
+    } finally {
+      setSyncingRequest(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!canSyncSelectedSource || syncingRequest) return;
+    const shouldLoadMore = status === "empty" || (status === "results" && page + 1 >= paginationWindowEnd);
+    if (!shouldLoadMore) return;
+
+    const term = submitted.trim() || query.trim();
+    const key = [
+      selectedSyncSource,
+      term,
+      page,
+      totalPages,
+      yearFrom,
+      yearTo,
+      [...types].join(","),
+      status,
+    ].join("|");
+
+    if (autoSyncKeys.current.has(key)) return;
+    autoSyncKeys.current.add(key);
+    void requestCorpusSync();
+    // requestCorpusSync intentionally stays out to avoid recreating the auto-load trigger on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSyncSelectedSource, syncingRequest, status, page, totalPages, paginationWindowEnd, selectedSyncSource, submitted, query, yearFrom, yearTo, types]);
 
   return (
     <main className="main search">
@@ -345,17 +402,6 @@ export function SearchPage({ theme, toggle }: Props) {
             )}
           </div>
 
-          <FacetGroup title="Lĩnh vực">
-            {FIELDS.map((f) => (
-              <Check
-                key={f}
-                label={f}
-                checked={fields.has(f)}
-                onChange={() => toggleSet(fields, f, setFields)}
-              />
-            ))}
-          </FacetGroup>
-
           <FacetGroup title="Khoảng năm">
             <div className="yearrange">
               <label>
@@ -414,7 +460,7 @@ export function SearchPage({ theme, toggle }: Props) {
             <p className="results__count">
               {status === "results" ? (
                 <>
-                  <strong className="num">{formatInt(results.length)}</strong> kết quả
+                  <strong className="num">{formatInt(totalResults)}</strong> kết quả
                   {submitted && (
                     <>
                       {" "}
@@ -445,9 +491,6 @@ export function SearchPage({ theme, toggle }: Props) {
           {/* Active filter chips */}
           {activeFilterCount > 0 && status !== "landing" && (
             <div className="activefilters">
-              {[...fields].map((f) => (
-                <FilterPill key={`f-${f}`} label={f} onRemove={() => toggleSet(fields, f, setFields)} />
-              ))}
               {[...sources].map((s) => (
                 <FilterPill key={`s-${s}`} label={s} onRemove={() => toggleSet(sources, s, setSources)} />
               ))}
@@ -469,18 +512,16 @@ export function SearchPage({ theme, toggle }: Props) {
               )}
             </div>
           )}
+          {syncNotice && status !== "empty" && <p className="state__body" role="status">{syncNotice}</p>}
 
           {status === "loading" && <ResultsSkeleton />}
 
-          {status === "landing" && <LandingState onSuggest={onSuggest} onPickField={(f) => {
-            toggleSet(fields, f, setFields);
-            runSearch("");
-          }} />}
+          {status === "landing" && <LandingState onSuggest={onSuggest} />}
 
           {status === "error" && (
             <div className="state state--error">
               <p className="state__title">Không tải được kết quả tìm kiếm</p>
-              <p className="state__body">Có lỗi khi truy vấn nguồn dữ liệu. Vui lòng thử lại.</p>
+              <p className="state__body">{searchError || "Có lỗi khi truy vấn nguồn dữ liệu. Vui lòng thử lại."}</p>
               <button className="btn btn--primary" onClick={() => runSearch(submitted)}>
                 Thử lại
               </button>
@@ -491,13 +532,17 @@ export function SearchPage({ theme, toggle }: Props) {
             <div className="state state--empty">
               <p className="state__title">Không tìm thấy bài báo phù hợp</p>
               <p className="state__body">
-                Thử nới rộng khoảng năm, bỏ bớt bộ lọc, hoặc dùng từ khóa tổng quát hơn.
+                Corpus hiện chưa có paper khớp với từ khóa và bộ lọc này. Thử nới rộng khoảng năm,
+                bỏ bớt bộ lọc, hoặc đợi hệ thống tự tải thêm dữ liệu từ nguồn đang chọn.
               </p>
-              {activeFilterCount > 0 && (
-                <button className="btn btn--ghost" onClick={clearFilters}>
-                  Xóa {activeFilterCount} bộ lọc
-                </button>
-              )}
+              <div className="state__actions">
+                {activeFilterCount > 0 && (
+                  <button className="btn btn--ghost" onClick={clearFilters}>
+                    Xóa {activeFilterCount} bộ lọc
+                  </button>
+                )}
+              </div>
+              {syncNotice && <p className="state__body" role="status">{syncNotice}</p>}
             </div>
           )}
 
@@ -511,6 +556,7 @@ export function SearchPage({ theme, toggle }: Props) {
                     terms={highlightTerms}
                     saved={saved.has(p.id)}
                     onToggleSave={() => toggleSaved(p.id)}
+                    onOpenSource={() => paperApi.recordView(p.id).catch(() => undefined)}
                   />
                 ))}
               </ol>
@@ -525,7 +571,7 @@ export function SearchPage({ theme, toggle }: Props) {
                     Trước
                   </button>
                   <span className="pager__pages">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                    {paginationPages.map((n) => (
                       <button
                         key={n}
                         className={`pager__page num ${n === page ? "is-active" : ""}`}
@@ -550,19 +596,6 @@ export function SearchPage({ theme, toggle }: Props) {
         </section>
       </div>
 
-      {/* Demo state preview (parity with dashboard) */}
-      <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
-        <span className="statepick__label">Xem trạng thái</span>
-        {(["auto", "loading", "empty", "error"] as Demo[]).map((d) => (
-          <button
-            key={d}
-            className={`statepick__btn ${demo === d ? "is-active" : ""}`}
-            onClick={() => setDemo(d)}
-          >
-            {d === "auto" ? "Thực tế" : d === "loading" ? "Đang tải" : d === "empty" ? "Trống" : "Lỗi"}
-          </button>
-        ))}
-      </div>
     </main>
   );
 }
@@ -612,22 +645,26 @@ function ResultItem({
   terms,
   saved,
   onToggleSave,
+  onOpenSource,
 }: {
   paper: PaperResult;
   terms: string[];
   saved: boolean;
   onToggleSave: () => void;
+  onOpenSource: () => void;
 }) {
   const authors =
     paper.authors.length > 3
       ? `${paper.authors.slice(0, 3).join(", ")} +${paper.authors.length - 3}`
       : paper.authors.join(", ");
+  const doiHref = paper.doi ? `https://doi.org/${paper.doi.replace(/^https?:\/\/doi\.org\//i, "")}` : paper.url;
+  const doiLabel = paper.doi ? paper.doi.replace(/^https?:\/\/doi\.org\//i, "") : paper.url;
 
   return (
     <li className="rcard">
       <div className="rcard__main">
         <h3 className="rcard__title">
-          <a href={paper.url} target="_blank" rel="noreferrer noopener">
+          <a href={paper.url} target="_blank" rel="noreferrer noopener" onClick={onOpenSource}>
             {highlight(paper.title, terms)}
           </a>
         </h3>
@@ -639,7 +676,19 @@ function ResultItem({
           <span className="rcard__source">{paper.source}</span>
           <span className={`rtype rtype--${paper.type.toLowerCase()}`}>{typeLabel(paper.type)}</span>
         </p>
-        <p className="rcard__abstract">{highlight(paper.abstract, terms)}</p>
+        {doiLabel && doiLabel !== "#" && (
+          <p className="rcard__doi">
+            DOI/Link:{" "}
+            <a href={doiHref} target="_blank" rel="noreferrer noopener" onClick={onOpenSource}>
+              {doiLabel}
+            </a>
+          </p>
+        )}
+        <p className="rcard__abstract">
+          {paper.abstract
+            ? highlight(paper.abstract, terms)
+            : `Không tìm được abstract nguyên văn từ ${paper.source} cho paper này.`}
+        </p>
         <div className="rcard__kw">
           {paper.keywords.slice(0, 4).map((k) => (
             <span key={k} className="tag">
@@ -671,6 +720,7 @@ function ResultItem({
             target="_blank"
             rel="noreferrer noopener"
             title="Mở tại nguồn"
+            onClick={onOpenSource}
           >
             <IconExternal width={16} height={16} />
             Nguồn
@@ -700,10 +750,8 @@ function ResultsSkeleton() {
 
 function LandingState({
   onSuggest,
-  onPickField,
 }: {
   onSuggest: (kw: string) => void;
-  onPickField: (f: string) => void;
 }) {
   return (
     <div className="landing">
@@ -712,8 +760,7 @@ function LandingState({
       </div>
       <p className="landing__title">Bắt đầu khám phá tài liệu nghiên cứu</p>
       <p className="landing__body">
-        Nhập từ khóa, tên tác giả hoặc chọn nhanh một lĩnh vực bên dưới. Dùng điều kiện nâng cao
-        (VÀ / HOẶC / KHÔNG) để thu hẹp truy vấn.
+        Nhập từ khóa hoặc tên tác giả. Dùng điều kiện nâng cao (VÀ / HOẶC / KHÔNG) để thu hẹp truy vấn.
       </p>
 
       <div className="landing__block">
@@ -727,16 +774,6 @@ function LandingState({
         </div>
       </div>
 
-      <div className="landing__block">
-        <span className="landing__blocklabel">Duyệt theo lĩnh vực</span>
-        <div className="landing__fields">
-          {FIELDS.map((f) => (
-            <button key={f} className="fieldcard" onClick={() => onPickField(f)}>
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import "./App.css";
+import { useEffect } from "react";
 import { Sidebar, NAV } from "./components/Sidebar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -15,13 +16,29 @@ import { TrendsPage } from "./pages/TrendsPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { getCurrentUser } from "./lib/api";
 
 export default function App() {
   const { theme, toggle } = useTheme();
   const route = useHashRoute("home");
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.roles.includes("Admin") ?? false;
+
+  useEffect(() => {
+    if (isAdmin && route !== "admin" && route !== "login" && route !== "register") {
+      window.location.hash = "admin";
+    }
+    if (route === "admin" && !isAdmin) {
+      window.location.hash = currentUser ? "overview" : "login";
+    }
+  }, [currentUser, isAdmin, route]);
+
+  if (isAdmin && route !== "login" && route !== "register") {
+    return <AdminPage theme={theme} toggle={toggle} />;
+  }
 
   if (route === "admin") {
-    return <AdminPage theme={theme} toggle={toggle} />;
+    return currentUser ? <OverviewPage theme={theme} toggle={toggle} /> : <LoginPage />;
   }
   if (route === "login") {
     return <LoginPage />;

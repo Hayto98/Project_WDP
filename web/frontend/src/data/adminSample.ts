@@ -17,6 +17,12 @@ export interface AdminJob {
   startedAt: string;
   duration: string;
   owner: string;
+  query?: string;
+  maxRecords?: number;
+  imported?: number;
+  skipped?: number;
+  sourceTotal?: number;
+  errorMessage?: string;
 }
 
 export interface DataSource {
@@ -28,6 +34,7 @@ export interface DataSource {
   latency: string;
   errorRate: string;
   enabled: boolean;
+  errorMessage?: string;
 }
 
 export interface AdminUser {
@@ -101,9 +108,9 @@ export const ADMIN_JOBS: AdminJob[] = [
     owner: "Admin · Minh Thành",
   },
   {
-    id: "job-acm-topic",
-    name: "ACM topic classifier",
-    source: "ACM Digital Library",
+    id: "job-semantic-enrich",
+    name: "Semantic Scholar enrichment",
+    source: "Semantic Scholar",
     status: "queued",
     progress: 0,
     records: 0,

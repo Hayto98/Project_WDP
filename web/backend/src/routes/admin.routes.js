@@ -13,11 +13,13 @@ router.put('/users/:id', ctrl.updateUser);
 
 // Data Sources
 router.get('/data-sources', ctrl.getDataSources);
+router.post('/data-sources/check', ctrl.checkDataSourceApis);
 router.put('/data-sources/:id', ctrl.updateDataSource);
 
 // Crawler Jobs
 router.get('/jobs', ctrl.getJobs);
 router.post('/jobs', ctrl.createJob);
+router.post('/jobs/:id/run', ctrl.runJob);
 
 // Audit Logs
 router.get('/audit-logs', ctrl.getAuditLogs);

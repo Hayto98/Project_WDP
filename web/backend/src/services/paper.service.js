@@ -3,6 +3,7 @@ const PaperView = require('../models/PaperView');
 const { shouldCountView, invalidateTopPapersCache } = require('../utils/viewDedup');
 const { parsePagination } = require('../utils/pagination');
 const redis = require('../config/redis');
+const { ensureAbstracts } = require('./abstract.service');
 
 /**
  * Search papers with full-text, filters, sorting (BR-009~012).
@@ -11,20 +12,87 @@ async function searchPapers(query) {
   const { page, limit, skip } = parsePagination(query);
 
   const filter = { status: { $ne: 'Archived' } };
+  const andClauses = [];
+  let usesTextSearch = false;
+  const regexFor = (value) => new RegExp(String(value).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const searchableFields = ['title', 'abstract', 'keywords', 'research_fields', 'authors.name'];
+  const textLikeClause = (term) => ({
+    $or: searchableFields.map((field) => ({ [field]: regexFor(term) })),
+  });
+  const fieldAliases = {
+    'Large Language Models': [
+      'large language model', 'llm', 'language model', 'generative ai',
+      'retrieval-augmented generation', 'rag', 'prompt engineering', 'bert', 'gpt',
+      'natural language processing', 'nlp', 'text generation',
+    ],
+    'Computer Vision': [
+      'computer vision', 'image', 'visual', 'object detection', 'segmentation',
+      'convolutional', 'cnn', 'vision transformer', 'remote sensing', 'medical image',
+    ],
+    'Federated Learning': [
+      'federated learning', 'distributed learning', 'privacy-preserving', 'secure aggregation',
+      'non-iid', 'edge federation',
+    ],
+    'Graph Neural Networks': [
+      'graph neural network', 'gnn', 'graph convolution', 'graph representation',
+      'graph learning', 'knowledge graph',
+    ],
+    'Quantum Machine Learning': [
+      'quantum machine learning', 'quantum circuit', 'quantum computing',
+      'variational quantum', 'qubit',
+    ],
+    'Edge & TinyML': [
+      'edge', 'tinyml', 'on-device', 'embedded', 'mobile', 'iot', 'resource-constrained',
+    ],
+  };
+  const fieldFilterClause = (fields) => {
+    const terms = fields.flatMap((field) => [field, ...(fieldAliases[field] || [])]);
+    return {
+      $or: [
+        { research_fields: { $in: fields } },
+        ...terms.flatMap((term) => [
+          { research_fields: regexFor(term) },
+          { keywords: regexFor(term) },
+          { title: regexFor(term) },
+          { abstract: regexFor(term) },
+        ]),
+      ],
+    };
+  };
 
-  // Full-text search
+  // Full-text / scoped search
   if (query.q) {
-    filter.$text = { $search: query.q };
+    if (query.scope === 'title') {
+      andClauses.push({ title: regexFor(query.q) });
+    } else if (query.scope === 'author') {
+      andClauses.push({ 'authors.name': regexFor(query.q) });
+    } else {
+      filter.$text = { $search: query.q };
+      usesTextSearch = true;
+    }
   }
+
+  const andTerms = query.andTerms ? query.andTerms.split(',').map((t) => t.trim()).filter(Boolean) : [];
+  const orTerms = query.orTerms ? query.orTerms.split(',').map((t) => t.trim()).filter(Boolean) : [];
+  const notTerms = query.notTerms ? query.notTerms.split(',').map((t) => t.trim()).filter(Boolean) : [];
+
+  for (const term of andTerms) andClauses.push(textLikeClause(term));
+  if (orTerms.length) andClauses.push({ $or: orTerms.map(textLikeClause) });
+  for (const term of notTerms) andClauses.push({ $nor: [textLikeClause(term)] });
 
   // Field filters
   if (query.fields) {
-    const fields = query.fields.split(',').map((f) => f.trim());
-    filter.research_fields = { $in: fields };
+    const fields = query.fields.split(',').map((f) => f.trim()).filter(Boolean);
+    if (fields.length) andClauses.push(fieldFilterClause(fields));
   }
   if (query.sources) {
     const sources = query.sources.split(',').map((s) => s.trim());
-    filter.source_name = { $in: sources };
+    andClauses.push({
+      $or: [
+        { source_name: { $in: sources } },
+        { 'sources.source_name': { $in: sources } },
+      ],
+    });
   }
   if (query.authors) {
     filter['authors.name'] = { $regex: query.authors, $options: 'i' };
@@ -35,8 +103,15 @@ async function searchPapers(query) {
   if (query.yearTo) {
     filter.publication_year = { ...filter.publication_year, $lte: parseInt(query.yearTo, 10) };
   }
-  if (query.type) {
+  if (query.types) {
+    const types = query.types.split(',').map((t) => t.trim()).filter(Boolean);
+    filter.type = { $in: types };
+  } else if (query.type) {
     filter.type = query.type;
+  }
+
+  if (andClauses.length) {
+    filter.$and = andClauses;
   }
 
   // Sort
@@ -53,7 +128,7 @@ async function searchPapers(query) {
       break;
     case 'relevance':
     default:
-      if (query.q) {
+      if (usesTextSearch) {
         sort = { score: { $meta: 'textScore' }, publication_year: -1 };
       } else {
         sort = { publication_year: -1 };
@@ -61,12 +136,13 @@ async function searchPapers(query) {
       break;
   }
 
-  const projection = query.q ? { score: { $meta: 'textScore' } } : {};
+  const projection = usesTextSearch ? { score: { $meta: 'textScore' } } : {};
 
-  const [papers, total] = await Promise.all([
+  const [rawPapers, total] = await Promise.all([
     Paper.find(filter, projection).sort(sort).skip(skip).limit(limit).lean(),
     Paper.countDocuments(filter),
   ]);
+  const papers = await ensureAbstracts(rawPapers);
 
   return { papers, page, limit, total };
 }

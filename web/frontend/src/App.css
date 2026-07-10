@@ -2480,6 +2480,12 @@
   max-width: 42ch;
   line-height: 1.55;
 }
+.state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-3);
+}
 .state--error {
   border-style: solid;
   border-color: var(--danger-weak);
@@ -3001,6 +3007,19 @@ mark.hl {
 }
 .rtype--preprint {
   color: var(--c6);
+}
+.rcard__doi {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+.rcard__doi a {
+  color: var(--primary-ink);
+  text-decoration: none;
+}
+.rcard__doi a:hover {
+  text-decoration: underline;
 }
 .rcard__abstract {
   margin-top: 9px;

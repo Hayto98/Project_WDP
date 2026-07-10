@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { makeDashboardData } from "../data/sample";
-import type { TimeRange, WidgetStatus } from "../data/types";
+import type { DashboardData, TimeRange, WidgetStatus } from "../data/types";
 import type { Theme } from "../hooks/useTheme";
 import { AiInsights } from "../components/AiInsights";
 import { FollowedRail } from "../components/FollowedRail";
@@ -18,6 +18,7 @@ import {
   IconSparkle,
   IconTrend,
 } from "../components/icons";
+import { dashboardApi } from "../lib/api";
 
 const RANGES: { id: TimeRange; label: string }[] = [
   { id: "12m", label: "12 tháng" },
@@ -36,13 +37,27 @@ export function OverviewPage({ theme, toggle }: Props) {
   const [range, setRange] = useState<TimeRange>("12m");
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewState>("default");
+  const [remoteData, setRemoteData] = useState<DashboardData | null>(null);
 
-  const data = useMemo(() => makeDashboardData(range), [range]);
+  const data = useMemo(() => remoteData ?? makeDashboardData(range), [range, remoteData]);
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 620);
-    return () => clearTimeout(t);
+    dashboardApi
+      .overview()
+      .then((next) => {
+        if (alive) setRemoteData(next);
+      })
+      .catch(() => {
+        if (alive) setRemoteData(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [range]);
 
   const status: WidgetStatus =
@@ -87,7 +102,11 @@ export function OverviewPage({ theme, toggle }: Props) {
             className="icon-btn"
             onClick={() => {
               setLoading(true);
-              setTimeout(() => setLoading(false), 620);
+              dashboardApi
+                .overview()
+                .then(setRemoteData)
+                .catch(() => setRemoteData(null))
+                .finally(() => setLoading(false));
             }}
             aria-label="Làm mới dữ liệu"
             title="Làm mới"
