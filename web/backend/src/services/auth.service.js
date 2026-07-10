@@ -152,10 +152,17 @@ async function getProfile(userId) {
 async function updateProfile(userId, updates) {
   const allowed = {};
   if (updates.full_name) allowed.full_name = updates.full_name;
-  if (updates.email) allowed.email = updates.email.toLowerCase();
+  if (updates.email) {
+    const email = updates.email.toLowerCase();
+    const existing = await User.findOne({ email, _id: { $ne: userId } }).select('_id').lean();
+    if (existing) {
+      throw Object.assign(new Error('Email already registered'), { statusCode: 409, code: 'CONFLICT' });
+    }
+    allowed.email = email;
+  }
 
   const user = await User.findByIdAndUpdate(userId, allowed, {
-    new: true,
+    returnDocument: 'after',
     runValidators: true,
   }).select('-password_hash');
 
@@ -172,7 +179,7 @@ async function updateDashboardLayout(userId, layout) {
   const user = await User.findByIdAndUpdate(
     userId,
     { dashboard_layout: layout },
-    { new: true },
+    { returnDocument: 'after' },
   ).select('dashboard_layout');
 
   if (!user) {

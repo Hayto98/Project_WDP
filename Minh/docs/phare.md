@@ -1440,3 +1440,1610 @@ git commit -m "feat: add observability notifications and report scheduler"
 ```
 
 Kiem tra ky truoc khi commit neu `package-lock.json` hoac file env example co thay doi ngoai y muon.
+
+## Cap nhat 2026-07-11 - FE route dung API that
+
+Muc tieu:
+
+- Tiep tuc phan "cap nhat cac route cho FE su dung API that".
+- Giam demo-only action tren cac page chinh.
+- Them AI action that cho Search, Gap, Library.
+- Cap nhat docs sau moi dot sua theo yeu cau.
+
+Da sua file:
+
+- `web/frontend/src/lib/api.ts`
+- `web/frontend/src/pages/FollowPage.tsx`
+- `web/frontend/src/pages/WorkspacePage.tsx`
+- `web/frontend/src/pages/AdminPage.tsx`
+- `web/frontend/src/pages/SearchPage.tsx`
+- `web/frontend/src/pages/GapPage.tsx`
+- `web/frontend/src/pages/LibraryPage.tsx`
+
+Chi tiet API client:
+
+- Them mapper/normalizer cho admin job, data source, follow subject/alert, workspace, workspace item, invite.
+- Them `asObjectId()` de tranh gui id demo/fallback len backend khi route Joi yeu cau Mongo ObjectId.
+- Them `userApi`:
+  - update profile.
+  - update dashboard layout.
+- Them `paperApi.getById`.
+- Mo rong `adminApi`:
+  - create job.
+  - update user.
+  - update data source.
+  - refresh reports.
+  - map jobs/data sources ve type FE.
+- Mo rong `followApi`:
+  - add/update/remove subject.
+  - mark alert read.
+  - mark all alerts read.
+- Mo rong `notificationApi`:
+  - unread count.
+- Mo rong `workspaceApi`:
+  - create/update/delete workspace.
+  - add/update/remove member.
+  - create/update/delete item.
+  - add comment.
+  - load researchers.
+  - create/respond invite.
+- Mo rong `feedbackApi`:
+  - create/list/update feedback.
+
+Chi tiet page:
+
+- Follow page:
+  - Load subject/alert tu API.
+  - Add subject goi `followApi.addSubject`.
+  - Update subject/rule goi `followApi.updateSubject`.
+  - Remove subject goi `followApi.removeSubject`.
+  - Mark alert read goi `followApi.markAlertRead`.
+  - Them notice khi API loi va rollback optimistic update.
+- Workspace page:
+  - Load researchers tu `/collaboration/researchers`.
+  - Tao workspace goi API.
+  - Tao/sua/xoa item goi API.
+  - Comment goi API.
+  - Doi role member goi API.
+  - Tao invite va accept/decline invite goi API.
+  - Them reload detail sau mutation de dong bo state.
+- Admin page:
+  - Toggle data source goi `adminApi.updateDataSource`.
+  - Lock/unlock user goi `adminApi.updateUser`.
+  - Nut refresh reports goi `adminApi.refreshReports`.
+  - Logout goi `authApi.logout`.
+- Search page:
+  - Detail paper da co nut `AI tom tat`, goi `/ai/summarize`.
+- Gap page:
+  - Nut `AI goi y them` goi `/ai/suggest-directions`.
+  - Click keyword goi `/ai/explain-term`.
+- Library page:
+  - Detail saved paper co nut `AI tom tat`, goi `/ai/summarize`.
+
+Da test:
+
+- Frontend build:
+  - `npm run build` pass.
+  - Vite canh bao chunk lon hon 500 kB, chua phai loi build.
+- Backend health:
+  - `GET http://localhost:5001/api/health` -> `200`.
+- Auth smoke:
+  - Login seed admin `minh.thanh@uni.edu.vn` thanh cong, access token hop le.
+- FE-backed API smoke:
+  - `GET /api/v1/collaboration/researchers` -> `200`, tra 3 researchers.
+  - `POST /api/v1/admin/reports/refresh` -> `200`.
+  - `POST /api/v1/ai/explain-term` -> `200`, provider fallback vi Gemini quota `LLM_QUOTA_EXCEEDED`.
+
+Trang thai fixlist gan nhat:
+
+- Da xong nhom lon:
+  - Security validation/Joi va mass assignment guard.
+  - Auth refresh/change-password va FE auto refresh.
+  - Notification route ordering.
+  - Core UX Search/Library/Saved Search/Paper detail.
+  - System logger va notification service.
+  - Scheduler/report generation.
+  - AI service + FE AI action.
+  - Service layer refactor cho collaboration/workspace/search/feedback.
+  - FE routes chinh da noi API that cho Follow/Workspace/Admin/Search/Gap/Library.
+- Con nen lam tiep:
+  - Exa provider trong backend search pipeline, hien FE da co source filter Exa nhung can verify backend provider service that.
+  - Data cleaning pipeline ro hon: normalize, dedupe, validate, mark cleaned.
+  - Workspace activity audit chi tiet hon bang model rieng hoac SystemLog metadata.
+  - Test tu dong cho validators/auth/search/workspace/admin/report/AI.
+  - Code splitting frontend de giam chunk build.
+
+Lenh commit goi y cho dot FE route/API nay:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/lib/api.ts web/frontend/src/pages/AdminPage.tsx web/frontend/src/pages/FollowPage.tsx web/frontend/src/pages/GapPage.tsx web/frontend/src/pages/LibraryPage.tsx web/frontend/src/pages/SearchPage.tsx web/frontend/src/pages/WorkspacePage.tsx
+git commit -m "feat: connect frontend routes to real APIs"
+```
+
+## Cap nhat 2026-07-11 - Exa provider va cleaning pipeline buoc 1
+
+Muc tieu:
+
+- Hoan thien nguon `Exa` that cho backend search/sync pipeline.
+- Dam bao Search page chon source `Exa` co du lieu tu API that, khong chi la filter tren FE.
+- Tao buoc dau cho data cleaning pipeline: normalize, validate, dedupe, merge source.
+- Cap nhat `.env` cac nguon con thieu theo thong tin da cung cap.
+
+Da tham chieu tai lieu:
+
+- Exa official docs: `POST https://api.exa.ai/search`, header `x-api-key`, body co `query`, `numResults`, `contents`.
+
+Da them file:
+
+- `web/backend/src/services/exa.service.js`
+- `web/backend/src/services/paperCleaning.service.js`
+
+Da sua file:
+
+- `web/backend/src/controllers/paper.controller.js`
+- `web/backend/src/services/scheduler.service.js`
+- `web/backend/src/services/sourceHealth.service.js`
+- `web/backend/src/seeds/seed.js`
+- `web/backend/.env.example`
+- `web/backend/.env`
+
+Chi tiet Exa:
+
+- Them `importExaByQuery(query, maxRecords, options)`.
+- Goi Exa bang `POST /search`.
+- Map result Exa ve model `Paper`:
+  - title.
+  - abstract/text/highlights.
+  - publication year/month.
+  - original URL.
+  - author neu co.
+  - keywords suy ra tu title/result.
+  - source `Exa`.
+- Gan `Exa` vao immediate sync source:
+  - `POST /api/v1/papers/sync-request`.
+- Gan `Exa` vao scheduler queued jobs:
+  - `runCrawlerJob`.
+- Gan `Exa` vao source health check:
+  - `POST /api/v1/admin/data-sources/check`.
+- Them seed DataSource `Exa`.
+- Neu database cu chua co DataSource `Exa`, sync/source-health se upsert de Admin page hien nguon nay.
+
+Chi tiet cleaning pipeline buoc 1:
+
+- `normalizeTitle()`:
+  - lowercase.
+  - bo punctuation.
+  - collapse whitespace.
+- `normalizeDoi()`:
+  - bo prefix `doi:` va `https://doi.org/`.
+- `cleanText()`:
+  - strip HTML entity/tag co ban.
+  - collapse whitespace.
+  - cap length.
+- `uniqueStrings()`:
+  - dedupe keywords/research fields.
+- `preparePaper()`:
+  - normalize title, DOI, abstract, URL, author, keyword.
+  - mark `Cleaned` neu record hop le.
+  - mark `Rejected` neu thieu title/normalized title.
+- `upsertCleanPaper()`:
+  - reject record thieu title/url.
+  - dedupe theo DOI hoac `title_normalized + publication_year`.
+  - neu paper da ton tai va chua co source Exa thi merge source/keywords/fields.
+
+Da cap nhat env:
+
+- `EXTERNAL_API_TIMEOUT_MS`
+- `SEMANTIC_SCHOLAR_API_URL`
+- `SEMANTIC_SCHOLAR_API_KEY`
+- `CROSSREF_API_URL`
+- `CROSSREF_MAILTO`
+- `IEEE_API_URL`
+- `IEEE_API_KEY`
+- `IEEE_XPLORE_API_KEY`
+- `EXA_API_URL`
+- `EXA_API_KEY`
+
+Da test:
+
+- Module load:
+  - `exa modules ok`
+  - `patched modules ok`
+- Backend restart tren `http://localhost:5001`.
+- Exa sync smoke:
+  - `POST /api/v1/papers/sync-request`
+  - payload sourceName `Exa`, maxRecords `1`
+  - ket qua `201`, job `success`, imported `1`.
+- Exa search smoke:
+  - `GET /api/v1/papers/search?q=ai harness&sources=Exa&limit=3`
+  - ket qua `200`, co record source `Exa`.
+- Admin DataSource smoke:
+  - `GET /api/v1/admin/data-sources`
+  - ket qua `200`, co `Exa`, endpoint `https://api.exa.ai`, enabled `true`.
+
+Trang thai fixlist sau dot nay:
+
+- Exa provider backend: da xong buoc chay that.
+- Data cleaning pipeline: da co service buoc 1 va Exa dung service nay.
+- Con nen lam tiep:
+  - Mo rong `paperCleaning.service.js` de OpenAlex/Crossref/arXiv/IEEE cung dung chung cleaning/upsert.
+  - Them WorkspaceActivity model hoac SystemLog metadata chi tiet cho workspace audit.
+  - Them automated tests cho Exa importer, cleaning service, auth validators, workspace mutation.
+  - Code splitting frontend de giam chunk build.
+
+Lenh commit goi y cho dot Exa/cleaning:
+
+```bash
+git add Minh/docs/phare.md web/backend/.env.example web/backend/src/controllers/paper.controller.js web/backend/src/seeds/seed.js web/backend/src/services/exa.service.js web/backend/src/services/paperCleaning.service.js web/backend/src/services/scheduler.service.js web/backend/src/services/sourceHealth.service.js
+git commit -m "feat: add exa source sync and paper cleaning pipeline"
+```
+
+## Cap nhat 2026-07-11 - Workspace activity audit that
+
+Muc tieu:
+
+- Thay activity tam suy ra tu `WorkspaceItem.updated_at` bang audit log that.
+- Ghi lai hanh dong workspace/member/item/comment tai service layer.
+- Giu API response cu de frontend khong can doi.
+
+Da them file:
+
+- `web/backend/src/models/WorkspaceActivity.js`
+
+Da sua file:
+
+- `web/backend/src/models/index.js`
+- `web/backend/src/services/workspace.service.js`
+- `web/backend/src/controllers/workspace.controller.js`
+
+Chi tiet:
+
+- Them collection `workspace_activities`.
+- Moi activity co:
+  - `workspace_id`
+  - `actor_id`
+  - `actor_name`
+  - `action`
+  - `target_type`
+  - `target_id`
+  - `target_title`
+  - `details`
+  - `created_at`
+- Cac action dang ghi:
+  - `workspace_created`
+  - `workspace_updated`
+  - `workspace_deleted`
+  - `member_added`
+  - `member_updated`
+  - `member_removed`
+  - `item_created`
+  - `item_updated`
+  - `item_deleted`
+  - `comment_added`
+- `GET /api/v1/workspaces/:id/activities` bay gio doc tu `WorkspaceActivity`.
+- Response van map ve format FE dang dung:
+  - `id`
+  - `workspace_id`
+  - `actor`
+  - `action`
+  - `when`
+  - them `type`, `target_type`, `target_id`, `details`.
+
+Da test:
+
+- Module load:
+  - `workspace audit modules ok`.
+- Backend restart tren `http://localhost:5001`.
+- Smoke workspace audit:
+  - tao workspace tam.
+  - tao item tam.
+  - them comment.
+  - `GET /api/v1/workspaces/:id/activities` -> `200`.
+  - tra 3 activities:
+    - `comment_added`
+    - `item_created`
+    - `workspace_created`
+  - actor hien `minh.thanh@uni.edu.vn`.
+  - da cleanup workspace tam bang `DELETE /api/v1/workspaces/:id`.
+
+Trang thai fixlist sau dot nay:
+
+- Workspace activity chi tiet: da co model rieng va API doc du lieu audit that.
+- Con nen lam tiep:
+  - Refactor OpenAlex/Crossref/arXiv/IEEE sang dung chung `paperCleaning.service.js`.
+  - Them automated tests cho Exa importer, cleaning service, auth validators, workspace activity.
+  - Code splitting frontend de giam chunk build.
+
+Lenh commit goi y cho dot workspace audit:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/controllers/workspace.controller.js web/backend/src/models/WorkspaceActivity.js web/backend/src/models/index.js web/backend/src/services/workspace.service.js
+git commit -m "feat: add workspace activity audit log"
+```
+
+## Cap nhat 2026-07-11 - Backend tests cho Exa/cleaning
+
+Muc tieu:
+
+- Bien `npm test` backend tu script fail mac dinh thanh test runner that.
+- Them regression tests cho Exa mapper va cleaning pipeline buoc 1.
+- Khong them dependency moi.
+
+Da sua file:
+
+- `web/backend/package.json`
+
+Da them file:
+
+- `web/backend/test/paperCleaning.test.js`
+- `web/backend/test/exa.service.test.js`
+
+Chi tiet:
+
+- Doi script:
+  - tu `echo "Error: no test specified" && exit 1`
+  - sang `node --test`.
+- Test `paperCleaning.service.js`:
+  - normalize title.
+  - normalize DOI tu URL va prefix `doi:`.
+  - clean HTML/entity text.
+  - dedupe keyword case-insensitive.
+  - prepare valid paper thanh `Cleaned`.
+  - mark paper thieu title thanh `Rejected`.
+- Test `exa.service.js`:
+  - map Exa result ve payload `Paper`.
+  - extract DOI tu URL.
+  - map year/month.
+  - infer type Journal/Preprint.
+  - map author/source/keywords.
+
+Da test:
+
+- `npm test` trong `web/backend` pass.
+- Ket qua:
+  - tests: 8
+  - pass: 8
+  - fail: 0
+
+Trang thai fixlist sau dot nay:
+
+- Automated tests: da bat dau co coverage cho Exa va cleaning.
+- Con nen lam tiep:
+  - Them API/integration tests cho auth refresh/change-password, workspace activity, admin reports.
+  - Refactor OpenAlex/Crossref/arXiv/IEEE sang dung chung `paperCleaning.service.js`.
+  - Code splitting frontend de giam chunk build.
+
+Lenh commit goi y cho dot test:
+
+```bash
+git add Minh/docs/phare.md web/backend/package.json web/backend/test/exa.service.test.js web/backend/test/paperCleaning.test.js
+git commit -m "test: cover exa mapping and paper cleaning"
+```
+
+## Cap nhat 2026-07-11 - Dung chung cleaning pipeline cho cac source
+
+Muc tieu:
+
+- Mo rong `paperCleaning.service.js` ra ngoai Exa.
+- Giam duplicate logic dedupe/upsert trong OpenAlex, Crossref, arXiv, IEEE.
+- Them test cho mapper cua tat ca source chinh.
+
+Da sua file:
+
+- `web/backend/src/services/openalex.service.js`
+- `web/backend/src/services/crossref.service.js`
+- `web/backend/src/services/arxiv.service.js`
+- `web/backend/src/services/ieee.service.js`
+
+Da them file:
+
+- `web/backend/test/sourceMappers.test.js`
+
+Chi tiet:
+
+- OpenAlex importer:
+  - dung `normalizeDoi`, `normalizeTitle`, `upsertCleanPaper`.
+  - export `mapWorkToPaper` de test.
+- Crossref importer:
+  - dung `cleanText`, `normalizeTitle`, `upsertCleanPaper`.
+  - export `mapItemToPaper` de test.
+- arXiv importer:
+  - dung `normalizeTitle`, `upsertCleanPaper`.
+  - export `mapEntryToPaper` de test.
+- IEEE importer:
+  - dung `normalizeTitle`, `upsertCleanPaper`.
+  - export `mapArticleToPaper` de test.
+- Ket qua la cac source deu cung dedupe theo:
+  - DOI neu co.
+  - hoac `title_normalized + publication_year`.
+  - merge source/keywords/fields neu paper da ton tai nhung chua co source do.
+
+Da test:
+
+- Module load:
+  - `importer modules ok`.
+- Backend tests:
+  - `npm test` pass.
+  - tests: 12
+  - pass: 12
+  - fail: 0
+- Backend restart tren `http://localhost:5001`.
+- Smoke API:
+  - `GET /api/health` -> `200`.
+  - `POST /api/v1/papers/sync-request` voi source `OpenAlex`, maxRecords `1` -> `201`.
+  - job `success`, result co imported/skipped/source_total.
+
+Trang thai fixlist sau dot nay:
+
+- Data cleaning pipeline: da dung chung cho Exa/OpenAlex/Crossref/arXiv/IEEE o tang import.
+- Con nen lam tiep:
+  - Fix warning duplicate Mongoose indexes khi start backend.
+  - Them integration tests cho auth/workspace/admin.
+  - Code splitting frontend de giam chunk build.
+
+Lenh commit goi y cho dot cleaning refactor:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/services/openalex.service.js web/backend/src/services/crossref.service.js web/backend/src/services/arxiv.service.js web/backend/src/services/ieee.service.js web/backend/test/sourceMappers.test.js
+git commit -m "refactor: share paper cleaning across source importers"
+```
+
+## Cap nhat 2026-07-11 - Don warning backend va code splitting frontend
+
+Muc tieu:
+
+- Don warning duplicate Mongoose indexes khi start backend.
+- Giam bundle frontend de het canh bao Vite chunk > 500 kB.
+
+Da sua file backend:
+
+- `web/backend/src/models/User.js`
+- `web/backend/src/models/DataSource.js`
+- `web/backend/src/models/Paper.js`
+
+Chi tiet backend:
+
+- Xoa duplicate `userSchema.index({ email: 1 }, { unique: true })` vi field `email` da co `unique: true`.
+- Xoa duplicate `dataSourceSchema.index({ name: 1 }, { unique: true })` vi field `name` da co `unique: true`.
+- Bo `sparse: true` tren field `doi`, giu explicit index:
+  - `paperSchema.index({ doi: 1 }, { unique: true, sparse: true })`.
+- Restart backend khong con warning duplicate index.
+- Redis warning van con neu Redis local khong chay, app van degrade sang khong cache.
+
+Da sua file frontend:
+
+- `web/frontend/src/App.tsx`
+
+Chi tiet frontend:
+
+- Doi page imports sang `React.lazy`.
+- Them `Suspense` wrapper cho route rendering.
+- Giu hash route behavior cu.
+- Them fallback nhe khi dang load page.
+
+Da test:
+
+- Backend:
+  - `npm test` pass.
+  - tests: 12
+  - pass: 12
+  - restart backend thanh cong.
+  - startup log khong con duplicate index warning.
+- Frontend:
+  - `npm run build` pass.
+  - Khong con warning chunk > 500 kB.
+  - Main JS chunk sau split: khoang `216.58 kB`.
+  - Chart chunk rieng: khoang `349.08 kB`.
+
+Trang thai fixlist sau dot nay:
+
+- Duplicate Mongoose index warnings: da fix.
+- Frontend chunk warning: da fix bang route-level lazy loading.
+- Con nen lam tiep:
+  - Them integration tests cho auth refresh/change-password, workspace activity, admin reports.
+  - Xem lai `.env` truoc commit vi file nay co secret that va khong nen commit.
+
+Lenh commit goi y cho dot nay:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/models/User.js web/backend/src/models/DataSource.js web/backend/src/models/Paper.js web/frontend/src/App.tsx
+git commit -m "chore: clean backend indexes and split frontend routes"
+```
+
+## Cap nhat 2026-07-11 - Integration tests va don Mongoose update warnings
+
+Muc tieu:
+
+- Them integration tests cho auth, workspace activity, admin reports.
+- Lam `src/app.js` testable ma khong tu dong listen khi duoc `require`.
+- Don warning Mongoose deprecated `{ new: true }`.
+
+Da sua file:
+
+- `web/backend/src/app.js`
+- `web/backend/package.json`
+- `web/backend/src/controllers/admin.controller.js`
+- `web/backend/src/controllers/paper.controller.js`
+- `web/backend/src/services/auth.service.js`
+- `web/backend/src/services/collaboration.service.js`
+- `web/backend/src/services/feedback.service.js`
+- `web/backend/src/services/follow.service.js`
+- `web/backend/src/services/library.service.js`
+- `web/backend/src/services/report.service.js`
+- `web/backend/src/services/search.service.js`
+- `web/backend/src/services/workspace.service.js`
+
+Da them file:
+
+- `web/backend/test/api.integration.test.js`
+
+Chi tiet:
+
+- `app.js`:
+  - export `{ app, start }`.
+  - chi goi `start()` khi file duoc chay truc tiep bang `node src/app.js`.
+  - khi test `require('../src/app')` se khong tu listen/connect/scheduler nua.
+- `package.json`:
+  - `npm test` chay `NODE_ENV=test node --test`.
+- Integration tests:
+  - tu start Express app tren port random.
+  - connect Mongo bang `mongodbUri` hien co.
+  - tao du lieu test voi email domain `@wdp-test.example.com`.
+  - cleanup user/workspace/item/activity test sau khi chay.
+- Test coverage moi:
+  - Auth:
+    - register.
+    - login.
+    - refresh token.
+    - change password fail khi current password sai.
+    - change password success.
+    - old password bi reject.
+    - new password login duoc.
+  - Workspace:
+    - create workspace.
+    - create item.
+    - add comment.
+    - get activities.
+    - verify activity types `comment_added`, `item_created`, `workspace_created`.
+  - Admin:
+    - create admin test user truc tiep trong DB.
+    - login admin.
+    - `POST /api/v1/admin/reports/refresh` success.
+- Don Mongoose update warning:
+  - thay `{ new: true }` bang `{ returnDocument: 'after' }` trong services/controllers.
+
+Da test:
+
+- `npm test` pass.
+- Ket qua:
+  - tests: 15
+  - pass: 15
+  - fail: 0
+- Backend restart tren `http://localhost:5001`.
+- Startup log khong con duplicate index warning va khong con `new` option warning.
+- Redis warning van con neu Redis local khong chay; app van fallback khong cache.
+
+Trang thai fixlist sau dot nay:
+
+- Integration tests cho auth/workspace/admin: da co.
+- App testability: da co.
+- Mongoose warnings: da don.
+- Con nen lam tiep:
+  - Neu muon log that su sach 100%, cai/chay Redis local hoac tat Redis connect trong development khi khong can cache.
+  - Co the them CI script rieng `test:unit`/`test:integration`.
+
+Lenh commit goi y cho dot nay:
+
+```bash
+git add Minh/docs/phare.md web/backend/package.json web/backend/src/app.js web/backend/src/controllers/admin.controller.js web/backend/src/controllers/paper.controller.js web/backend/src/services/auth.service.js web/backend/src/services/collaboration.service.js web/backend/src/services/feedback.service.js web/backend/src/services/follow.service.js web/backend/src/services/library.service.js web/backend/src/services/report.service.js web/backend/src/services/search.service.js web/backend/src/services/workspace.service.js web/backend/test/api.integration.test.js
+git commit -m "test: add backend integration coverage"
+```
+
+## Cap nhat 2026-07-11 - Redis optional flag
+
+Muc tieu:
+
+- Don Redis warning khi local/dev khong chay Redis.
+- Giu kha nang bat Redis lai bang env khi can cache.
+
+Da sua file:
+
+- `web/backend/src/config/env.js`
+- `web/backend/src/config/redis.js`
+- `web/backend/src/app.js`
+- `web/backend/.env.example`
+- `web/backend/.env`
+
+Chi tiet:
+
+- Them `REDIS_ENABLED`.
+- Default logic:
+  - Neu `REDIS_ENABLED=false`, app khong tao Redis client va khong connect Redis.
+  - Cac code dang dung Redis da co guard `if (redis)`, nen fallback khong cache.
+- Local `.env` da set:
+  - `REDIS_ENABLED=false`
+- `.env.example` da them:
+  - `REDIS_ENABLED=false`
+
+Da test:
+
+- Module load:
+  - `redis flag modules ok`.
+- Backend tests:
+  - `npm test` pass.
+  - tests: 15
+  - pass: 15
+  - fail: 0
+- Backend restart tren `http://localhost:5001`.
+- Startup log sach:
+  - MongoDB connected.
+  - Backend running.
+  - Khong con Redis warning.
+  - Khong con Mongoose index/update warning.
+
+Trang thai fixlist sau dot nay:
+
+- Local backend startup log: sach.
+- Redis: optional theo env.
+- Con nen lam tiep:
+  - Tach `test:unit` va `test:integration` neu muon CI nhanh hon.
+  - Review lai git diff mot lan truoc khi commit vi scope da lon.
+
+Lenh commit goi y cho dot Redis:
+
+```bash
+git add Minh/docs/phare.md web/backend/.env.example web/backend/src/app.js web/backend/src/config/env.js web/backend/src/config/redis.js
+git commit -m "chore: make redis optional in local development"
+```
+
+## Cap nhat 2026-07-11 - Tach test scripts unit/integration
+
+Muc tieu:
+
+- Cho phep chay unit test nhanh rieng.
+- Cho phep chay integration test rieng.
+- Giu `npm test` chay full suite.
+- Don warning `MongoDB disconnected` trong test output.
+
+Da sua file:
+
+- `web/backend/package.json`
+- `web/backend/src/config/database.js`
+
+Chi tiet:
+
+- Them scripts:
+  - `npm run test:unit`
+  - `npm run test:integration`
+  - `npm test`
+- `test:unit` chay:
+  - `test/exa.service.test.js`
+  - `test/paperCleaning.test.js`
+  - `test/sourceMappers.test.js`
+- `test:integration` chay:
+  - `test/api.integration.test.js`
+- `database.js` khong log `MongoDB disconnected` khi `NODE_ENV=test`.
+
+Da test:
+
+- `npm run test:unit` pass:
+  - tests: 12
+  - pass: 12
+- `npm run test:integration` pass:
+  - tests: 3
+  - pass: 3
+- `npm test` pass:
+  - tests: 15
+  - pass: 15
+  - fail: 0
+
+Trang thai fixlist sau dot nay:
+
+- Test scripts tach ro: da xong.
+- Test output sach hon.
+- Con nen lam tiep:
+  - Review/tong hop diff de chia commit hop ly.
+  - Cap nhat `FIXLIST.md` checkbox neu ban muon no phan anh trang thai da implement.
+
+Lenh commit goi y cho dot nay:
+
+```bash
+git add Minh/docs/phare.md web/backend/package.json web/backend/src/config/database.js
+git commit -m "chore: split backend test scripts"
+```
+
+## Cap nhat 2026-07-11 - Hoan tat FIXLIST checkbox
+
+Muc tieu:
+
+- Xu ly cac checkbox con ho trong `FIXLIST.md`.
+- Refactor notification controller sang service layer dung nhu plan.
+- Xoa validation thu cong con sot trong paper sync controller.
+- Tick FIXLIST theo trang thai code da verify.
+
+Da sua file:
+
+- `FIXLIST.md`
+- `web/backend/src/controllers/notification.controller.js`
+- `web/backend/src/services/notification.service.js`
+- `web/backend/src/controllers/paper.controller.js`
+
+Chi tiet:
+
+- `notification.service.js` them read/mark APIs:
+  - `listNotifications`
+  - `markNotificationRead`
+  - `markAllNotificationsRead`
+  - `countUnreadNotifications`
+- `notification.controller.js` khong query model truc tiep nua, chuyen sang service.
+- `paper.controller.js` trong `requestCorpusSync()` khong con block validate thu cong `if (!query)`.
+- Joi validator hien la nguon validate cho sync request.
+- `FIXLIST.md`:
+  - Tick tat ca task checkbox `[x]`.
+  - Cap nhat bang Business Rules Coverage:
+    - Exa/IEEE/importers.
+    - Scheduler.
+    - Cleaning pipeline.
+    - Notification auto-create.
+    - AI Gemini/fallback.
+    - Auth refresh/change password.
+    - System logger.
+    - Redis optional fallback.
+
+Da test:
+
+- Module load:
+  - `notification refactor modules ok`.
+- Backend:
+  - `npm test` pass.
+  - tests: 15
+  - pass: 15
+  - fail: 0
+- Frontend:
+  - `npm run build` pass.
+- FIXLIST check:
+  - `rg '\\[ \\]|\\[/\\]' FIXLIST.md` chi con dong legend trang thai.
+- Backend restart tren `http://localhost:5001`, startup log sach.
+
+Trang thai fixlist sau dot nay:
+
+- `FIXLIST.md` da duoc cap nhat theo code hien tai.
+- Khong con checkbox task chua tick.
+- Can luu y truoc commit:
+  - Khong add `web/backend/.env` vi co secret that.
+  - Nen review diff/commit theo nhom vi scope lon.
+
+Lenh commit goi y cho dot nay:
+
+```bash
+git add FIXLIST.md Minh/docs/phare.md web/backend/src/controllers/notification.controller.js web/backend/src/services/notification.service.js web/backend/src/controllers/paper.controller.js
+git commit -m "chore: complete fixlist checklist"
+```
+
+## Cap nhat 2026-07-11 - Audit Mongo update operators
+
+Muc tieu:
+
+- Audit cac thay doi sau khi tick FIXLIST de bat bug runtime con sot.
+- Sua cac Mongo update object bi mix operator va field truc tiep.
+- Dam bao source health endpoint chay that sau khi them Exa/upsert.
+
+Da sua file:
+
+- `web/backend/src/services/sourceHealth.service.js`
+- `web/backend/src/services/ieee.service.js`
+- `web/backend/src/services/scheduler.service.js`
+
+Chi tiet:
+
+- `sourceHealth.service.js`:
+  - Sua `DataSource.updateOne()` tu mix `$setOnInsert` voi field truc tiep sang:
+    - `$setOnInsert`
+    - `$set`
+  - Tranh loi Mongo khi chay `POST /api/v1/admin/data-sources/check`.
+- `ieee.service.js`:
+  - Sua `DataSource.updateOne()` tu mix `$inc` voi field truc tiep sang:
+    - `$set`
+    - `$inc`
+- `scheduler.service.js`:
+  - Doi `last_sync_status` tu lowercase `success/failed` sang enum dung schema:
+    - `Success`
+    - `Failed`
+
+Da test:
+
+- Module load:
+  - `data source update modules ok`.
+  - `source health module ok`.
+- Backend:
+  - `npm test` pass.
+  - tests: 15
+  - pass: 15
+  - fail: 0
+- Backend restart tren `http://localhost:5001`.
+- Health:
+  - `GET /api/health` -> `200`.
+- Source health smoke:
+  - `POST /api/v1/admin/data-sources/check` -> `200`.
+  - Tra 6 source.
+  - OpenAlex/Semantic Scholar/Crossref/arXiv/Exa ok.
+  - IEEE Xplore fail health theo response nguon/API, nhung endpoint va DB update thanh cong.
+
+Lenh commit goi y cho dot audit nay:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/services/sourceHealth.service.js web/backend/src/services/ieee.service.js web/backend/src/services/scheduler.service.js
+git commit -m "fix: harden data source status updates"
+```
+
+## Cap nhat 2026-07-11 - Git ignore va secret audit
+
+Muc tieu:
+
+- Giam rui ro commit nham `.env` co secret that.
+- Kiem tra nhanh repository co lo key that ngoai `.env` khong.
+
+Da them file:
+
+- `.gitignore`
+
+Chi tiet:
+
+- Them root `.gitignore` de ignore:
+  - `.env`
+  - `.env.local`
+  - `.env.*.local`
+  - `**/.env`
+  - `node_modules`
+  - `dist/build`
+  - logs/coverage/temp/editor files.
+- Van allow `.env.example`:
+  - `!.env.example`
+  - `!**/.env.example`
+
+Da test/kiem tra:
+
+- `git ls-files` chi thay:
+  - `web/backend/.env.example`
+- `git check-ignore`:
+  - `web/backend/.env` bi ignore boi `web/backend/.gitignore`.
+  - `web/frontend/.env` va root `.env` bi ignore boi root `.gitignore`.
+- Secret scan nhanh voi pattern key:
+  - khong thay key that trong file tracked/khong-bi-ignore.
+- `git diff --check` pass.
+
+Lenh commit goi y cho dot nay:
+
+```bash
+git add .gitignore Minh/docs/phare.md
+git commit -m "chore: add root gitignore for env safety"
+```
+
+## Cap nhat 2026-07-11 - Hoan thien FR-001 sources Semantic Scholar va ACM
+
+Muc tieu:
+
+- Hoan thien cac source con thieu trong yeu cau FR-001.
+- Dam bao batch/sync support day du:
+  - OpenAlex
+  - Semantic Scholar
+  - Crossref
+  - arXiv
+  - IEEE Xplore
+  - ACM Digital Library
+  - Exa
+
+Nguon tai lieu/API da tham chieu:
+
+- Semantic Scholar Academic Graph API official docs:
+  - REST API cho paper search, auth qua `x-api-key`, endpoint Graph API.
+- ACM Digital Library:
+  - Khong co public REST API on dinh mien phi nhu cac nguon con lai.
+  - Backend dung Crossref metadata fallback de lay ban ghi ACM-indexed va gan source label `ACM Digital Library`.
+
+Da them file:
+
+- `web/backend/src/services/semanticScholar.service.js`
+- `web/backend/src/services/acm.service.js`
+
+Da sua file:
+
+- `web/backend/src/models/DataSource.js`
+- `web/backend/src/models/Paper.js`
+- `web/backend/src/validators/paper.validator.js`
+- `web/backend/src/validators/admin.validator.js`
+- `web/backend/src/seeds/seed.js`
+- `web/backend/src/controllers/paper.controller.js`
+- `web/backend/src/services/scheduler.service.js`
+- `web/backend/src/services/sourceHealth.service.js`
+- `web/backend/test/sourceMappers.test.js`
+- `web/frontend/src/data/searchSample.ts`
+- `web/frontend/src/data/adminSample.ts`
+- `web/frontend/src/pages/SearchPage.tsx`
+- `FIXLIST.md`
+
+Chi tiet backend:
+
+- Them enum source `ACM Digital Library`.
+- Them `semanticScholar.service.js`:
+  - `fetchSemanticScholarPapers`
+  - `importSemanticScholarByQuery`
+  - `mapSemanticPaperToPaper`
+  - Goi Graph API `/paper/search`.
+  - Map title, abstract, year, authors, citationCount, venue, fields, DOI.
+  - Dung `upsertCleanPaper`.
+- Them `acm.service.js`:
+  - `fetchAcmWorks`
+  - `importAcmByQuery`
+  - `mapAcmItemToPaper`
+  - Dung Crossref query fallback.
+  - Chi import item co dau hieu ACM:
+    - publisher ACM.
+    - container/title/URL ACM.
+    - DOI `10.1145/*`.
+  - Gan source_name `ACM Digital Library`.
+- Gan Semantic Scholar va ACM vao:
+  - `POST /api/v1/papers/sync-request`.
+  - scheduler `IMPORTERS`.
+  - source health check.
+- Source health hien tra 7 nguon.
+
+Chi tiet frontend:
+
+- Search source filters them:
+  - `ACM Digital Library`.
+- Search syncable sources them:
+  - `Semantic Scholar`
+  - `ACM Digital Library`
+  - `Exa`
+- Bo note cu noi Exa chi filter corpus.
+- Admin sample data co them ACM/Exa fallback rows.
+
+Da test:
+
+- Module load:
+  - `semantic/acm modules ok`.
+- Backend tests:
+  - `npm test` pass.
+  - tests: 17
+  - pass: 17
+  - fail: 0
+- Frontend:
+  - `npm run build` pass.
+- Backend restart tren `http://localhost:5001`.
+- Smoke sync:
+  - `POST /api/v1/papers/sync-request` source `Semantic Scholar`, maxRecords `1` -> `201`, job `success`, imported `1`.
+  - `POST /api/v1/papers/sync-request` source `ACM Digital Library`, maxRecords `1` -> `201`, job `success`; query smoke skip 1 item vi ket qua dau khong qua ACM filter, endpoint/importer van chay dung.
+- Source health:
+  - `POST /api/v1/admin/data-sources/check` -> `200`.
+  - count `7`.
+  - OpenAlex/Semantic Scholar/Crossref/arXiv/ACM Digital Library/Exa ok.
+  - IEEE Xplore fail health theo response nguon/API, khong phai loi endpoint.
+
+Trang thai sau dot nay:
+
+- FR-001 source coverage da day du theo danh sach yeu cau, voi ACM duoc implement bang Crossref metadata fallback.
+- `FIXLIST.md` BR-001 da cap nhat day du source list.
+
+Lenh commit goi y:
+
+```bash
+git add FIXLIST.md Minh/docs/phare.md web/backend/src/models/DataSource.js web/backend/src/models/Paper.js web/backend/src/validators/paper.validator.js web/backend/src/validators/admin.validator.js web/backend/src/seeds/seed.js web/backend/src/controllers/paper.controller.js web/backend/src/services/scheduler.service.js web/backend/src/services/sourceHealth.service.js web/backend/src/services/semanticScholar.service.js web/backend/src/services/acm.service.js web/backend/test/sourceMappers.test.js web/frontend/src/data/searchSample.ts web/frontend/src/data/adminSample.ts web/frontend/src/pages/SearchPage.tsx
+git commit -m "feat: add semantic scholar and acm source sync"
+```
+
+## Cap nhat 2026-07-11 - Hoan thien FR-009/FR-010 con ho
+
+Muc tieu:
+
+- Hoan thien hanh vi notification khi paper moi khop subject dang follow.
+- Hoan thien phan AI/corpus goi y paper lien quan trong FR-009.
+
+Da sua file:
+
+- `web/backend/src/services/follow.service.js`
+- `web/backend/src/services/paperCleaning.service.js`
+- `web/backend/src/services/ai.service.js`
+- `web/backend/src/controllers/ai.controller.js`
+- `web/backend/src/validators/ai.validator.js`
+- `web/backend/src/routes/ai.routes.js`
+- `web/backend/test/follow.service.test.js`
+- `web/backend/test/api.integration.test.js`
+- `web/backend/package.json`
+- `web/frontend/src/lib/api.ts`
+- `web/frontend/src/pages/SearchPage.tsx`
+- `web/frontend/src/App.css`
+
+Chi tiet FR-010:
+
+- Them matcher follow subject:
+  - Keyword khop title/abstract/keywords/fields.
+  - Field khop `research_fields`.
+  - Author khop authors.
+- Them `notifyFollowersForPaper(paper)`.
+- `paperCleaning.service.js` goi notify sau khi:
+  - tao paper moi.
+  - merge source moi vao paper da ton tai.
+- Tranh duplicate notification theo:
+  - user.
+  - follow_id.
+  - related paper id.
+- Notification tao ra co type `paper`, link ve `#search`, source/metadata/citation priority.
+
+Chi tiet FR-009:
+
+- Them endpoint:
+  - `POST /api/v1/ai/related-papers`
+- Endpoint lay paper lien quan tu corpus theo:
+  - title text.
+  - keywords.
+  - fields.
+  - optional paperId exclude.
+- Tra provider `corpus`, khong can gui PII/abstract ra LLM.
+- Frontend `aiApi.relatedPapers()`.
+- Search detail co nut:
+  - `Paper lien quan`
+- UI hien danh sach paper lien quan voi title/year/source.
+
+Da test:
+
+- Backend tests:
+  - `npm test` pass.
+  - tests: 21
+  - pass: 21
+  - fail: 0
+- Frontend:
+  - `npm run build` pass.
+- Smoke DB follow notification:
+  - tao user test co followed subject.
+  - upsert paper khop keyword.
+  - notification `paper` duoc tao.
+  - da cleanup user/paper/notification test.
+- Backend restart tren `http://localhost:5001`.
+- Smoke API:
+  - `POST /api/v1/ai/related-papers` -> `200`.
+  - tra 3 paper, provider `corpus`.
+
+Trang thai:
+
+- FR-009: bo sung goi y paper lien quan da xong.
+- FR-010: auto notification cho followed subject match da xong.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/backend/package.json web/backend/src/services/follow.service.js web/backend/src/services/paperCleaning.service.js web/backend/src/services/ai.service.js web/backend/src/controllers/ai.controller.js web/backend/src/validators/ai.validator.js web/backend/src/routes/ai.routes.js web/backend/test/follow.service.test.js web/backend/test/api.integration.test.js web/frontend/src/lib/api.ts web/frontend/src/pages/SearchPage.tsx web/frontend/src/App.css
+git commit -m "feat: add follow match notifications and related paper recommendations"
+```
+
+## Cap nhat 2026-07-11 - Hoan thien FE account/feedback theo fixlist
+
+Muc tieu:
+
+- Noi not chuc nang FE con ho cho `change-password`.
+- Noi feedback flow that tu user den admin.
+- Bo sung coverage test cho feedback API.
+
+Da sua file:
+
+- `web/frontend/src/components/icons.tsx`
+- `web/frontend/src/components/Sidebar.tsx`
+- `web/frontend/src/App.tsx`
+- `web/frontend/src/pages/AccountPage.tsx`
+- `web/frontend/src/pages/AdminPage.tsx`
+- `web/frontend/src/App.css`
+- `web/backend/src/services/feedback.service.js`
+- `web/backend/test/api.integration.test.js`
+
+Chi tiet frontend:
+
+- Them route sidebar:
+  - `#account` / `Tai khoan`
+- Them `AccountPage` cho user:
+  - hien thong tin tai khoan hien tai.
+  - form doi mat khau goi `PUT /auth/change-password`.
+  - form gui feedback goi `POST /feedbacks`.
+  - danh sach feedback cua user goi `GET /feedbacks`.
+  - hien status `Pending`, `Reviewed`, `Resolved` va admin note neu co.
+- Them Admin tab:
+  - `Phan hoi`
+  - doc feedback that tu `GET /feedbacks`.
+  - admin cap nhat status qua `PUT /feedbacks/:id`.
+  - admin cap nhat `admin_note` khi blur textarea.
+
+Chi tiet backend:
+
+- `feedback.service.js` populate user khi admin list feedback:
+  - `full_name`
+  - `email`
+  - `roles`
+  - `status`
+- User thuong van chi xem feedback cua chinh minh.
+
+Da test:
+
+- Backend:
+  - `npm test` pass.
+  - tests: 22
+  - pass: 22
+  - fail: 0
+- Frontend:
+  - `npm run build` pass.
+- Integration test moi:
+  - user submit feedback.
+  - user list feedback cua minh.
+  - admin list feedback thay thong tin user.
+  - admin update status `Resolved` va `admin_note`.
+
+Trang thai:
+
+- Sprint 1 auth/change-password da co UI that.
+- Feedback flow da co UI that cho user va admin.
+- Them mot phan con ho cua "frontend route su dung API that" da hoan thien.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/services/feedback.service.js web/backend/test/api.integration.test.js web/frontend/src/components/icons.tsx web/frontend/src/components/Sidebar.tsx web/frontend/src/App.tsx web/frontend/src/pages/AccountPage.tsx web/frontend/src/pages/AdminPage.tsx web/frontend/src/App.css
+git commit -m "feat: add account and feedback management UI"
+```
+
+## Cap nhat 2026-07-11 - Fix crash ResearchGapHeatmap
+
+Loi user bao:
+
+- `ResearchGapHeatmap.tsx:43 Uncaught TypeError: Cannot read properties of undefined (reading 'gap')`
+
+Nguyen nhan:
+
+- Component overview cu gia dinh moi cap `field + aspect` luon co san mot cell trong `gaps`.
+- Khi du lieu API that bi thieu mot to hop field/aspect, `gaps.find(...)` tra `undefined`.
+- Code dung non-null assertion `!` nen runtime van crash khi doc `c.gap`.
+
+Da sua file:
+
+- `web/frontend/src/components/ResearchGapHeatmap.tsx`
+
+Chi tiet:
+
+- Them fallback cell an toan khi khong tim thay data:
+  - `density: 0`
+  - `papers: 0`
+  - `gap: false`
+- Heatmap tiep tuc render o trong thay vi crash trang overview.
+
+Da test:
+
+- Frontend:
+  - `npm run build` pass.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/components/ResearchGapHeatmap.tsx
+git commit -m "fix: guard missing research gap heatmap cells"
+```
+
+## Cap nhat 2026-07-11 - Fix object fields trong ResearchGapHeatmap
+
+Loi user bao:
+
+- `Encountered two children with the same key, [object Object]`
+- `Objects are not valid as a React child (found: object with keys {key, label, token})`
+
+Nguyen nhan:
+
+- `ResearchGapHeatmap` type cu khai bao `fields: string[]`.
+- Du lieu sample/overview co the truyen `gapFields` la object:
+  - `{ key, label, token }`
+- React dung object lam key/render child nen thanh `[object Object]` va crash.
+
+Da sua file:
+
+- `web/frontend/src/components/ResearchGapHeatmap.tsx`
+
+Chi tiet:
+
+- Cho phep `fields` va `aspects` nhan ca string lan object.
+- Normalize axis item ve:
+  - `key`
+  - `label`
+- Render label thay vi render object.
+- Key tung cell thanh `${field.key}-${aspect.key}` de tranh duplicate key.
+- Matcher cell ho tro so sanh string/object.
+
+Da test:
+
+- Frontend:
+  - `npm run build` pass.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/components/ResearchGapHeatmap.tsx
+git commit -m "fix: normalize research gap heatmap axes"
+```
+
+## Cap nhat 2026-07-11 - Chuan hoa dashboard/gap data shape
+
+Muc tieu:
+
+- Tiep tuc hoan thien chuc nang Overview/Research Gap de chay on voi du lieu API that.
+- Khong chi chong crash trong component, ma chuan hoa data shape o type va API mapper.
+
+Da sua file:
+
+- `web/frontend/src/data/types.ts`
+- `web/frontend/src/data/sample.ts`
+- `web/frontend/src/lib/api.ts`
+- `web/frontend/src/components/ResearchGapHeatmap.tsx`
+
+Chi tiet:
+
+- Them type `AxisOption`:
+  - `key`
+  - `label`
+  - `token?`
+- `DashboardData.gapFields` va `gapAspects` chuyen sang `AxisOption[]`.
+- `dashboardApi.overview()` normalize:
+  - `trendSeries`
+  - `gapFields`
+  - `gapAspects`
+  - `gaps`
+- `normalizeGapCells()` chong data thieu/sai:
+  - field/aspect co the la string hoac object.
+  - density clamp ve `0..1`.
+  - papers ve so nguyen >= 0.
+- Sample dashboard cung chuyen sang axis object de khong lech voi type moi.
+
+Da test:
+
+- Frontend:
+  - `npm run build` pass.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/data/types.ts web/frontend/src/data/sample.ts web/frontend/src/lib/api.ts web/frontend/src/components/ResearchGapHeatmap.tsx
+git commit -m "fix: normalize dashboard gap data"
+```
+
+## Cap nhat 2026-07-11 - Chuan hoa Analytics Gap page mapper
+
+Muc tieu:
+
+- Tiep tuc hoan thien chuc nang Research Gap khi backend/API tra `fields` va `aspects` dang string hoac object.
+- Giam loi runtime sau khi noi API that.
+
+Da sua file:
+
+- `web/frontend/src/lib/api.ts`
+
+Chi tiet:
+
+- `analyticsApi.gaps()` khong con gia dinh `fields/aspects` la `string[]`.
+- Dung lai `normalizeAxisOptions()` de map du lieu ve axis object.
+- `fieldLabel` va `aspect` dung `axisLabel()` de doc duoc ca string/object.
+- Them fallback field/aspect an toan khi backend thieu data.
+- Giu token mau cho field tu `GAP_FIELDS` khi API khong tra token.
+
+Da test:
+
+- Frontend:
+  - `npm run build` pass.
+- Backend:
+  - `npm test` pass.
+  - tests: 22
+  - pass: 22
+  - fail: 0
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/lib/api.ts
+git commit -m "fix: normalize analytics gap api data"
+```
+
+## Cap nhat 2026-07-11 - Hoan thien Account profile update
+
+Muc tieu:
+
+- Hoan thien chuc nang quan ly tai khoan theo fixlist.
+- FE khong chi doi mat khau, ma sua duoc ho ten/email bang API that.
+- Backend tra loi dung khi email moi bi trung.
+
+Da sua file:
+
+- `web/frontend/src/pages/AccountPage.tsx`
+- `web/backend/src/services/auth.service.js`
+- `web/backend/src/controllers/auth.controller.js`
+- `web/backend/test/api.integration.test.js`
+
+Chi tiet frontend:
+
+- `AccountPage` them form sua thong tin:
+  - ho ten.
+  - email.
+- Goi `userApi.updateProfile()` toi `PUT /api/v1/users/me`.
+- Cap nhat local current user va localStorage sau khi luu thanh cong.
+- Hien notice thanh cong/loi tren UI.
+
+Chi tiet backend:
+
+- `auth.service.updateProfile()` check email trung truoc khi update.
+- Neu email da ton tai o user khac:
+  - HTTP `409`.
+  - code `CONFLICT`.
+  - message `Email already registered`.
+- `auth.controller.updateProfile()` giu lai `err.code` thay vi luon tra `INTERNAL_ERROR`.
+
+Da test:
+
+- Frontend:
+  - `npm run build` pass.
+- Backend:
+  - `npm test` pass.
+  - tests: 23
+  - pass: 23
+  - fail: 0
+- Integration test moi:
+  - user update `full_name/email` thanh cong.
+  - user update sang email da ton tai bi reject `409 CONFLICT`.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/pages/AccountPage.tsx web/backend/src/services/auth.service.js web/backend/src/controllers/auth.controller.js web/backend/test/api.integration.test.js
+git commit -m "feat: add profile update flow"
+```
+
+## Cap nhat 2026-07-11 - Trien khai fix login UX va save paper theo collection
+
+Muc tieu:
+
+- Tiep tuc hoan thien code that theo fixlist.
+- Cai thien loi login de user hieu dung nguyen nhan.
+- Search page cho chon collection khi luu paper thay vi tu dong dung collection dau tien.
+- Backend tranh duplicate saved paper trong cung collection.
+
+Da sua file:
+
+- `web/frontend/src/pages/LoginPage.tsx`
+- `web/frontend/src/pages/SearchPage.tsx`
+- `web/frontend/src/App.css`
+- `web/backend/src/services/library.service.js`
+
+Chi tiet login:
+
+- Map loi login thanh thong bao than thien:
+  - email sai format.
+  - sai email/mat khau.
+  - tai khoan bi khoa.
+  - thu qua nhieu lan.
+- Giam hien thi raw Joi/backend message tren UI dang nhap.
+
+Chi tiet Search/Library:
+
+- `SearchPage` load collection that tu `libraryApi.collections()`.
+- Them dropdown `Luu vao` tren thanh ket qua.
+- Khi luu paper:
+  - dung collection user dang chon.
+  - neu user chua co collection thi tao `Doc sau`.
+  - cap nhat notice theo collection da luu.
+- CSS responsive cho selector collection trong results bar.
+
+Chi tiet backend:
+
+- `library.service.savePaper()` kiem tra paper da ton tai trong collection truoc khi `$push`.
+- Neu da ton tai thi skip, tranh trung lap saved paper khi user bam lai/retry.
+
+Da test:
+
+- Frontend:
+  - `npm run build` pass.
+- Backend:
+  - `npm test` pass.
+  - tests: 23
+  - pass: 23
+  - fail: 0
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/pages/LoginPage.tsx web/frontend/src/pages/SearchPage.tsx web/frontend/src/App.css web/backend/src/services/library.service.js
+git commit -m "feat: improve login errors and save paper collection flow"
+```
+
+## Cap nhat 2026-07-11 - Enforce Workspace permissions
+
+Muc tieu:
+
+- Tiep tuc hoan thien fixlist theo huong production/security.
+- Dong lo workspace: user biet workspace id khong duoc doc/ghi item/activity neu khong phai member.
+- Phan quyen owner/editor/viewer dung hon.
+
+Da sua file:
+
+- `web/backend/src/services/workspace.service.js`
+- `web/backend/src/controllers/workspace.controller.js`
+- `web/backend/test/api.integration.test.js`
+
+Chi tiet backend:
+
+- Them helper `getMemberRole(userId, workspaceId)`.
+- Role behavior:
+  - `owner`: quan ly workspace/member/item.
+  - `editor`: doc workspace, tao/sua/xoa item, comment.
+  - `viewer`: doc item/activity va comment, khong tao/sua/xoa item.
+  - non-member: bi chan doc item/activity.
+- `getWorkspaceById()` chi tra workspace neu user la member.
+- `listItems()` yeu cau user la member.
+- `createItem/updateItem/deleteItem()` yeu cau owner/editor.
+- `addComment()` yeu cau user la member.
+- `listActivities()` yeu cau user la member.
+
+Integration test moi:
+
+- owner tao workspace.
+- owner them viewer/editor.
+- viewer doc item duoc.
+- viewer tao item bi `403`.
+- viewer comment duoc.
+- editor update item duoc.
+- outsider doc item bi `403`.
+
+Da test:
+
+- Backend:
+  - `npm test` pass.
+  - tests: 24
+  - pass: 24
+  - fail: 0
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/services/workspace.service.js web/backend/src/controllers/workspace.controller.js web/backend/test/api.integration.test.js
+git commit -m "fix: enforce workspace member permissions"
+```
+
+## Cap nhat 2026-07-11 - Workspace role-aware UI va invite permission
+
+Muc tieu:
+
+- Tiep tuc trien khai het cac phan con ho theo fixlist.
+- Sau khi backend enforce workspace role, FE cung phai disable/hide action theo role.
+- Backend collaboration invite khong cho non-member/viewer moi nguoi vao workspace.
+
+Da sua file:
+
+- `web/frontend/src/pages/WorkspacePage.tsx`
+- `web/backend/src/services/collaboration.service.js`
+- `web/backend/src/controllers/collaboration.controller.js`
+- `web/backend/test/api.integration.test.js`
+
+Chi tiet frontend:
+
+- `WorkspacePage` lay current user tu localStorage.
+- Tim current member trong workspace hien tai.
+- Tinh quyen:
+  - `canEditWorkspace`: owner/editor.
+  - `canManageMembers`: owner.
+- Disable nut:
+  - `Them task` neu viewer.
+  - `Loi moi nghien cuu chung` neu viewer.
+- `WorkspaceDetail` nhan props:
+  - `canEdit`
+  - `canManageMembers`
+- Viewer:
+  - khong thay nut xoa item.
+  - khong sua status/assignee/deadline/paper/note.
+  - van comment duoc.
+- Owner moi sua role thanh vien.
+- Owner role bi lock, khong bi doi qua select.
+
+Chi tiet backend:
+
+- `collaboration.service.createInvite()` check workspace membership role.
+- Chi `owner/editor` moi tao invite cho workspace.
+- Viewer/non-member tao invite bi `403 FORBIDDEN`.
+- Controller preserve error code tu service.
+
+Integration test cap nhat:
+
+- Viewer tao invite bi `403`.
+- Editor tao invite thanh cong `201`.
+- Cac test workspace permission cu van pass.
+
+Da test:
+
+- Backend:
+  - `npm test` pass.
+  - tests: 24
+  - pass: 24
+  - fail: 0
+- Frontend:
+  - `npm run build` pass.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/pages/WorkspacePage.tsx web/backend/src/services/collaboration.service.js web/backend/src/controllers/collaboration.controller.js web/backend/test/api.integration.test.js
+git commit -m "fix: align workspace UI with member permissions"
+```
+
+## Cap nhat 2026-07-11 - AI hardening va an demo controls production
+
+Muc tieu:
+
+- Trien khai tiep cac phase production hardening.
+- Bao ve AI endpoints vi co the ton chi phi/tai nguyen.
+- Giam nguy co gui PII sang LLM.
+- An cac control demo `Xem trang thai` khi build production.
+
+Da sua file:
+
+- `web/backend/src/middleware/rateLimiter.middleware.js`
+- `web/backend/src/routes/ai.routes.js`
+- `web/backend/src/services/ai.service.js`
+- `web/backend/test/ai.service.test.js`
+- `web/frontend/src/lib/flags.ts`
+- `web/frontend/src/pages/OverviewPage.tsx`
+- `web/frontend/src/pages/TrendsPage.tsx`
+- `web/frontend/src/pages/GapPage.tsx`
+- `web/frontend/src/pages/LibraryPage.tsx`
+- `web/frontend/src/pages/FollowPage.tsx`
+- `web/frontend/src/pages/WorkspacePage.tsx`
+
+Chi tiet backend AI:
+
+- Them `aiLimiter` rieng:
+  - dev: 120 requests / 15 phut.
+  - production: 40 requests / 15 phut.
+  - tra code `RATE_LIMITED`.
+- Gan `aiLimiter` cho tat ca route `/api/v1/ai/*`.
+- Them in-memory TTL cache cho AI:
+  - TTL 10 phut.
+  - gioi han map khoang 500 entries.
+  - response cached co flag `cached: true`.
+- Them redaction truoc khi tao prompt:
+  - email -> `[redacted-email]`
+  - phone-like value -> `[redacted-phone]`
+- Ap dung redaction/cleaning cho:
+  - summarize title/abstract/source/keywords.
+  - explain term/context.
+  - suggest directions field/gaps/keywords.
+  - fallback summary.
+- Export `_private` helper cho unit test.
+
+Chi tiet frontend production UI:
+
+- Them `web/frontend/src/lib/flags.ts`.
+- `SHOW_DEMO_CONTROLS` chi true khi:
+  - `import.meta.env.DEV`
+  - hoac `VITE_SHOW_DEMO_CONTROLS=true`.
+- Boc state demo controls trong cac page:
+  - Overview.
+  - Trends.
+  - Gap.
+  - Library.
+  - Follow.
+  - Workspace.
+- Production build mac dinh khong hien `Xem trang thai`.
+
+Da test:
+
+- Backend:
+  - `npm test` pass.
+  - tests: 25
+  - pass: 25
+  - fail: 0
+- Frontend:
+  - `npm run build` pass.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/middleware/rateLimiter.middleware.js web/backend/src/routes/ai.routes.js web/backend/src/services/ai.service.js web/backend/test/ai.service.test.js web/frontend/src/lib/flags.ts web/frontend/src/pages/OverviewPage.tsx web/frontend/src/pages/TrendsPage.tsx web/frontend/src/pages/GapPage.tsx web/frontend/src/pages/LibraryPage.tsx web/frontend/src/pages/FollowPage.tsx web/frontend/src/pages/WorkspacePage.tsx
+git commit -m "fix: harden ai endpoints and hide demo controls"
+```
