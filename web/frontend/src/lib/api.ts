@@ -26,7 +26,7 @@ import type {
   WorkspaceMember,
 } from "../data/workspaceSample";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api/v1";
 const TOKEN_KEY = "wdp_access_token";
 const REFRESH_TOKEN_KEY = "wdp_refresh_token";
 const USER_KEY = "wdp_user";
@@ -44,6 +44,10 @@ interface ApiEnvelope<T> {
     code: string;
     message: string;
   };
+}
+
+interface ApiRequestInit extends RequestInit {
+  _isRetry?: boolean;
 }
 
 export interface AuthUser {
@@ -86,38 +90,78 @@ export function clearAuth() {
   localStorage.removeItem(USER_KEY);
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function refreshAuth() {
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!refreshToken) return false;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refreshToken }),
+      cache: "no-store",
+    });
+    const payload = (await res.json()) as ApiEnvelope<AuthResult>;
+    if (!res.ok || !payload.success) return false;
+    storeAuth(payload.data);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function redirectToLogin() {
+  clearAuth();
+  if (window.location.hash !== "#login") window.location.hash = "login";
+}
+
+async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  const { _isRetry, ...fetchInit } = init;
   const token = getAccessToken();
-  const headers = new Headers(init.headers);
+  const headers = new Headers(fetchInit.headers);
   headers.set("Accept", "application/json");
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (fetchInit.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
+    ...fetchInit,
     headers,
     cache: "no-store",
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
+  if (res.status === 401 && !_isRetry && path !== "/auth/refresh") {
+    const refreshed = await refreshAuth();
+    if (refreshed) return request<T>(path, { ...fetchInit, _isRetry: true });
+    redirectToLogin();
+  }
   if (!res.ok || !payload.success) {
     throw new Error(payload.error?.message ?? `API request failed: ${res.status}`);
   }
   return payload.data;
 }
 
-async function requestWithMeta<T>(path: string, init: RequestInit = {}) {
+async function requestWithMeta<T>(path: string, init: ApiRequestInit = {}) {
+  const { _isRetry, ...fetchInit } = init;
   const token = getAccessToken();
-  const headers = new Headers(init.headers);
+  const headers = new Headers(fetchInit.headers);
   headers.set("Accept", "application/json");
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (fetchInit.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
+    ...fetchInit,
     headers,
     cache: "no-store",
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
+  if (res.status === 401 && !_isRetry && path !== "/auth/refresh") {
+    const refreshed = await refreshAuth();
+    if (refreshed) return requestWithMeta<T>(path, { ...fetchInit, _isRetry: true });
+    redirectToLogin();
+  }
   if (!res.ok || !payload.success) {
     throw new Error(payload.error?.message ?? `API request failed: ${res.status}`);
   }
@@ -196,6 +240,15 @@ export const authApi = {
     });
     storeAuth(result);
     return result;
+  },
+  async logout() {
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } catch {
+      // Local logout should still complete if the server token is already invalid.
+    } finally {
+      clearAuth();
+    }
   },
 };
 

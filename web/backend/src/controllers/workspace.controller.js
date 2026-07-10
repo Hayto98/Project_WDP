@@ -20,13 +20,15 @@ async function getWorkspaces(req, res) {
 
 async function createWorkspace(req, res) {
   try {
+    const { name, description, owner_name, owner_initials } = req.body;
     const ws = await Workspace.create({
-      ...req.body,
+      name,
+      description: description || '',
       owner_id: req.user.id,
       members: [{
         user_id: req.user.id,
-        name: req.body.owner_name || 'Owner',
-        initials: req.body.owner_initials || 'OW',
+        name: owner_name || 'Owner',
+        initials: owner_initials || 'OW',
         role: 'owner',
       }],
     });
@@ -133,8 +135,15 @@ async function getItems(req, res) {
 
 async function createItem(req, res) {
   try {
+    const { kind, title, status, assignee_id, paper_id, due, note } = req.body;
     const item = await WorkspaceItem.create({
-      ...req.body,
+      kind,
+      title,
+      status,
+      assignee_id,
+      paper_id,
+      due,
+      note,
       workspace_id: req.params.id,
     });
     return ApiResponse.created(res, item);
@@ -145,9 +154,13 @@ async function createItem(req, res) {
 
 async function updateItem(req, res) {
   try {
+    const allowed = {};
+    for (const key of ['kind', 'title', 'status', 'assignee_id', 'paper_id', 'due', 'note']) {
+      if (req.body[key] !== undefined) allowed[key] = req.body[key];
+    }
     const item = await WorkspaceItem.findOneAndUpdate(
       { _id: req.params.itemId, workspace_id: req.params.id },
-      req.body,
+      allowed,
       { new: true },
     );
     if (!item) return ApiResponse.notFound(res);

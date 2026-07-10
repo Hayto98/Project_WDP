@@ -43,18 +43,12 @@ async function getTrending(req, res) {
 
 async function requestCorpusSync(req, res) {
   try {
-    const query = String(req.body.query || '').trim();
-    const sourceName = req.body.sourceName || 'OpenAlex';
-    const maxRecords = Math.max(1, Math.min(parseInt(req.body.maxRecords, 10) || 25, 50));
+    const { query, sourceName = 'OpenAlex', maxRecords = 25 } = req.body;
     const syncFilters = {
       yearFrom: req.body.yearFrom,
       yearTo: req.body.yearTo,
       types: req.body.types,
     };
-
-    if (!query) {
-      return ApiResponse.validationError(res, 'Query is required');
-    }
 
     const source = await DataSource.findOne({ name: sourceName }).lean();
     const existing = await CrawlerJob.findOne({

@@ -98,7 +98,19 @@ async function getJobs(req, res) {
 
 async function createJob(req, res) {
   try {
-    const job = await CrawlerJob.create(req.body);
+    const { name, source_name, query, max_records } = req.body;
+    const source = await DataSource.findOne({ name: source_name }).lean();
+    const job = await CrawlerJob.create({
+      name,
+      source_id: source?._id,
+      source_name,
+      query,
+      max_records: max_records || 25,
+      status: 'queued',
+      progress: 0,
+      owner: req.user.email,
+      requested_by: req.user.id,
+    });
     return ApiResponse.created(res, job);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);

@@ -15,7 +15,7 @@ import {
 } from "../data/adminSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { adminApi, clearAuth, getCurrentUser } from "../lib/api";
+import { adminApi, authApi, getCurrentUser } from "../lib/api";
 
 type AdminTab = "overview" | "jobs" | "sources" | "users" | "reading" | "logs";
 type AdminReadAction = "refresh" | "export" | "threshold" | "raw";
@@ -249,8 +249,8 @@ export function AdminPage({ theme, toggle }: Props) {
           <button
             className="btn btn--ghost"
             type="button"
-            onClick={() => {
-              clearAuth();
+            onClick={async () => {
+              await authApi.logout();
               window.location.hash = "login";
             }}
           >
