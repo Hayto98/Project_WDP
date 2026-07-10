@@ -2742,6 +2742,12 @@ mark.hl {
   flex-direction: column;
   gap: 3px;
 }
+.facetgroup__note {
+  margin-top: var(--s-2);
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
 
 /* checkbox row */
 .check {
@@ -2901,6 +2907,10 @@ mark.hl {
   color: var(--ink-muted);
   pointer-events: none;
 }
+.results__save {
+  min-height: 38px;
+  white-space: nowrap;
+}
 
 /* active filter pills */
 .activefilters {
@@ -3038,6 +3048,42 @@ mark.hl {
   gap: 6px;
   margin-top: 11px;
 }
+.rcard__detail {
+  margin-top: var(--s-4);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.rcard__detail-label {
+  display: block;
+  margin-bottom: var(--s-2);
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rcard__detail dl {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+}
+.rcard__detail div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: var(--s-3);
+}
+.rcard__detail dt {
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rcard__detail dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
 .rcard__side {
   display: flex;
   flex-direction: column;
@@ -3097,6 +3143,10 @@ mark.hl {
   color: var(--primary-ink);
   border-color: var(--primary);
   background: var(--primary-weak);
+}
+.iconpill:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
 /* ---- pager ---- */
@@ -3988,6 +4038,18 @@ mark.hl {
   width: 38px;
   height: 38px;
   flex-shrink: 0;
+}
+.libedit {
+  display: grid;
+  gap: var(--s-2);
+}
+.libedit .btn {
+  min-height: 38px;
+  padding-inline: 12px;
+}
+.libedit__delete {
+  justify-self: start;
+  color: var(--danger);
 }
 
 /* main list */

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { formatInt } from "../lib/format";
-import { paperApi } from "../lib/api";
+import { libraryApi, paperApi, searchApi } from "../lib/api";
 import {
   RELATED_KEYWORDS,
   SOURCES,
@@ -45,6 +45,7 @@ const SORTS: { id: SortKey; label: string }[] = [
   { id: "year", label: "Mới nhất" },
   { id: "citations", label: "Trích dẫn nhiều" },
 ];
+const SYNCABLE_SOURCES = ["OpenAlex", "arXiv", "Crossref"] as const;
 
 interface Props {
   theme: Theme;
@@ -72,6 +73,10 @@ export function SearchPage({ theme, toggle }: Props) {
   const [searchError, setSearchError] = useState("");
   const [syncNotice, setSyncNotice] = useState("");
   const [syncingRequest, setSyncingRequest] = useState(false);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [savingPaperId, setSavingPaperId] = useState("");
+  const [savingSearch, setSavingSearch] = useState(false);
+  const [expandedId, setExpandedId] = useState("");
 
   const condId = useRef(1);
   const searchRunId = useRef(0);
@@ -183,7 +188,8 @@ export function SearchPage({ theme, toggle }: Props) {
   const canSyncSelectedSource =
     (status === "results" || status === "empty") &&
     Boolean((submitted.trim() || query.trim())) &&
-    (sources.has("OpenAlex") || sources.has("arXiv") || sources.has("Crossref"));
+    SYNCABLE_SOURCES.some((source) => sources.has(source));
+  const hasExaSource = sources.has("Exa");
   const paginationPages = useMemo(() => {
     const windowSize = 10;
     const start = Math.max(1, Math.min(page - 5, Math.max(1, totalPages - windowSize + 1)));
@@ -216,16 +222,49 @@ export function SearchPage({ theme, toggle }: Props) {
   const removeCondition = (id: number) =>
     setConditions((c) => c.filter((x) => x.id !== id));
 
-  const toggleSaved = (id: string) =>
-    setSaved((s) => {
-      const next = new Set(s);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const ensureDefaultCollection = async () => {
+    const collections = await libraryApi.collections();
+    if (collections[0]?.id) return collections[0].id;
+    const created = await libraryApi.createCollection("Đọc sau", "Bài lưu nhanh từ trang tìm kiếm");
+    return String(created._id ?? created.id ?? "");
+  };
+
+  const savePaperToLibrary = async (paper: PaperResult) => {
+    if (saved.has(paper.id) || savingPaperId) return;
+    setSavingPaperId(paper.id);
+    setSaveNotice("");
+    try {
+      const collectionId = await ensureDefaultCollection();
+      await libraryApi.savePaper(paper.id, [collectionId]);
+      setSaved((current) => new Set(current).add(paper.id));
+      setSaveNotice(`Đã lưu “${paper.title}” vào thư viện.`);
+    } catch (err) {
+      setSaveNotice(err instanceof Error ? err.message : "Không lưu được bài vào thư viện.");
+    } finally {
+      setSavingPaperId("");
+    }
+  };
+
+  const saveCurrentSearch = async () => {
+    const term = submitted.trim() || query.trim();
+    if (!term || savingSearch) return;
+    setSavingSearch(true);
+    setSaveNotice("");
+    try {
+      await searchApi.createSavedSearch(`Tìm: ${term}`, {
+        keywords: [term],
+        year_gte: yearFrom,
+        year_lte: yearTo,
+        source_names: [...sources],
+        logic: "AND",
+      });
+      setSaveNotice(`Đã lưu điều kiện tìm kiếm “${term}”.`);
+    } catch (err) {
+      setSaveNotice(err instanceof Error ? err.message : "Không lưu được điều kiện tìm kiếm.");
+    } finally {
+      setSavingSearch(false);
+    }
+  };
 
   const onSuggest = (kw: string) => {
     setQuery(kw);
@@ -431,6 +470,11 @@ export function SearchPage({ theme, toggle }: Props) {
                 onChange={() => toggleSet(sources, s, setSources)}
               />
             ))}
+            {hasExaSource && (
+              <p className="facetgroup__note">
+                Exa đang dùng để lọc corpus; đồng bộ tức thời sẽ được nối ở backend sau.
+              </p>
+            )}
           </FacetGroup>
 
           <FacetGroup title="Loại tài liệu">
@@ -486,6 +530,12 @@ export function SearchPage({ theme, toggle }: Props) {
               </select>
               <IconChevron className="results__sorticon" width={16} height={16} />
             </label>
+            {status === "results" && submitted && (
+              <button className="btn btn--ghost results__save" type="button" onClick={saveCurrentSearch} disabled={savingSearch}>
+                <IconBookmark width={15} height={15} />
+                {savingSearch ? "Đang lưu" : "Lưu tìm kiếm"}
+              </button>
+            )}
           </div>
 
           {/* Active filter chips */}
@@ -513,6 +563,7 @@ export function SearchPage({ theme, toggle }: Props) {
             </div>
           )}
           {syncNotice && status !== "empty" && <p className="state__body" role="status">{syncNotice}</p>}
+          {saveNotice && <p className="state__body" role="status">{saveNotice}</p>}
 
           {status === "loading" && <ResultsSkeleton />}
 
@@ -555,7 +606,10 @@ export function SearchPage({ theme, toggle }: Props) {
                     paper={p}
                     terms={highlightTerms}
                     saved={saved.has(p.id)}
-                    onToggleSave={() => toggleSaved(p.id)}
+                    saving={savingPaperId === p.id}
+                    expanded={expandedId === p.id}
+                    onToggleSave={() => savePaperToLibrary(p)}
+                    onToggleExpand={() => setExpandedId((current) => (current === p.id ? "" : p.id))}
                     onOpenSource={() => paperApi.recordView(p.id).catch(() => undefined)}
                   />
                 ))}
@@ -644,13 +698,19 @@ function ResultItem({
   paper,
   terms,
   saved,
+  saving,
+  expanded,
   onToggleSave,
+  onToggleExpand,
   onOpenSource,
 }: {
   paper: PaperResult;
   terms: string[];
   saved: boolean;
+  saving: boolean;
+  expanded: boolean;
   onToggleSave: () => void;
+  onToggleExpand: () => void;
   onOpenSource: () => void;
 }) {
   const authors =
@@ -696,6 +756,29 @@ function ResultItem({
             </span>
           ))}
         </div>
+        {expanded && (
+          <div className="rcard__detail">
+            <span className="rcard__detail-label">Chi tiết paper</span>
+            <dl>
+              <div>
+                <dt>Lĩnh vực</dt>
+                <dd>{paper.fields.join(", ") || "Chưa phân loại"}</dd>
+              </div>
+              <div>
+                <dt>Từ khóa</dt>
+                <dd>{paper.keywords.join(", ") || "Chưa có từ khóa"}</dd>
+              </div>
+              <div>
+                <dt>Liên kết</dt>
+                <dd>
+                  <a href={paper.url} target="_blank" rel="noreferrer noopener" onClick={onOpenSource}>
+                    {paper.url}
+                  </a>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        )}
       </div>
 
       <div className="rcard__side">
@@ -708,11 +791,16 @@ function ResultItem({
           <button
             className={`iconpill ${saved ? "is-on" : ""}`}
             onClick={onToggleSave}
+            disabled={saved || saving}
             aria-pressed={saved}
             title={saved ? "Bỏ khỏi thư viện" : "Lưu vào thư viện"}
           >
             <IconBookmark width={16} height={16} />
-            {saved ? "Đã lưu" : "Lưu"}
+            {saving ? "Đang lưu" : saved ? "Đã lưu" : "Lưu"}
+          </button>
+          <button className="iconpill" type="button" onClick={onToggleExpand} aria-expanded={expanded}>
+            <IconSearch width={16} height={16} />
+            {expanded ? "Thu gọn" : "Chi tiết"}
           </button>
           <a
             className="iconpill"

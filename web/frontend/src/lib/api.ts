@@ -26,7 +26,7 @@ import type {
   WorkspaceMember,
 } from "../data/workspaceSample";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api/v1";
 const TOKEN_KEY = "wdp_access_token";
 const REFRESH_TOKEN_KEY = "wdp_refresh_token";
 const USER_KEY = "wdp_user";
@@ -477,6 +477,21 @@ export const libraryApi = {
       description: collection.description ?? "",
     }));
   },
+  createCollection(collectionName: string, description = "") {
+    return request<any>("/library/collections", {
+      method: "POST",
+      body: JSON.stringify({ collection_name: collectionName, description }),
+    });
+  },
+  updateCollection(id: string, patch: { collection_name?: string; description?: string }) {
+    return request<any>(`/library/collections/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+  },
+  deleteCollection(id: string) {
+    return request(`/library/collections/${id}`, { method: "DELETE" });
+  },
   async papers(): Promise<LibraryEntry[]> {
     const { data } = await requestWithMeta<any[]>("/library/papers?limit=100");
     return data.map((item) => {
@@ -491,6 +506,36 @@ export const libraryApi = {
         paper,
       };
     });
+  },
+  savePaper(paperId: string, collectionIds: string[], note = "") {
+    return request("/library/papers", {
+      method: "POST",
+      body: JSON.stringify({ paper_id: paperId, collection_ids: collectionIds, note }),
+    });
+  },
+  updateSavedPaper(collectionId: string, paperId: string, patch: { status?: string; note?: string }) {
+    return request(`/library/papers/${collectionId}/${paperId}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+  },
+  removePaper(collectionId: string, paperId: string) {
+    return request(`/library/papers/${collectionId}/${paperId}`, { method: "DELETE" });
+  },
+};
+
+export const searchApi = {
+  getSavedSearches() {
+    return request<any[]>("/searches");
+  },
+  createSavedSearch(name: string, criteria: Record<string, unknown>) {
+    return request("/searches", {
+      method: "POST",
+      body: JSON.stringify({ name, criteria }),
+    });
+  },
+  deleteSavedSearch(id: string) {
+    return request(`/searches/${id}`, { method: "DELETE" });
   },
 };
 

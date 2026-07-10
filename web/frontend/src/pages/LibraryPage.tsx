@@ -50,6 +50,8 @@ export function LibraryPage({ theme, toggle }: Props) {
   const [sort, setSort] = useState<SortKey>("saved");
   const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id ?? null);
   const [newCollection, setNewCollection] = useState("");
+  const [editingCollectionName, setEditingCollectionName] = useState("");
+  const [libraryNotice, setLibraryNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [demo, setDemo] = useState<Demo>("auto");
 
@@ -59,7 +61,10 @@ export function LibraryPage({ theme, toggle }: Props) {
     Promise.all([libraryApi.collections(), libraryApi.papers()])
       .then(([nextCollections, nextItems]) => {
         if (!alive) return;
-        if (nextCollections.length) setCollections(nextCollections);
+        if (nextCollections.length) {
+          setCollections(nextCollections);
+          setEditingCollectionName(nextCollections[0]?.name ?? "");
+        }
         if (nextItems.length) {
           setItems(nextItems);
           setSelectedId(nextItems[0]?.id ?? null);
@@ -119,6 +124,7 @@ export function LibraryPage({ theme, toggle }: Props) {
     activeCollection === "all"
       ? "Tất cả bài đã lưu"
       : collections.find((c) => c.id === activeCollection)?.name ?? "Bộ sưu tập";
+  const activeCollectionData = collections.find((c) => c.id === activeCollection) ?? null;
 
   const view: "loading" | "error" | "empty" | "ready" =
     demo === "loading" || loading
@@ -129,22 +135,86 @@ export function LibraryPage({ theme, toggle }: Props) {
           ? "empty"
           : "ready";
 
-  const updateItem = (id: string, patch: Partial<LibraryEntry>) => {
+  const updateItem = async (id: string, patch: Partial<LibraryEntry>) => {
+    const current = items.find((item) => item.id === id);
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    if (!current) return;
+    if (patch.status === undefined && patch.note === undefined) return;
+    try {
+      await libraryApi.updateSavedPaper(current.collectionIds[0], current.paperId, {
+        status: patch.status,
+        note: patch.note,
+      });
+      setLibraryNotice("Đã cập nhật thư viện.");
+    } catch (err) {
+      setLibraryNotice(err instanceof Error ? err.message : "Không cập nhật được bài đã lưu.");
+    }
   };
 
-  const removeItem = (id: string) => {
+  const removeItem = async (id: string) => {
+    const current = items.find((item) => item.id === id);
     setItems((current) => current.filter((item) => item.id !== id));
     setSelectedId((current) => (current === id ? null : current));
+    if (!current) return;
+    try {
+      await libraryApi.removePaper(current.collectionIds[0], current.paperId);
+      setLibraryNotice("Đã bỏ lưu bài khỏi thư viện.");
+    } catch (err) {
+      setLibraryNotice(err instanceof Error ? err.message : "Không bỏ lưu được bài.");
+    }
   };
 
-  const addCollection = () => {
+  const addCollection = async () => {
     const name = newCollection.trim();
     if (!name) return;
-    const id = `custom-${Date.now()}`;
-    setCollections((current) => [...current, { id, name, description: "Bộ sưu tập do bạn tạo" }]);
-    setNewCollection("");
-    setActiveCollection(id);
+    try {
+      const created = await libraryApi.createCollection(name, "Bộ sưu tập do bạn tạo");
+      const next = {
+        id: String(created._id ?? created.id),
+        name: created.collection_name ?? name,
+        description: created.description ?? "Bộ sưu tập do bạn tạo",
+      };
+      setCollections((current) => [...current, next]);
+      setNewCollection("");
+      setActiveCollection(next.id);
+      setEditingCollectionName(next.name);
+      setLibraryNotice("Đã tạo bộ sưu tập.");
+    } catch (err) {
+      setLibraryNotice(err instanceof Error ? err.message : "Không tạo được bộ sưu tập.");
+    }
+  };
+
+  const renameActiveCollection = async () => {
+    if (!activeCollectionData) return;
+    const name = editingCollectionName.trim();
+    if (!name) return;
+    try {
+      const updated = await libraryApi.updateCollection(activeCollectionData.id, { collection_name: name });
+      setCollections((current) =>
+        current.map((collection) =>
+          collection.id === activeCollectionData.id
+            ? { ...collection, name: updated.collection_name ?? name }
+            : collection,
+        ),
+      );
+      setLibraryNotice("Đã đổi tên bộ sưu tập.");
+    } catch (err) {
+      setLibraryNotice(err instanceof Error ? err.message : "Không đổi tên được bộ sưu tập.");
+    }
+  };
+
+  const deleteActiveCollection = async () => {
+    if (!activeCollectionData) return;
+    try {
+      await libraryApi.deleteCollection(activeCollectionData.id);
+      setCollections((current) => current.filter((collection) => collection.id !== activeCollectionData.id));
+      setItems((current) => current.filter((item) => !item.collectionIds.includes(activeCollectionData.id)));
+      setActiveCollection("all");
+      setSelectedId(null);
+      setLibraryNotice("Đã xóa bộ sưu tập.");
+    } catch (err) {
+      setLibraryNotice(err instanceof Error ? err.message : "Không xóa được bộ sưu tập.");
+    }
   };
 
   return (
@@ -193,7 +263,10 @@ export function LibraryPage({ theme, toggle }: Props) {
               <button
                 key={collection.id}
                 className={`libcol ${activeCollection === collection.id ? "is-active" : ""}`}
-                onClick={() => setActiveCollection(collection.id)}
+                onClick={() => {
+                  setActiveCollection(collection.id);
+                  setEditingCollectionName(collection.name);
+                }}
                 aria-current={activeCollection === collection.id ? "page" : undefined}
               >
                 <span>
@@ -225,6 +298,32 @@ export function LibraryPage({ theme, toggle }: Props) {
               </button>
             </div>
           </form>
+
+          {activeCollectionData && (
+            <form
+              className="libnew libedit"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void renameActiveCollection();
+              }}
+            >
+              <label htmlFor="edit-collection">Sửa bộ sưu tập</label>
+              <div className="libnew__row">
+                <input
+                  id="edit-collection"
+                  value={editingCollectionName}
+                  onChange={(e) => setEditingCollectionName(e.target.value)}
+                  aria-label="Tên bộ sưu tập"
+                />
+                <button type="submit" className="btn btn--ghost">
+                  Lưu
+                </button>
+              </div>
+              <button type="button" className="btn btn--ghost libedit__delete" onClick={deleteActiveCollection}>
+                Xóa bộ sưu tập
+              </button>
+            </form>
+          )}
         </aside>
 
         <section className="libmain" aria-live="polite">
@@ -277,6 +376,7 @@ export function LibraryPage({ theme, toggle }: Props) {
           </div>
 
           {view === "loading" && <LibrarySkeleton />}
+          {libraryNotice && <p className="state__body" role="status">{libraryNotice}</p>}
 
           {view === "error" && (
             <div className="state state--error">
@@ -419,6 +519,12 @@ function LibraryDetail({
   onUpdate: (patch: Partial<LibraryEntry>) => void;
   onRemove: () => void;
 }) {
+  const [draftNote, setDraftNote] = useState(entry.note);
+
+  useEffect(() => {
+    setDraftNote(entry.note);
+  }, [entry.id, entry.note]);
+
   const toggleCollection = (id: string) => {
     const next = new Set(entry.collectionIds);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -480,8 +586,11 @@ function LibraryDetail({
       <label className="libdetail__section">
         <span className="libdetail__label">Ghi chú cá nhân</span>
         <textarea
-          value={entry.note}
-          onChange={(e) => onUpdate({ note: e.target.value })}
+          value={draftNote}
+          onChange={(e) => setDraftNote(e.target.value)}
+          onBlur={() => {
+            if (draftNote !== entry.note) onUpdate({ note: draftNote });
+          }}
           rows={5}
           aria-label="Ghi chú cá nhân cho bài báo"
         />
