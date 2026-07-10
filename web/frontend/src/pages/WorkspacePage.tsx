@@ -30,6 +30,7 @@ import {
 import { PAPERS } from "../data/searchSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
+import { workspaceApi } from "../lib/api";
 
 type Demo = "auto" | "loading" | "empty" | "error";
 type WorkspaceMode = "board" | "createTask" | "invites";
@@ -70,6 +71,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
   const [members, setMembers] = useState<WorkspaceMember[]>(MEMBERS);
   const [items, setItems] = useState<WorkspaceItem[]>(WORK_ITEMS);
   const [invites, setInvites] = useState<CollaborationInvite[]>(COLLAB_INVITES);
+  const [remoteActivities, setRemoteActivities] = useState(ACTIVITIES);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(WORKSPACES[0]?.id ?? "");
   const [selectedId, setSelectedId] = useState(WORK_ITEMS[0]?.id ?? "");
   const [newWorkspace, setNewWorkspace] = useState("");
@@ -90,9 +92,38 @@ export function WorkspacePage({ theme, toggle }: Props) {
   const [demo, setDemo] = useState<Demo>("auto");
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 520);
-    return () => clearTimeout(t);
+    workspaceApi
+      .workspaces()
+      .then(async (nextWorkspaces) => {
+        if (!nextWorkspaces.length) return;
+        const [memberGroups, itemGroups, activityGroups, nextInvites] = await Promise.all([
+          Promise.all(nextWorkspaces.map((workspace) => workspaceApi.workspaceMembers(workspace.id).catch(() => []))),
+          Promise.all(nextWorkspaces.map((workspace) => workspaceApi.items(workspace.id).catch(() => []))),
+          Promise.all(nextWorkspaces.map((workspace) => workspaceApi.activities(workspace.id).catch(() => []))),
+          workspaceApi.invites().catch(() => []),
+        ]);
+        if (!alive) return;
+        const nextMembers = memberGroups.flat();
+        const nextItems = itemGroups.flat();
+        setWorkspaces(nextWorkspaces);
+        if (nextMembers.length) setMembers(nextMembers);
+        if (nextItems.length) setItems(nextItems);
+        if (nextInvites.length) setInvites(nextInvites);
+        setRemoteActivities(activityGroups.flat());
+        setActiveWorkspaceId(nextWorkspaces[0]?.id ?? "");
+        setSelectedId(nextItems[0]?.id ?? "");
+      })
+      .catch(() => {
+        // Keep sample workspace data when the API is unavailable.
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const entries = useMemo(() => makeWorkspaceEntries(items, members), [items, members]);
@@ -100,7 +131,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
   const workspaceMembers = members.filter((m) => m.workspaceId === activeWorkspaceId);
   const workspaceEntries = entries.filter((item) => item.workspaceId === activeWorkspaceId);
   const selected = entries.find((item) => item.id === selectedId) ?? workspaceEntries[0] ?? null;
-  const activities = ACTIVITIES.filter((a) => a.workspaceId === activeWorkspaceId);
+  const activities = (remoteActivities.length ? remoteActivities : ACTIVITIES).filter((a) => a.workspaceId === activeWorkspaceId);
   const workspaceInvites = invites.filter((invite) => invite.workspaceId === activeWorkspaceId);
   const pendingWorkspaceInviteCount = workspaceInvites.filter((invite) => invite.status === "pending").length;
 

@@ -18,11 +18,19 @@ const crawlerJobSchema = new Schema(
     },
     progress: { type: Number, min: 0, max: 100, default: 0 },
     records_processed: { type: Number, default: 0 },
+    query: { type: String, default: '', trim: true },
+    max_records: { type: Number, min: 1, max: 50, default: 25 },
+    requested_by: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     started_at: Date,
     completed_at: Date,
     duration_seconds: { type: Number, default: 0 },
     owner: { type: String, default: 'Scheduler', trim: true },
     error_message: { type: String, default: null },
+    result: {
+      imported: { type: Number, default: 0 },
+      skipped: { type: Number, default: 0 },
+      source_total: { type: Number, default: 0 },
+    },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -33,5 +41,6 @@ const crawlerJobSchema = new Schema(
 /* ── Indexes ── */
 crawlerJobSchema.index({ status: 1, created_at: -1 });
 crawlerJobSchema.index({ source_id: 1 });
+crawlerJobSchema.index({ source_name: 1, query: 1, status: 1 });
 
 module.exports = mongoose.model('CrawlerJob', crawlerJobSchema);

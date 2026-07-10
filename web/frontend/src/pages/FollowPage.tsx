@@ -23,6 +23,7 @@ import {
 } from "../data/followSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
+import { followApi } from "../lib/api";
 
 type FeedFilter = "all" | "unread" | "high";
 type SortKey = "newest" | "priority";
@@ -76,9 +77,26 @@ export function FollowPage({ theme, toggle }: Props) {
   const [demo, setDemo] = useState<Demo>("auto");
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 520);
-    return () => clearTimeout(t);
+    Promise.all([followApi.subjects(), followApi.alerts()])
+      .then(([nextSubjects, nextAlerts]) => {
+        if (!alive) return;
+        if (nextSubjects.length) {
+          setSubjects(nextSubjects);
+          setActiveId("all");
+        }
+        if (nextAlerts.length) setAlerts(nextAlerts);
+      })
+      .catch(() => {
+        // Keep sample follow data when the API is unavailable.
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const entries = useMemo(() => makeFollowAlerts(subjects, alerts), [subjects, alerts]);

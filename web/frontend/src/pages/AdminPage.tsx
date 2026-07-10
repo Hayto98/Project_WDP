@@ -1,13 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { IconAlert, IconRefresh, IconSearch, IconTelescope } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import {
-  ADMIN_JOBS,
-  ADMIN_USERS,
-  AUDIT_LOGS,
-  DATA_SOURCES,
-  PAPER_READ_LOGS,
   type AdminJob,
   type AdminUser,
   type AdminUserStatus,
@@ -20,6 +15,7 @@ import {
 } from "../data/adminSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
+import { adminApi, authApi, getCurrentUser } from "../lib/api";
 
 type AdminTab = "overview" | "jobs" | "sources" | "users" | "reading" | "logs";
 type AdminReadAction = "refresh" | "export" | "threshold" | "raw";
@@ -84,40 +80,86 @@ const READING_STATUS_LABEL: Record<ReadingPersistStatus, string> = {
 
 export function AdminPage({ theme, toggle }: Props) {
   const [tab, setTab] = useState<AdminTab>("overview");
-  const [jobs, setJobs] = useState(ADMIN_JOBS);
-  const [sources, setSources] = useState(DATA_SOURCES);
-  const [users, setUsers] = useState(ADMIN_USERS);
+  const [jobs, setJobs] = useState<AdminJob[]>([]);
+  const [sources, setSources] = useState<DataSource[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [readLogs, setReadLogs] = useState<PaperReadLog[]>([]);
+  const [stats, setStats] = useState({ totalPapers: 0, totalUsers: 0, activeJobs: 0, dataSources: 0 });
   const [query, setQuery] = useState("");
   const [readNotice, setReadNotice] = useState("Thống kê đang dùng cửa sổ 30 phút gần nhất.");
+  const [jobNotice, setJobNotice] = useState("");
+  const [sourceNotice, setSourceNotice] = useState("");
+  const [checkingSources, setCheckingSources] = useState(false);
+  const currentUser = getCurrentUser();
+
+  useEffect(() => {
+    Promise.all([
+      adminApi.jobs(),
+      adminApi.dataSources(),
+      adminApi.users(),
+      adminApi.auditLogs(),
+      adminApi.paperReads(),
+      adminApi.stats(),
+    ])
+      .then(([nextJobs, nextSources, nextUsers, nextAuditLogs, nextReadLogs, nextStats]) => {
+        setJobs(nextJobs);
+        setSources(nextSources);
+        setUsers(nextUsers);
+        setAuditLogs(nextAuditLogs);
+        setReadLogs(nextReadLogs);
+        setStats(nextStats);
+      })
+      .catch(() => {
+        setJobs([]);
+        setSources([]);
+        setUsers([]);
+        setAuditLogs([]);
+        setReadLogs([]);
+      });
+  }, []);
 
   const filteredLogs = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return AUDIT_LOGS;
-    return AUDIT_LOGS.filter((log) =>
+    if (!q) return auditLogs;
+    return auditLogs.filter((log) =>
       [log.actor, log.action, log.target, log.ip].join(" ").toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [auditLogs, query]);
 
   const runningJobs = jobs.filter((job) => job.status === "running").length;
   const activeSources = sources.filter((source) => source.enabled).length;
-  const storedReadLogs = PAPER_READ_LOGS.filter((log) => log.persistStatus === "stored").length;
-  const uniqueReaders = new Set(PAPER_READ_LOGS.map((log) => log.userEmail)).size;
+  const storedReadLogs = readLogs.filter((log) => log.persistStatus === "stored").length;
+  const uniqueReaders = new Set(readLogs.map((log) => log.userEmail)).size;
   const avgReadMinutes = Math.round(
-    PAPER_READ_LOGS.reduce((sum, log) => sum + log.durationMinutes, 0) / Math.max(PAPER_READ_LOGS.length, 1),
+    readLogs.reduce((sum, log) => sum + log.durationMinutes, 0) / Math.max(readLogs.length, 1),
   );
-  const topReadPapers = useMemo(() => buildTopReadPapers(PAPER_READ_LOGS), []);
+  const topReadPapers = useMemo(() => buildTopReadPapers(readLogs), [readLogs]);
   const mostReadPaper = topReadPapers[0];
-  const topicInterest = useMemo(() => buildTopicInterest(PAPER_READ_LOGS), []);
-  const windowStats = useMemo(() => buildWindowStats(PAPER_READ_LOGS), []);
+  const topicInterest = useMemo(() => buildTopicInterest(readLogs), [readLogs]);
+  const windowStats = useMemo(() => buildWindowStats(readLogs), [readLogs]);
 
-  const rerunJob = (id: string) => {
+  const rerunJob = async (id: string) => {
+    setJobNotice("");
     setJobs((current) =>
-      current.map((job) =>
-        job.id === id
-          ? { ...job, status: "running", progress: Math.max(12, Math.min(job.progress, 38)), startedAt: "vừa xong", owner: "Admin · Minh Thành" }
-          : job,
-      ),
+      current.map((job) => (job.id === id ? { ...job, status: "running", progress: 10 } : job)),
     );
+    try {
+      const nextJob = await adminApi.runJob(id);
+      setJobs((current) => current.map((job) => (job.id === id ? nextJob : job)));
+      setJobNotice(
+        `Đã chạy ${nextJob.source}: import ${formatInt(nextJob.imported ?? nextJob.records)} bài, bỏ qua ${formatInt(nextJob.skipped ?? 0)} bài trùng.`,
+      );
+      const [nextStats, nextSources] = await Promise.all([adminApi.stats(), adminApi.dataSources()]);
+      setStats(nextStats);
+      setSources(nextSources);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Không chạy được job đồng bộ.";
+      setJobNotice(message);
+      setJobs((current) =>
+        current.map((job) => (job.id === id ? { ...job, status: "failed", progress: 100, errorMessage: message } : job)),
+      );
+    }
   };
 
   const toggleSource = (id: string) => {
@@ -153,6 +195,21 @@ export function AdminPage({ theme, toggle }: Props) {
     setReadNotice(messages[action]);
   };
 
+  const checkSourceApis = async () => {
+    setCheckingSources(true);
+    setSourceNotice("");
+    try {
+      const nextSources = await adminApi.checkDataSources();
+      setSources(nextSources);
+      const okCount = nextSources.filter((source) => source.status === "active").length;
+      setSourceNotice(`Đã kiểm tra API: ${formatInt(okCount)}/${formatInt(nextSources.length)} nguồn hoạt động.`);
+    } catch (err) {
+      setSourceNotice(err instanceof Error ? err.message : "Không kiểm tra được API nguồn.");
+    } finally {
+      setCheckingSources(false);
+    }
+  };
+
   return (
     <div className="admin-site">
       <aside className="admin-site__nav" aria-label="Điều hướng website admin">
@@ -168,7 +225,7 @@ export function AdminPage({ theme, toggle }: Props) {
         <div className="admin-operator">
           <span className="userchip__avatar" aria-hidden>AD</span>
           <span>
-            <strong>Minh Thành</strong>
+            <strong>{currentUser?.full_name ?? "Admin"}</strong>
             <small>Quản trị hệ thống</small>
           </span>
         </div>
@@ -189,9 +246,16 @@ export function AdminPage({ theme, toggle }: Props) {
         </div>
 
         <div className="admin-site__foot">
-          <a className="btn btn--ghost" href="#overview">
-            Về website người dùng
-          </a>
+          <button
+            className="btn btn--ghost"
+            type="button"
+            onClick={async () => {
+              await authApi.logout();
+              window.location.hash = "login";
+            }}
+          >
+            Đăng xuất
+          </button>
         </div>
       </aside>
 
@@ -212,10 +276,10 @@ export function AdminPage({ theme, toggle }: Props) {
         </header>
 
         <div className="trendsum admin-sum" aria-label="Tổng quan admin">
-          <Summary label="Records corpus" value="1.28M" />
-          <Summary label="Job đang chạy" value={formatInt(runningJobs)} />
-          <Summary label="Nguồn bật" value={`${formatInt(activeSources)}/${formatInt(sources.length)}`} />
-          <Summary label="Lượt đọc gần đây" value={formatInt(PAPER_READ_LOGS.length)} />
+          <Summary label="Bài báo trong corpus" value={formatInt(stats.totalPapers)} />
+          <Summary label="Job đang chạy" value={formatInt(stats.activeJobs || runningJobs)} />
+          <Summary label="Nguồn bật" value={`${formatInt(activeSources)}/${formatInt(stats.dataSources || sources.length)}`} />
+          <Summary label="Lượt đọc gần đây" value={formatInt(readLogs.length)} />
         </div>
 
         <section className="admin-shell">
@@ -245,8 +309,8 @@ export function AdminPage({ theme, toggle }: Props) {
               </div>
             </section>
             <section className="admin-panel">
-              <PanelHead title="Audit gần đây" meta={`${AUDIT_LOGS.length} sự kiện`} />
-              <AuditList logs={AUDIT_LOGS.slice(0, 3)} />
+              <PanelHead title="Audit gần đây" meta={`${auditLogs.length} sự kiện`} />
+              <AuditList logs={auditLogs.slice(0, 3)} />
             </section>
             <section className="admin-panel">
               <PanelHead title="Thống kê lượt đọc" meta={`${storedReadLogs} record đã ghi database`} />
@@ -263,7 +327,8 @@ export function AdminPage({ theme, toggle }: Props) {
 
         {tab === "jobs" && (
           <section className="admin-panel">
-            <PanelHead title="Batch jobs thu thập dữ liệu" meta="OpenAlex, arXiv, IEEE, ACM và classifier" />
+            <PanelHead title="Batch jobs thu thập dữ liệu" meta="OpenAlex, Crossref, arXiv, Semantic Scholar và IEEE" />
+            {jobNotice && <p className="invite-notice admin-read-notice" role="status">{jobNotice}</p>}
             <div className="admin-job-stack">
               {jobs.map((job) => (
                 <JobRow key={job.id} job={job} onRerun={rerunJob} />
@@ -275,6 +340,12 @@ export function AdminPage({ theme, toggle }: Props) {
         {tab === "sources" && (
           <section className="admin-panel">
             <PanelHead title="Cấu hình nguồn dữ liệu" meta="Bật/tắt nguồn học thuật và theo dõi độ ổn định" />
+            <div className="admin-read-actions" aria-label="Kiểm tra nguồn dữ liệu">
+              <button className="btn btn--primary" type="button" onClick={checkSourceApis} disabled={checkingSources}>
+                <IconRefresh width={15} height={15} /> {checkingSources ? "Đang kiểm tra..." : "Kiểm tra API nguồn"}
+              </button>
+            </div>
+            {sourceNotice && <p className="invite-notice admin-read-notice" role="status">{sourceNotice}</p>}
             <div className="admin-source-grid">
               {sources.map((source) => (
                 <SourceCard key={source.id} source={source} onToggle={toggleSource} />
@@ -315,7 +386,7 @@ export function AdminPage({ theme, toggle }: Props) {
               meta="Paper trong database đang được đọc nhiều và event ghi thống kê theo cửa sổ 30 phút"
             />
             <div className="admin-read-kpis admin-read-kpis--wide">
-              <Summary label="Lượt xem ghi nhận" value={formatInt(PAPER_READ_LOGS.length)} />
+              <Summary label="Lượt xem ghi nhận" value={formatInt(readLogs.length)} />
               <Summary label="User duy nhất" value={formatInt(uniqueReaders)} />
               <Summary label="Đã ghi database" value={formatInt(storedReadLogs)} />
               <Summary label="Thời lượng TB" value={`${formatInt(avgReadMinutes)}p`} />
@@ -379,7 +450,7 @@ export function AdminPage({ theme, toggle }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {PAPER_READ_LOGS.map((log) => (
+                  {readLogs.map((log) => (
                     <ReadLogRow key={log.id} log={log} />
                   ))}
                 </tbody>
@@ -560,7 +631,12 @@ function JobRow({ job, onRerun, compact = false }: { job: AdminJob; onRerun: (id
         </span>
         <span>
           <strong>{job.name}</strong>
-          <small>{job.source} · {job.owner} · {job.startedAt}</small>
+          <small>
+            {job.source} · {job.owner} · {job.startedAt}
+            {job.query ? ` · query: "${job.query}"` : ""}
+            {job.imported || job.skipped ? ` · import ${job.imported ?? 0}, trùng ${job.skipped ?? 0}` : ""}
+          </small>
+          {job.errorMessage && <small className="admin-read-note">{job.errorMessage}</small>}
         </span>
       </div>
       <div className="admin-progress" aria-label={`Tiến độ ${job.progress}%`}>
@@ -569,7 +645,7 @@ function JobRow({ job, onRerun, compact = false }: { job: AdminJob; onRerun: (id
       <span className="admin-job__records num">{formatInt(job.records)} records</span>
       <StatusPill status={job.status} label={JOB_STATUS_LABEL[job.status]} />
       <button className="btn btn--ghost btn--sm" type="button" onClick={() => onRerun(job.id)}>
-        Chạy lại
+        {job.status === "queued" ? "Chạy sync" : "Chạy lại"}
       </button>
     </article>
   );
@@ -599,6 +675,7 @@ function SourceCard({ source, onToggle }: { source: DataSource; onToggle: (id: s
           <dd>{source.errorRate}</dd>
         </div>
       </dl>
+      {source.errorMessage && <p className="admin-read-note">{source.errorMessage}</p>}
       <button className="btn btn--ghost" type="button" onClick={() => onToggle(source.id)}>
         {source.enabled ? "Tạm dừng nguồn" : "Bật lại nguồn"}
       </button>

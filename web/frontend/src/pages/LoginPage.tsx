@@ -1,17 +1,24 @@
 import { useState } from "react";
 import { IconTelescope } from "../components/icons";
+import { authApi } from "../lib/api";
 import "./Auth.css";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = () => {
-    // Basic mock login: if email contains 'admin', go to admin page, else go to home
-    if (email.includes('admin')) {
-      window.location.hash = "admin";
-    } else {
-      window.location.hash = "home";
+  const handleLogin = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const result = await authApi.login(email.trim(), password);
+      window.location.hash = result.user.roles.includes("Admin") ? "admin" : "overview";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể đăng nhập. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -35,10 +42,11 @@ export function LoginPage() {
             <label className="auth-label">Email</label>
             <input 
               type="email"
-              placeholder="Nhập email của bạn (dùng 'admin' để test Admin)"
+              placeholder="Nhập email của bạn"
               className="auth-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
           </div>
 
@@ -50,15 +58,19 @@ export function LoginPage() {
               className="auth-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              required
             />
           </div>
+
+          {error && <p className="auth-subtitle" role="alert">{error}</p>}
 
           <div style={{ marginTop: '8px' }}>
             <button 
               type="submit"
               className="auth-btn auth-btn--primary"
+              disabled={loading}
             >
-              Đăng nhập
+              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
           </div>
         </form>

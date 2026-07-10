@@ -8,6 +8,7 @@ import { GapScatter } from "../components/GapScatter";
 import { Sparkline } from "../components/Sparkline";
 import { IconGap, IconGrid, IconSparkle, IconTrend } from "../components/icons";
 import { formatInt } from "../lib/format";
+import { analyticsApi } from "../lib/api";
 import {
   GAP_ASPECTS,
   GAP_FIELDS,
@@ -24,7 +25,21 @@ interface Props {
 }
 
 export function GapPage({ theme, toggle }: Props) {
-  const allItems = useMemo(() => buildGaps(), []);
+  const [remoteItems, setRemoteItems] = useState<GapItem[] | null>(null);
+  const allItems = useMemo(() => remoteItems ?? buildGaps(), [remoteItems]);
+  const fieldOptions = useMemo(() => {
+    const seen = new Map<string, { key: string; label: string; token: string }>();
+    for (const item of allItems) {
+      if (!seen.has(item.fieldKey)) {
+        seen.set(item.fieldKey, { key: item.fieldKey, label: item.fieldLabel, token: item.token });
+      }
+    }
+    return seen.size ? [...seen.values()] : GAP_FIELDS;
+  }, [allItems]);
+  const aspectOptions = useMemo(() => {
+    const values = [...new Set(allItems.map((item) => item.aspect))];
+    return values.length ? values : GAP_ASPECTS;
+  }, [allItems]);
   const [threshold, setThreshold] = useState(0.35);
   const [fields, setFields] = useState<Set<string>>(
     () => new Set(GAP_FIELDS.map((f) => f.key)),
@@ -35,10 +50,26 @@ export function GapPage({ theme, toggle }: Props) {
   const [demo, setDemo] = useState<Demo>("auto");
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 520);
-    return () => clearTimeout(t);
-  }, []);
+    analyticsApi
+      .gaps(threshold)
+      .then((items) => {
+        if (!alive) return;
+        setRemoteItems(items);
+        setFields(new Set(items.map((item) => item.fieldKey)));
+        setAspects(new Set(items.map((item) => item.aspect)));
+      })
+      .catch(() => {
+        if (alive) setRemoteItems(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [threshold]);
 
   const items = useMemo(
     () => allItems.filter((i) => fields.has(i.fieldKey) && aspects.has(i.aspect)),
@@ -54,7 +85,7 @@ export function GapPage({ theme, toggle }: Props) {
   );
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
-  const shownFields = GAP_FIELDS.filter((f) => fields.has(f.key));
+  const shownFields = fieldOptions.filter((f) => fields.has(f.key));
 
   const strongest = gapItems[0];
   const avgScore = gapItems.length
@@ -119,7 +150,7 @@ export function GapPage({ theme, toggle }: Props) {
 
         <div className="gapctl__filters">
           <div className="gapchips" role="group" aria-label="Lọc lĩnh vực">
-            {GAP_FIELDS.map((f) => {
+            {fieldOptions.map((f) => {
               const on = fields.has(f.key);
               return (
                 <button
@@ -136,7 +167,7 @@ export function GapPage({ theme, toggle }: Props) {
             })}
           </div>
           <div className="gapchips gapchips--aspect" role="group" aria-label="Lọc khía cạnh">
-            {GAP_ASPECTS.map((a) => {
+            {aspectOptions.map((a) => {
               const on = aspects.has(a);
               return (
                 <button

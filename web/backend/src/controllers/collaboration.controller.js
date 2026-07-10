@@ -59,8 +59,23 @@ async function getInvites(req, res) {
 
 async function createInvite(req, res) {
   try {
+    const {
+      workspace_id,
+      invitee_email,
+      invitee_name,
+      invitee_user_id,
+      direction,
+      topic,
+      message,
+    } = req.body;
     const invite = await CollaborationInvite.create({
-      ...req.body,
+      workspace_id,
+      invitee_email,
+      invitee_name: invitee_name || '',
+      invitee_user_id: invitee_user_id || null,
+      direction,
+      topic,
+      message: message || '',
       sender_id: req.user.id,
     });
     return ApiResponse.created(res, invite);

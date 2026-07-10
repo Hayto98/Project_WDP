@@ -10,7 +10,7 @@ const bcrypt = require('bcryptjs');
 const connectDB = require('../config/database');
 const {
   User, Paper, DataSource, UserCollection, PaperView,
-  Notification, Feedback, CrawlerJob, Workspace, WorkspaceItem,
+  Notification, Feedback, CrawlerJob, Workspace, WorkspaceItem, SystemLog,
   CollaborationInvite, AnalysisReport,
 } = require('../models');
 
@@ -106,11 +106,11 @@ async function seed() {
       doi: '10.1145/3612345.3612399',
       abstract: 'We release a benchmark of 1.2M crystalline structures and evaluate twelve GNN architectures.',
       authors: [{ name: 'R. Duarte', is_primary: true }, { name: 'H. Nakamura' }, { name: 'P. Silva' }],
-      publication_year: 2024, source_name: 'ACM Digital Library', type: 'Conference', status: 'Cleaned',
+      publication_year: 2024, source_name: 'OpenAlex', type: 'Conference', status: 'Cleaned',
       keywords: ['graph neural networks', 'materials discovery', 'benchmark'],
       research_fields: ['Graph Neural Networks'],
-      citation_count: 156, original_url: 'https://dl.acm.org/',
-      sources: [{ source_name: 'ACM Digital Library', external_id: '3612345.3612399', fetched_at: new Date() }],
+      citation_count: 156, original_url: 'https://openalex.org/',
+      sources: [{ source_name: 'OpenAlex', external_id: 'W36123453612399', fetched_at: new Date() }],
     },
     {
       title: 'Variational Quantum Circuits Meet Contrastive Representation Learning',
@@ -156,6 +156,17 @@ async function seed() {
       citation_count: 93, original_url: 'https://ieeexplore.ieee.org/',
       sources: [{ source_name: 'IEEE Xplore', external_id: 'SP.2024.00078', fetched_at: new Date() }],
     },
+    {
+      title: 'Efficient Large Language Model Inference for Scholarly Search Systems',
+      doi: '10.1109/TKDE.2025.1234567',
+      abstract: 'We study retrieval-aware inference strategies for large language models in scholarly search systems, reducing latency while preserving citation-grounded answer quality.',
+      authors: [{ name: 'A. Nguyen', is_primary: true }, { name: 'M. Tran' }, { name: 'L. Zhou' }],
+      publication_year: 2025, source_name: 'IEEE Xplore', type: 'Journal', status: 'Cleaned',
+      keywords: ['large language models', 'scholarly search', 'retrieval-aware inference', 'citation grounding'],
+      research_fields: ['Large Language Models'],
+      citation_count: 58, original_url: 'https://ieeexplore.ieee.org/',
+      sources: [{ source_name: 'IEEE Xplore', external_id: 'TKDE.2025.1234567', fetched_at: new Date() }],
+    },
   ]);
 
   console.log(`✅ Papers: ${papers.length}`);
@@ -167,7 +178,6 @@ async function seed() {
     { name: 'Crossref', api_endpoint: 'https://api.crossref.org', enabled: true, coverage: '69%', latency: '4.8s', error_rate: '3.1%', last_sync_status: 'Partial' },
     { name: 'arXiv', api_endpoint: 'https://export.arxiv.org/api', enabled: true, coverage: '60%', latency: '2.1s', error_rate: '0.5%', last_sync_status: 'Success' },
     { name: 'IEEE Xplore', api_endpoint: 'https://ieeexploreapi.ieee.org', enabled: false, coverage: '54%', latency: '—', error_rate: '—', last_sync_status: 'Failed' },
-    { name: 'ACM Digital Library', api_endpoint: 'https://dl.acm.org/api', enabled: true, coverage: '45%', latency: '3.2s', error_rate: '1.0%', last_sync_status: 'Success' },
   ]);
 
   console.log(`✅ Data Sources: ${dataSources.length}`);
@@ -176,8 +186,7 @@ async function seed() {
   const crawlerJobs = await CrawlerJob.insertMany([
     { name: 'Nightly OpenAlex ingest', source_name: 'OpenAlex', source_id: dataSources[0]._id, status: 'running', progress: 68, records_processed: 18420, owner: 'Crawler Service' },
     { name: 'arXiv AI refresh', source_name: 'arXiv', source_id: dataSources[3]._id, status: 'success', progress: 100, records_processed: 3240, owner: 'Scheduler' },
-    { name: 'IEEE Xplore backfill', source_name: 'IEEE Xplore', source_id: dataSources[4]._id, status: 'warning', progress: 74, records_processed: 980, owner: 'Admin · Minh Thành' },
-    { name: 'ACM topic classifier', source_name: 'ACM Digital Library', source_id: dataSources[5]._id, status: 'queued', progress: 0, records_processed: 0, owner: 'ML Pipeline' },
+    { name: 'IEEE Xplore backfill', source_name: 'IEEE Xplore', source_id: dataSources[4]._id, status: 'warning', progress: 74, records_processed: 980, owner: 'Admin · Minh Thành', query: 'federated learning', max_records: 25, result: { imported: 0, skipped: 0, source_total: 0 } },
   ]);
 
   console.log(`✅ Crawler Jobs: ${crawlerJobs.length}`);
@@ -305,14 +314,31 @@ async function seed() {
 
   /* ── 9. Paper Views (sample) ── */
   const views = await PaperView.insertMany([
-    { user_id: users[1]._id, paper_id: papers[0]._id, source: 'Search_Result' },
-    { user_id: minh._id, paper_id: papers[0]._id, source: 'Library' },
-    { user_id: users[2]._id, paper_id: papers[1]._id, source: 'Dashboard' },
-    { user_id: users[4]._id, paper_id: papers[0]._id, source: 'Search_Result' },
-    { user_id: users[1]._id, paper_id: papers[1]._id, source: 'Search_Result' },
+    { user_id: users[1]._id, paper_id: papers[0]._id, source: 'Search_Result', duration_minutes: 8, session_window: '12:00-12:30', device: 'desktop', persist_status: 'stored', reason: 'Đủ ngưỡng đọc' },
+    { user_id: minh._id, paper_id: papers[0]._id, source: 'Library', duration_minutes: 14, session_window: '12:00-12:30', device: 'desktop', persist_status: 'stored', reason: 'Đủ ngưỡng đọc' },
+    { user_id: users[2]._id, paper_id: papers[1]._id, source: 'Dashboard', duration_minutes: 5, session_window: '12:30-13:00', device: 'tablet', persist_status: 'stored', reason: 'Đủ ngưỡng đọc' },
+    { user_id: users[4]._id, paper_id: papers[0]._id, source: 'Search_Result', duration_minutes: 1, session_window: '12:30-13:00', device: 'mobile', persist_status: 'skipped', reason: 'Dưới ngưỡng đọc' },
+    { user_id: users[1]._id, paper_id: papers[1]._id, source: 'Search_Result', duration_minutes: 6, session_window: '13:00-13:30', device: 'desktop', persist_status: 'stored', reason: 'Đủ ngưỡng đọc' },
   ]);
 
   console.log(`✅ Paper Views: ${views.length}`);
+
+  const systemLogs = await SystemLog.insertMany([
+    {
+      meta: { action_type: 'Login', user_id: minh._id },
+      details: { actor: 'Minh Thành', action: 'Đăng nhập admin', target: 'Admin Dashboard', severity: 'info', ip: '127.0.0.1' },
+    },
+    {
+      meta: { action_type: 'BatchJob', user_id: minh._id, source_name: 'OpenAlex' },
+      details: { actor: 'Crawler Service', action: 'Chạy batch ingest', target: 'OpenAlex', severity: 'info', ip: 'system' },
+    },
+    {
+      meta: { action_type: 'ApiError', source_name: 'IEEE Xplore' },
+      details: { actor: 'Crawler Service', action: 'API nguồn trả lỗi', target: 'IEEE Xplore', severity: 'warning', ip: 'system' },
+    },
+  ]);
+
+  console.log(`✅ System Logs: ${systemLogs.length}`);
 
   /* ── Done ── */
   console.log('\n✅ Seed complete!');

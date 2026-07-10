@@ -15,7 +15,7 @@ const sourceRefSchema = new Schema(
   {
     source_name: {
       type: String,
-      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'ACM Digital Library'],
+      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore'],
       required: true,
     },
     external_id: { type: String, required: true },
@@ -66,6 +66,7 @@ paperSchema.index({ title_normalized: 1, publication_year: 1 });
 paperSchema.index({ status: 1, publication_year: -1 });
 paperSchema.index({ citation_count: -1 }, { sparse: true });
 paperSchema.index({ publication_year: -1 });
+paperSchema.index({ source_name: 1, type: 1, publication_year: -1 });
 paperSchema.index({ research_fields: 1 });
 paperSchema.index({ keywords: 1 });
 paperSchema.index(
@@ -74,11 +75,10 @@ paperSchema.index(
 );
 
 /* ── Pre-save hook: generate title_normalized for dedup ── */
-paperSchema.pre('save', function (next) {
+paperSchema.pre('save', function () {
   if (this.isModified('title')) {
     this.title_normalized = this.title.toLowerCase().trim();
   }
-  next();
 });
 
 module.exports = mongoose.model('Paper', paperSchema);

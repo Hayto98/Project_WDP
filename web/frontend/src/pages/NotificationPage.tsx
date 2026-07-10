@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconAlert, IconBell, IconExternal, IconFilter, IconGrid, IconLibrary, IconTrend } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import {
@@ -9,6 +9,7 @@ import {
 } from "../data/notificationSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
+import { notificationApi } from "../lib/api";
 
 type InboxFilter = "all" | "unread" | NotificationKind;
 
@@ -46,6 +47,23 @@ export function NotificationPage({ theme, toggle }: Props) {
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [selectedId, setSelectedId] = useState(NOTIFICATIONS[0]?.id ?? "");
 
+  useEffect(() => {
+    let alive = true;
+    notificationApi
+      .list()
+      .then((items) => {
+        if (!alive || !items.length) return;
+        setNotifications(items);
+        setSelectedId(items[0]?.id ?? "");
+      })
+      .catch(() => {
+        // Keep sample notifications when the API is unavailable.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     return notifications.filter((item) => {
       if (filter === "all") return true;
@@ -62,10 +80,12 @@ export function NotificationPage({ theme, toggle }: Props) {
 
   const markRead = (id: string, unread: boolean) => {
     setNotifications((current) => current.map((item) => (item.id === id ? { ...item, unread } : item)));
+    if (!unread) notificationApi.markRead(id).catch(() => undefined);
   };
 
   const markAllRead = () => {
     setNotifications((current) => current.map((item) => ({ ...item, unread: false })));
+    notificationApi.markAllRead().catch(() => undefined);
   };
 
   return (

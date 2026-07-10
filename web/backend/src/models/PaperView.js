@@ -11,6 +11,15 @@ const paperViewSchema = new Schema(
       enum: ['Search_Result', 'Library', 'Recommendation', 'Dashboard'],
       default: 'Search_Result',
     },
+    duration_minutes: { type: Number, default: 0 },
+    session_window: { type: String, default: '' },
+    device: { type: String, default: 'web' },
+    persist_status: {
+      type: String,
+      enum: ['stored', 'queued', 'skipped'],
+      default: 'stored',
+    },
+    reason: { type: String, default: '' },
   },
   {
     timestamps: false, // viewed_at is the timestamp

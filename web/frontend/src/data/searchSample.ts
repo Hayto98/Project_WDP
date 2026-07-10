@@ -19,7 +19,6 @@ export const SOURCES = [
   "Crossref",
   "arXiv",
   "IEEE Xplore",
-  "ACM Digital Library",
 ];
 
 export const FIELDS = [
@@ -78,7 +77,7 @@ export const PAPERS: PaperResult[] = [
     title: "Graph Neural Networks for Materials Discovery: A Benchmark Study",
     authors: ["R. Duarte", "H. Nakamura", "P. Silva", "T. Lang", "K. Mensah", "J. Weiss"],
     year: 2024,
-    source: "ACM Digital Library",
+    source: "OpenAlex",
     type: "Conference",
     fields: ["Graph Neural Networks"],
     keywords: ["graph neural networks", "materials discovery", "benchmark"],
@@ -86,7 +85,7 @@ export const PAPERS: PaperResult[] = [
       "We release a benchmark of 1.2M crystalline structures and evaluate twelve GNN architectures on formation-energy prediction, highlighting the gap between message-passing and equivariant models.",
     citations: 156,
     doi: "10.1145/3612345.3612399",
-    url: "https://dl.acm.org/",
+    url: "https://openalex.org/",
   },
   {
     id: "s4",
@@ -183,7 +182,7 @@ export const PAPERS: PaperResult[] = [
     title: "Self-Supervised Depth Estimation for Autonomous Micro-Drones",
     authors: ["G. Ferreira", "H. Sato"],
     year: 2023,
-    source: "ACM Digital Library",
+    source: "Crossref",
     type: "Conference",
     fields: ["Computer Vision", "Edge & TinyML"],
     keywords: ["self-supervised", "depth estimation", "drones"],
@@ -191,7 +190,7 @@ export const PAPERS: PaperResult[] = [
       "A lightweight self-supervised network estimates metric depth from a single camera on 30-gram drones, enabling obstacle avoidance without active sensors.",
     citations: 58,
     doi: "10.1145/3587654.3587701",
-    url: "https://dl.acm.org/",
+    url: "https://www.crossref.org/",
   },
   {
     id: "s11",

@@ -3,6 +3,7 @@ import { IconBookmark, IconExternal, IconLibrary, IconPlus, IconSearch, IconX } 
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
+import { libraryApi } from "../lib/api";
 import {
   COLLECTIONS,
   makeLibraryEntries,
@@ -53,9 +54,26 @@ export function LibraryPage({ theme, toggle }: Props) {
   const [demo, setDemo] = useState<Demo>("auto");
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 520);
-    return () => clearTimeout(t);
+    Promise.all([libraryApi.collections(), libraryApi.papers()])
+      .then(([nextCollections, nextItems]) => {
+        if (!alive) return;
+        if (nextCollections.length) setCollections(nextCollections);
+        if (nextItems.length) {
+          setItems(nextItems);
+          setSelectedId(nextItems[0]?.id ?? null);
+        }
+      })
+      .catch(() => {
+        // Keep sample library data when the API is unavailable.
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const collectionCounts = useMemo(() => {

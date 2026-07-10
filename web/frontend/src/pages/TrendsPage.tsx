@@ -8,16 +8,20 @@ import { Sparkline } from "../components/Sparkline";
 import { Widget } from "../components/Widget";
 import { IconGap, IconSparkle, IconTrend } from "../components/icons";
 import { formatCompact, formatInt, formatPercent } from "../lib/format";
+import { analyticsApi } from "../lib/api";
 import {
   COOC_EDGES,
   COOC_NODES,
   TREND_TOPICS,
   computeGrowth,
   slicePoints,
+  type CoocEdge,
+  type CoocNode,
   type Granularity,
   type GrowthRow,
   type TrendRange,
 } from "../data/trendsSample";
+import type { TrendPoint, TrendSeries } from "../data/types";
 
 const RANGES: { id: TrendRange; label: string }[] = [
   { id: "12m", label: "12 tháng" },
@@ -51,21 +55,55 @@ export function TrendsPage({ theme, toggle }: Props) {
   const [gran, setGran] = useState<Granularity>("year");
   const [loading, setLoading] = useState(true);
   const [demo, setDemo] = useState<Demo>("auto");
+  const [remotePoints, setRemotePoints] = useState<TrendPoint[] | null>(null);
+  const [remoteGrowth, setRemoteGrowth] = useState<GrowthRow[] | null>(null);
+  const [remoteNetwork, setRemoteNetwork] = useState<{ nodes: CoocNode[]; edges: CoocEdge[] } | null>(null);
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 560);
-    return () => clearTimeout(t);
+    Promise.all([
+      analyticsApi.trends(range, gran),
+      analyticsApi.growth(range, gran),
+      analyticsApi.cooccurrence(),
+    ])
+      .then(([points, growth, network]) => {
+        if (!alive) return;
+        setRemotePoints(points);
+        setRemoteGrowth(growth);
+        setRemoteNetwork(network);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setRemotePoints(null);
+        setRemoteGrowth(null);
+        setRemoteNetwork(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, [range, gran]);
 
-  const points = useMemo(() => slicePoints(range, gran), [range, gran]);
+  const points = useMemo(() => remotePoints ?? slicePoints(range, gran), [range, gran, remotePoints]);
+  const topics = useMemo<TrendSeries[]>(() => {
+    const series = remotePoints?.length ? analyticsApi.seriesFromPoints(remotePoints) : TREND_TOPICS;
+    return series.length ? series : TREND_TOPICS;
+  }, [remotePoints]);
+
+  useEffect(() => {
+    setSelected(new Set(topics.map((topic) => topic.key)));
+  }, [topics]);
+
   const activeSeries = useMemo(
-    () => TREND_TOPICS.filter((t) => selected.has(t.key)),
-    [selected],
+    () => topics.filter((t) => selected.has(t.key)),
+    [selected, topics],
   );
   const growth = useMemo(
-    () => computeGrowth(points).filter((g) => selected.has(g.key)),
-    [points, selected],
+    () => (remoteGrowth ?? computeGrowth(points)).filter((g) => selected.has(g.key)),
+    [remoteGrowth, points, selected],
   );
 
   const totalPublications = useMemo(() => {
@@ -96,7 +134,7 @@ export function TrendsPage({ theme, toggle }: Props) {
       return next;
     });
 
-  const allOn = selected.size === TREND_TOPICS.length;
+  const allOn = selected.size === topics.length;
 
   return (
     <main className="main trends">
@@ -139,7 +177,7 @@ export function TrendsPage({ theme, toggle }: Props) {
       {/* topic selector */}
       <div className="topicbar">
         <div className="topicbar__chips" role="group" aria-label="Chọn chủ đề phân tích">
-          {TREND_TOPICS.map((t) => {
+          {topics.map((t) => {
             const on = selected.has(t.key);
             return (
               <button
@@ -158,7 +196,7 @@ export function TrendsPage({ theme, toggle }: Props) {
         <button
           className="topicbar__all"
           onClick={() =>
-            setSelected(allOn ? new Set() : new Set(TREND_TOPICS.map((t) => t.key)))
+            setSelected(allOn ? new Set() : new Set(topics.map((t) => t.key)))
           }
         >
           {allOn ? "Bỏ chọn tất cả" : "Chọn tất cả"}
@@ -167,7 +205,7 @@ export function TrendsPage({ theme, toggle }: Props) {
 
       {/* selection summary */}
       <div className="trendsum">
-        <SumStat label="Chủ đề" value={formatInt(selected.size)} unit={`/ ${TREND_TOPICS.length}`} />
+        <SumStat label="Chủ đề" value={formatInt(selected.size)} unit={`/ ${topics.length}`} />
         <SumStat label="Tổng công bố (khoảng đang xem)" value={formatCompact(totalPublications)} />
         <SumStat
           label="Tăng trưởng TB (CAGR)"
@@ -232,8 +270,8 @@ export function TrendsPage({ theme, toggle }: Props) {
           emptyMessage="Chọn chủ đề để dựng mạng từ khóa"
         >
           <CoocNetwork
-            nodes={COOC_NODES}
-            edges={COOC_EDGES}
+            nodes={remoteNetwork?.nodes ?? COOC_NODES}
+            edges={remoteNetwork?.edges ?? COOC_EDGES}
             selected={selected}
             themeKey={theme}
           />

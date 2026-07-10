@@ -6,6 +6,11 @@ const PaperView = require('../models/PaperView');
 const Paper = require('../models/Paper');
 const ApiResponse = require('../utils/apiResponse');
 const { parsePagination } = require('../utils/pagination');
+const { importIEEEByQuery } = require('../services/ieee.service');
+const { importOpenAlexByQuery } = require('../services/openalex.service');
+const { importArxivByQuery } = require('../services/arxiv.service');
+const { importCrossrefByQuery } = require('../services/crossref.service');
+const { checkSourceApis } = require('../services/sourceHealth.service');
 
 // ── Users ──
 
@@ -68,6 +73,15 @@ async function updateDataSource(req, res) {
   }
 }
 
+async function checkDataSourceApis(_req, res) {
+  try {
+    const results = await checkSourceApis();
+    return ApiResponse.success(res, results);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, 500);
+  }
+}
+
 // ── Crawler Jobs ──
 
 async function getJobs(req, res) {
@@ -84,10 +98,80 @@ async function getJobs(req, res) {
 
 async function createJob(req, res) {
   try {
-    const job = await CrawlerJob.create(req.body);
+    const { name, source_name, query, max_records } = req.body;
+    const source = await DataSource.findOne({ name: source_name }).lean();
+    const job = await CrawlerJob.create({
+      name,
+      source_id: source?._id,
+      source_name,
+      query,
+      max_records: max_records || 25,
+      status: 'queued',
+      progress: 0,
+      owner: req.user.email,
+      requested_by: req.user.id,
+    });
     return ApiResponse.created(res, job);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
+  }
+}
+
+async function runJob(req, res) {
+  const startedAt = new Date();
+  try {
+    const job = await CrawlerJob.findById(req.params.id);
+    if (!job) return ApiResponse.notFound(res, 'Crawler job not found');
+    if (job.status === 'running') {
+      return ApiResponse.error(res, 'Job is already running', 409, 'JOB_RUNNING');
+    }
+    if (!['OpenAlex', 'arXiv', 'Crossref', 'IEEE Xplore'].includes(job.source_name)) {
+      return ApiResponse.error(res, `Unsupported sync source: ${job.source_name}`, 400, 'UNSUPPORTED_SOURCE');
+    }
+    if (!job.query) {
+      return ApiResponse.validationError(res, 'Job query is required before running sync');
+    }
+
+    job.status = 'running';
+    job.progress = 10;
+    job.started_at = startedAt;
+    job.completed_at = undefined;
+    job.error_message = null;
+    await job.save();
+
+    let result;
+    if (job.source_name === 'OpenAlex') {
+      result = await importOpenAlexByQuery(job.query, job.max_records);
+    } else if (job.source_name === 'arXiv') {
+      result = await importArxivByQuery(job.query, job.max_records);
+    } else if (job.source_name === 'Crossref') {
+      result = await importCrossrefByQuery(job.query, job.max_records);
+    } else {
+      result = await importIEEEByQuery(job.query, job.max_records);
+    }
+    const completedAt = new Date();
+    job.status = 'success';
+    job.progress = 100;
+    job.records_processed = result.imported;
+    job.completed_at = completedAt;
+    job.duration_seconds = Math.max(1, Math.round((completedAt - startedAt) / 1000));
+    job.result = {
+      imported: result.imported,
+      skipped: result.skipped,
+      source_total: result.sourceTotal,
+    };
+    await job.save();
+
+    return ApiResponse.success(res, job);
+  } catch (err) {
+    await CrawlerJob.findByIdAndUpdate(req.params.id, {
+      status: 'failed',
+      progress: 100,
+      completed_at: new Date(),
+      duration_seconds: Math.max(1, Math.round((new Date() - startedAt) / 1000)),
+      error_message: err.message,
+    });
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
   }
 }
 
@@ -153,8 +237,8 @@ async function getStats(req, res) {
 
 module.exports = {
   getUsers, updateUser,
-  getDataSources, updateDataSource,
-  getJobs, createJob,
+  getDataSources, updateDataSource, checkDataSourceApis,
+  getJobs, createJob, runJob,
   getAuditLogs,
   getPaperReads,
   getStats,
