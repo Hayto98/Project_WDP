@@ -15,11 +15,101 @@ const {
 const router = Router();
 router.use(authenticate);
 
+/**
+ * @swagger
+ * tags:
+ *   name: Workspaces
+ *   description: Workspace management
+ */
+
 // Workspaces
+
+/**
+ * @swagger
+ * /api/v1/workspaces:
+ *   get:
+ *     summary: Get user workspaces
+ *     tags: [Workspaces]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of workspaces
+ */
 router.get('/', ctrl.getWorkspaces);
+
+/**
+ * @swagger
+ * /api/v1/workspaces:
+ *   post:
+ *     summary: Create a workspace
+ *     tags: [Workspaces]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Workspace created
+ */
 router.post('/', validate(createWorkspaceSchema), ctrl.createWorkspace);
+
+/**
+ * @swagger
+ * /api/v1/workspaces/{id}:
+ *   get:
+ *     summary: Get workspace details
+ *     tags: [Workspaces]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Workspace details
+ */
 router.get('/:id', ctrl.getWorkspaceById);
+
+/**
+ * @swagger
+ * /api/v1/workspaces/{id}:
+ *   put:
+ *     summary: Update workspace
+ *     tags: [Workspaces]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Workspace updated
+ */
 router.put('/:id', validate(updateWorkspaceSchema), ctrl.updateWorkspace);
+
+/**
+ * @swagger
+ * /api/v1/workspaces/{id}:
+ *   delete:
+ *     summary: Delete workspace
+ *     tags: [Workspaces]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Workspace deleted
+ */
 router.delete('/:id', ctrl.deleteWorkspace);
 
 // Members

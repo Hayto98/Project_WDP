@@ -7,6 +7,8 @@ const connectDB = require('./config/database');
 const { port, corsOrigin, nodeEnv, redisEnabled } = require('./config/env');
 const { apiLimiter } = require('./middleware/rateLimiter.middleware');
 const { logAction } = require('./utils/systemLogger');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 
 // Route imports
 const authRoutes = require('./routes/auth.routes');
@@ -54,6 +56,9 @@ app.use(`${v1}/workspaces`, workspaceRoutes);
 app.use(`${v1}/collaboration`, collaborationRoutes);
 app.use(`${v1}/admin`, adminRoutes);
 app.use(`${v1}/feedbacks`, feedbackRoutes);
+
+// Swagger Documentation Route
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 /* ── Health Check ── */
 app.get('/api/health', (_req, res) => {

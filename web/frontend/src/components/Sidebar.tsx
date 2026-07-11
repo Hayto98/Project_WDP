@@ -8,6 +8,7 @@ import {
   IconTrend,
   IconUser,
 } from "./icons";
+import { authApi, getCurrentUser } from "../lib/api";
 
 export const NAV = [
   { id: "overview", label: "Tổng quan", icon: IconGrid },
@@ -22,6 +23,22 @@ export const NAV = [
 ];
 
 export function Sidebar({ active }: { active: string }) {
+  const user = getCurrentUser();
+  const handleLogout = async () => {
+    await authApi.logout();
+    window.location.hash = "login";
+  };
+
+  let initials = "MT";
+  if (user && user.full_name) {
+    const parts = user.full_name.trim().split(/\s+/);
+    if (parts.length > 1) {
+      initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    } else if (parts.length === 1 && parts[0]) {
+      initials = parts[0].substring(0, 2).toUpperCase();
+    }
+  }
+
   return (
     <nav className="sidebar" aria-label="Điều hướng chính">
       <a className="sidebar__brand" href="#home">
@@ -55,13 +72,20 @@ export function Sidebar({ active }: { active: string }) {
       <div className="sidebar__foot">
         <div className="userchip">
           <span className="userchip__avatar" aria-hidden>
-            MT
+            {initials}
           </span>
           <span className="userchip__meta">
-            <span className="userchip__name">Minh Thành</span>
-            <span className="userchip__role">Student</span>
+            <span className="userchip__name">{user ? user.full_name : "Khách"}</span>
+            <span className="userchip__role">{user ? user.roles.join(", ") : "Khách"}</span>
           </span>
         </div>
+        <button
+          className="btn btn--ghost mt-2 w-full text-left"
+          type="button"
+          onClick={handleLogout}
+        >
+          Đăng xuất
+        </button>
       </div>
     </nav>
   );

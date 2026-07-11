@@ -60,6 +60,10 @@ export default function App() {
     }
   }, [currentUser, isAdmin, route]);
 
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, [route]);
+
   if (isAdmin && route !== "login" && route !== "register") {
     return (
       <RouteSuspense>

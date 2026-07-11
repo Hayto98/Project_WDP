@@ -128,11 +128,6 @@ async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
     cache: "no-store",
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
-  if (res.status === 401 && !_isRetry && path !== "/auth/refresh") {
-    const refreshed = await refreshAuth();
-    if (refreshed) return request<T>(path, { ...fetchInit, _isRetry: true });
-    redirectToLogin();
-  }
   if (!res.ok || !payload.success) {
     if (res.status === 401 && !init._isRetry && path !== "/auth/refresh" && path !== "/auth/login") {
       const nextToken = await refreshAuthTokens().catch(() => null);
@@ -160,11 +155,6 @@ async function requestWithMeta<T>(path: string, init: ApiRequestInit = {}) {
     cache: "no-store",
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
-  if (res.status === 401 && !_isRetry && path !== "/auth/refresh") {
-    const refreshed = await refreshAuth();
-    if (refreshed) return requestWithMeta<T>(path, { ...fetchInit, _isRetry: true });
-    redirectToLogin();
-  }
   if (!res.ok || !payload.success) {
     if (res.status === 401 && !init._isRetry) {
       const nextToken = await refreshAuthTokens().catch(() => null);
@@ -372,6 +362,26 @@ export const authApi = {
       clearAuth();
     }
   },
+  async me() {
+    return request<AuthUser>("/auth/me");
+  },
+  async changePassword(currentPassword: string, newPassword: string) {
+    return request<{ message?: string }>("/auth/change-password", {
+      method: "PUT",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+};
+
+export const userApi = {
+  async updateProfile(data: { full_name: string; email: string }) {
+    const nextUser = await request<AuthUser>("/users/me", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    storeCurrentUser(nextUser);
+    return nextUser;
+  },
 };
 
 export const paperApi = {
@@ -461,7 +471,7 @@ export const dashboardApi = {
 function normalizeAxisOptions(values: unknown): AxisOption[] {
   if (!Array.isArray(values)) return [];
   return values
-    .map((value, index) => {
+    .map((value, index): AxisOption | null => {
       if (typeof value === "string") return { key: value, label: value };
       if (!value || typeof value !== "object") return null;
       const raw = value as Record<string, unknown>;

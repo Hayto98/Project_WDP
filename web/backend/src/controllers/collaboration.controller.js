@@ -14,25 +14,7 @@ const getInvites = asyncHandler(async (req, res) => {
 
 const createInvite = asyncHandler(async (req, res) => {
   try {
-    const {
-      workspace_id,
-      invitee_email,
-      invitee_name,
-      invitee_user_id,
-      direction,
-      topic,
-      message,
-    } = req.body;
-    const invite = await CollaborationInvite.create({
-      workspace_id,
-      invitee_email,
-      invitee_name: invitee_name || '',
-      invitee_user_id: invitee_user_id || null,
-      direction,
-      topic,
-      message: message || '',
-      sender_id: req.user.id,
-    });
+    const invite = await collaborationService.createInvite(req.user.id, req.body);
     return ApiResponse.created(res, invite);
   } catch (err) {
     return ApiResponse.error(res, err.message, err.statusCode || 500, err.code || 'INTERNAL_ERROR');
