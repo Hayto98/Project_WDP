@@ -19,12 +19,27 @@ import {
   IconTrend,
 } from "../components/icons";
 import { dashboardApi } from "../lib/api";
+import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 
 const RANGES: { id: TimeRange; label: string }[] = [
   { id: "12m", label: "12 tháng" },
   { id: "24m", label: "24 tháng" },
   { id: "5y", label: "5 năm" },
 ];
+
+const EMPTY_DASHBOARD: DashboardData = {
+  updatedAt: "chưa có dữ liệu",
+  kpis: [],
+  trendSeries: [],
+  trend: [],
+  gapFields: [],
+  gapAspects: [],
+  gaps: [],
+  trending: [],
+  ai: { summary: "", directions: [], evidence: [] },
+  followed: [],
+  notifications: [],
+};
 
 type ViewState = "default" | "loading" | "empty" | "error";
 
@@ -38,8 +53,12 @@ export function OverviewPage({ theme, toggle }: Props) {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewState>("default");
   const [remoteData, setRemoteData] = useState<DashboardData | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
-  const data = useMemo(() => remoteData ?? makeDashboardData(range), [range, remoteData]);
+  const data = useMemo(
+    () => remoteData ?? (USE_SAMPLE_FALLBACK ? makeDashboardData(range) : EMPTY_DASHBOARD),
+    [range, remoteData],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -47,10 +66,14 @@ export function OverviewPage({ theme, toggle }: Props) {
     dashboardApi
       .overview()
       .then((next) => {
-        if (alive) setRemoteData(next);
+        if (!alive) return;
+        setRemoteData(next);
+        setLoadError(false);
       })
       .catch(() => {
-        if (alive) setRemoteData(null);
+        if (!alive) return;
+        setRemoteData(null);
+        setLoadError(true);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -63,9 +86,9 @@ export function OverviewPage({ theme, toggle }: Props) {
   const status: WidgetStatus =
     view === "loading" || loading
       ? "loading"
-      : view === "error"
+      : view === "error" || (!USE_SAMPLE_FALLBACK && loadError)
         ? "error"
-        : view === "empty"
+        : view === "empty" || (!USE_SAMPLE_FALLBACK && !remoteData)
           ? "empty"
           : "ready";
 
@@ -104,8 +127,14 @@ export function OverviewPage({ theme, toggle }: Props) {
               setLoading(true);
               dashboardApi
                 .overview()
-                .then(setRemoteData)
-                .catch(() => setRemoteData(null))
+                .then((next) => {
+                  setRemoteData(next);
+                  setLoadError(false);
+                })
+                .catch(() => {
+                  setRemoteData(null);
+                  setLoadError(true);
+                })
                 .finally(() => setLoading(false));
             }}
             aria-label="Làm mới dữ liệu"
@@ -118,7 +147,7 @@ export function OverviewPage({ theme, toggle }: Props) {
         </div>
       </header>
 
-      <div className="statepick" role="group" aria-label="Xem trước trạng thái (demo)">
+      {SHOW_DEMO_CONTROLS && <div className="statepick" role="group" aria-label="Xem trước trạng thái (demo)">
         <span className="statepick__label">Xem trạng thái</span>
         {(["default", "loading", "empty", "error"] as ViewState[]).map((v) => (
           <button
@@ -129,7 +158,7 @@ export function OverviewPage({ theme, toggle }: Props) {
             {v === "default" ? "Mặc định" : v === "loading" ? "Đang tải" : v === "empty" ? "Trống" : "Lỗi"}
           </button>
         ))}
-      </div>
+      </div>}
 
       <KpiStrip kpis={data.kpis} loading={status === "loading"} />
 

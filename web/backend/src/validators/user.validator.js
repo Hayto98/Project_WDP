@@ -6,11 +6,12 @@ const updateProfileSchema = Joi.object({
 }).min(1);
 
 const updateDashboardLayoutSchema = Joi.object({
-  widgets: Joi.array()
-    .items(Joi.string().valid('trend_chart', 'research_gap_heatmap', 'top_papers', 'ai_insights'))
-    .min(1)
-    .max(10)
-    .required(),
+  widgets: Joi.array().items(
+    Joi.string().valid('trend_chart', 'research_gap_heatmap', 'top_papers', 'ai_insights'),
+  ).min(1).max(10).required(),
 });
 
-module.exports = { updateProfileSchema, updateDashboardLayoutSchema };
+module.exports = {
+  updateProfileSchema,
+  updateDashboardLayoutSchema,
+};

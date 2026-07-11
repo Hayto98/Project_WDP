@@ -6,7 +6,10 @@ const createFeedbackSchema = Joi.object({
 
 const updateFeedbackSchema = Joi.object({
   status: Joi.string().valid('Pending', 'Reviewed', 'Resolved').optional(),
-  admin_note: Joi.string().trim().max(1000).optional().allow(null, ''),
+  admin_note: Joi.string().trim().max(1000).allow(null, '').optional(),
 }).min(1);
 
-module.exports = { createFeedbackSchema, updateFeedbackSchema };
+module.exports = {
+  createFeedbackSchema,
+  updateFeedbackSchema,
+};

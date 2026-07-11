@@ -15,5 +15,6 @@ module.exports = {
   CrawlerJob: require('./CrawlerJob'),
   Workspace: require('./Workspace'),
   WorkspaceItem: require('./WorkspaceItem'),
+  WorkspaceActivity: require('./WorkspaceActivity'),
   CollaborationInvite: require('./CollaborationInvite'),
 };

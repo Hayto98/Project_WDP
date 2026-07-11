@@ -1,228 +1,88 @@
-const Workspace = require('../models/Workspace');
-const WorkspaceItem = require('../models/WorkspaceItem');
 const ApiResponse = require('../utils/apiResponse');
+const asyncHandler = require('../utils/asyncHandler');
+const workspaceService = require('../services/workspace.service');
 
-// ── Workspace CRUD ──
+const getWorkspaces = asyncHandler(async (req, res) => {
+  const workspaces = await workspaceService.listWorkspaces(req.user.id);
+  return ApiResponse.success(res, workspaces);
+});
 
-async function getWorkspaces(req, res) {
-  try {
-    const workspaces = await Workspace.find({
-      $or: [
-        { owner_id: req.user.id },
-        { 'members.user_id': req.user.id },
-      ],
-    }).sort({ updated_at: -1 }).lean();
-    return ApiResponse.success(res, workspaces);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const createWorkspace = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.createWorkspace(req.user, req.body);
+  return ApiResponse.created(res, workspace);
+});
 
-async function createWorkspace(req, res) {
-  try {
-    const { name, description, owner_name, owner_initials } = req.body;
-    const ws = await Workspace.create({
-      name,
-      description: description || '',
-      owner_id: req.user.id,
-      members: [{
-        user_id: req.user.id,
-        name: owner_name || 'Owner',
-        initials: owner_initials || 'OW',
-        role: 'owner',
-      }],
-    });
-    return ApiResponse.created(res, ws);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const getWorkspaceById = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.getWorkspaceById(req.user.id, req.params.id);
+  if (!workspace) return ApiResponse.notFound(res, 'Workspace not found');
+  return ApiResponse.success(res, workspace);
+});
 
-async function getWorkspaceById(req, res) {
-  try {
-    const ws = await Workspace.findById(req.params.id).lean();
-    if (!ws) return ApiResponse.notFound(res, 'Workspace not found');
-    return ApiResponse.success(res, ws);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const updateWorkspace = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.updateWorkspace(req.user.id, req.params.id, req.body, req.user);
+  if (!workspace) return ApiResponse.notFound(res);
+  return ApiResponse.success(res, workspace);
+});
 
-async function updateWorkspace(req, res) {
-  try {
-    const ws = await Workspace.findOneAndUpdate(
-      { _id: req.params.id, 'members.user_id': req.user.id },
-      { name: req.body.name, description: req.body.description, active: req.body.active },
-      { new: true },
-    );
-    if (!ws) return ApiResponse.notFound(res);
-    return ApiResponse.success(res, ws);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const deleteWorkspace = asyncHandler(async (req, res) => {
+  const result = await workspaceService.deleteWorkspace(req.user.id, req.params.id, req.user);
+  if (result.deletedCount === 0) return ApiResponse.forbidden(res, 'Only owner can delete');
+  return ApiResponse.success(res, { message: 'Workspace deleted' });
+});
 
-async function deleteWorkspace(req, res) {
-  try {
-    const result = await Workspace.deleteOne({ _id: req.params.id, owner_id: req.user.id });
-    if (result.deletedCount === 0) return ApiResponse.forbidden(res, 'Only owner can delete');
-    // Also delete all items
-    await WorkspaceItem.deleteMany({ workspace_id: req.params.id });
-    return ApiResponse.success(res, { message: 'Workspace deleted' });
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const addMember = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.addMember(req.user.id, req.params.id, req.body, req.user);
+  if (!workspace) return ApiResponse.forbidden(res, 'Only owner can add members');
+  return ApiResponse.created(res, workspace.members);
+});
 
-// ── Members ──
+const updateMember = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.updateMember(req.user.id, req.params.id, req.params.memberId, req.body, req.user);
+  if (!workspace) return ApiResponse.notFound(res);
+  return ApiResponse.success(res, workspace.members);
+});
 
-async function addMember(req, res) {
-  try {
-    const ws = await Workspace.findOneAndUpdate(
-      { _id: req.params.id, owner_id: req.user.id },
-      { $push: { members: req.body } },
-      { new: true },
-    );
-    if (!ws) return ApiResponse.forbidden(res, 'Only owner can add members');
-    return ApiResponse.created(res, ws.members);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const removeMember = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.removeMember(req.user.id, req.params.id, req.params.memberId, req.user);
+  if (!workspace) return ApiResponse.forbidden(res);
+  return ApiResponse.success(res, { message: 'Member removed' });
+});
 
-async function updateMember(req, res) {
-  try {
-    const ws = await Workspace.findOneAndUpdate(
-      { _id: req.params.id, owner_id: req.user.id, 'members.user_id': req.params.memberId },
-      { $set: { 'members.$.role': req.body.role } },
-      { new: true },
-    );
-    if (!ws) return ApiResponse.notFound(res);
-    return ApiResponse.success(res, ws.members);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const getItems = asyncHandler(async (req, res) => {
+  const items = await workspaceService.listItems(req.user.id, req.params.id, req.query);
+  if (!items) return ApiResponse.forbidden(res, 'Workspace access denied');
+  return ApiResponse.success(res, items);
+});
 
-async function removeMember(req, res) {
-  try {
-    const ws = await Workspace.findOneAndUpdate(
-      { _id: req.params.id, owner_id: req.user.id },
-      { $pull: { members: { user_id: req.params.memberId } } },
-      { new: true },
-    );
-    if (!ws) return ApiResponse.forbidden(res);
-    return ApiResponse.success(res, { message: 'Member removed' });
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const createItem = asyncHandler(async (req, res) => {
+  const item = await workspaceService.createItem(req.params.id, req.body, req.user);
+  if (!item) return ApiResponse.forbidden(res, 'Only owner or editor can create items');
+  return ApiResponse.created(res, item);
+});
 
-// ── Work Items ──
+const updateItem = asyncHandler(async (req, res) => {
+  const item = await workspaceService.updateItem(req.params.id, req.params.itemId, req.body, req.user);
+  if (!item) return ApiResponse.forbidden(res, 'Only owner or editor can update items');
+  return ApiResponse.success(res, item);
+});
 
-async function getItems(req, res) {
-  try {
-    const filter = { workspace_id: req.params.id };
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.kind) filter.kind = req.query.kind;
+const deleteItem = asyncHandler(async (req, res) => {
+  const result = await workspaceService.deleteItem(req.params.id, req.params.itemId, req.user);
+  if (!result) return ApiResponse.forbidden(res, 'Only owner or editor can delete items');
+  return ApiResponse.success(res, result);
+});
 
-    const items = await WorkspaceItem.find(filter).sort({ updated_at: -1 }).lean();
-    return ApiResponse.success(res, items);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const addComment = asyncHandler(async (req, res) => {
+  const comment = await workspaceService.addComment(req.user, req.params.id, req.params.itemId, req.body);
+  if (!comment) return ApiResponse.notFound(res);
+  return ApiResponse.created(res, comment);
+});
 
-async function createItem(req, res) {
-  try {
-    const { kind, title, status, assignee_id, paper_id, due, note } = req.body;
-    const item = await WorkspaceItem.create({
-      kind,
-      title,
-      status,
-      assignee_id,
-      paper_id,
-      due,
-      note,
-      workspace_id: req.params.id,
-    });
-    return ApiResponse.created(res, item);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
-
-async function updateItem(req, res) {
-  try {
-    const allowed = {};
-    for (const key of ['kind', 'title', 'status', 'assignee_id', 'paper_id', 'due', 'note']) {
-      if (req.body[key] !== undefined) allowed[key] = req.body[key];
-    }
-    const item = await WorkspaceItem.findOneAndUpdate(
-      { _id: req.params.itemId, workspace_id: req.params.id },
-      allowed,
-      { new: true },
-    );
-    if (!item) return ApiResponse.notFound(res);
-    return ApiResponse.success(res, item);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
-
-async function deleteItem(req, res) {
-  try {
-    await WorkspaceItem.deleteOne({ _id: req.params.itemId, workspace_id: req.params.id });
-    return ApiResponse.success(res, { message: 'Item deleted' });
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
-
-async function addComment(req, res) {
-  try {
-    const item = await WorkspaceItem.findOneAndUpdate(
-      { _id: req.params.itemId, workspace_id: req.params.id },
-      {
-        $push: {
-          comments: {
-            author_id: req.user.id,
-            author_name: req.body.author_name || '',
-            content: req.body.content,
-          },
-        },
-      },
-      { new: true },
-    );
-    if (!item) return ApiResponse.notFound(res);
-    return ApiResponse.created(res, item.comments[item.comments.length - 1]);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
-
-// ── Activities (read from system_logs or computed) ──
-
-async function getActivities(req, res) {
-  try {
-    // Simplified: derive from workspace items' recent updates
-    const items = await WorkspaceItem.find({ workspace_id: req.params.id })
-      .sort({ updated_at: -1 })
-      .limit(20)
-      .lean();
-
-    const activities = items.map((i) => ({
-      id: i._id,
-      workspace_id: i.workspace_id,
-      action: `cập nhật ${i.kind}: ${i.title}`,
-      when: i.updated_at,
-    }));
-
-    return ApiResponse.success(res, activities);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const getActivities = asyncHandler(async (req, res) => {
+  const activities = await workspaceService.listActivities(req.user.id, req.params.id);
+  if (!activities) return ApiResponse.forbidden(res, 'Workspace access denied');
+  return ApiResponse.success(res, activities);
+});
 
 module.exports = {
   getWorkspaces, createWorkspace, getWorkspaceById, updateWorkspace, deleteWorkspace,

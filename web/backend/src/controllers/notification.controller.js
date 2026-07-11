@@ -1,19 +1,16 @@
-const Notification = require('../models/Notification');
 const ApiResponse = require('../utils/apiResponse');
 const { parsePagination } = require('../utils/pagination');
+const notificationService = require('../services/notification.service');
 
 async function getNotifications(req, res) {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const filter = { user_id: req.user.id };
-    if (req.query.kind) filter.notification_type = req.query.kind;
-    if (req.query.unread === 'true') filter.is_read = false;
-
-    const [items, total] = await Promise.all([
-      Notification.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
-      Notification.countDocuments(filter),
-    ]);
-
+    const { items, total } = await notificationService.listNotifications(req.user.id, {
+      skip,
+      limit,
+      kind: req.query.kind,
+      unread: req.query.unread,
+    });
     return ApiResponse.paginated(res, items, page, limit, total);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
@@ -22,11 +19,8 @@ async function getNotifications(req, res) {
 
 async function markRead(req, res) {
   try {
-    await Notification.updateOne(
-      { _id: req.params.id, user_id: req.user.id },
-      { is_read: true },
-    );
-    return ApiResponse.success(res, { message: 'Marked as read' });
+    const result = await notificationService.markNotificationRead(req.user.id, req.params.id);
+    return ApiResponse.success(res, result);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
   }
@@ -34,11 +28,8 @@ async function markRead(req, res) {
 
 async function markAllRead(req, res) {
   try {
-    await Notification.updateMany(
-      { user_id: req.user.id, is_read: false },
-      { is_read: true },
-    );
-    return ApiResponse.success(res, { message: 'All notifications marked as read' });
+    const result = await notificationService.markAllNotificationsRead(req.user.id);
+    return ApiResponse.success(res, result);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
   }
@@ -46,10 +37,7 @@ async function markAllRead(req, res) {
 
 async function getUnreadCount(req, res) {
   try {
-    const count = await Notification.countDocuments({
-      user_id: req.user.id,
-      is_read: false,
-    });
+    const count = await notificationService.countUnreadNotifications(req.user.id);
     return ApiResponse.success(res, { count });
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);

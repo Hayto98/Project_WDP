@@ -61,7 +61,7 @@ async function updateProfile(req, res) {
     const user = await authService.updateProfile(req.user.id, req.body);
     return ApiResponse.success(res, user);
   } catch (err) {
-    return ApiResponse.error(res, err.message, err.statusCode || 500);
+    return ApiResponse.error(res, err.message, err.statusCode || 500, err.code || 'INTERNAL_ERROR');
   }
 }
 

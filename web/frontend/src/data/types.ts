@@ -24,6 +24,12 @@ export interface TrendSeries {
   token: string; // css custom-property name, e.g. "--c1"
 }
 
+export interface AxisOption {
+  key: string;
+  label: string;
+  token?: string;
+}
+
 export interface GapCell {
   field: string;
   aspect: string;
@@ -69,8 +75,8 @@ export interface DashboardData {
   kpis: Kpi[];
   trendSeries: TrendSeries[];
   trend: TrendPoint[];
-  gapFields: string[];
-  gapAspects: string[];
+  gapFields: AxisOption[];
+  gapAspects: AxisOption[];
   gaps: GapCell[];
   trending: TrendingPaper[];
   ai: AiInsight;

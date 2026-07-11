@@ -9,6 +9,7 @@ import { Widget } from "../components/Widget";
 import { IconGap, IconSparkle, IconTrend } from "../components/icons";
 import { formatCompact, formatInt, formatPercent } from "../lib/format";
 import { analyticsApi } from "../lib/api";
+import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 import {
   COOC_EDGES,
   COOC_NODES,
@@ -58,6 +59,7 @@ export function TrendsPage({ theme, toggle }: Props) {
   const [remotePoints, setRemotePoints] = useState<TrendPoint[] | null>(null);
   const [remoteGrowth, setRemoteGrowth] = useState<GrowthRow[] | null>(null);
   const [remoteNetwork, setRemoteNetwork] = useState<{ nodes: CoocNode[]; edges: CoocEdge[] } | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -72,12 +74,14 @@ export function TrendsPage({ theme, toggle }: Props) {
         setRemotePoints(points);
         setRemoteGrowth(growth);
         setRemoteNetwork(network);
+        setLoadError(false);
       })
       .catch(() => {
         if (!alive) return;
         setRemotePoints(null);
         setRemoteGrowth(null);
         setRemoteNetwork(null);
+        setLoadError(true);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -87,10 +91,13 @@ export function TrendsPage({ theme, toggle }: Props) {
     };
   }, [range, gran]);
 
-  const points = useMemo(() => remotePoints ?? slicePoints(range, gran), [range, gran, remotePoints]);
+  const points = useMemo(
+    () => remotePoints ?? (USE_SAMPLE_FALLBACK ? slicePoints(range, gran) : []),
+    [range, gran, remotePoints],
+  );
   const topics = useMemo<TrendSeries[]>(() => {
-    const series = remotePoints?.length ? analyticsApi.seriesFromPoints(remotePoints) : TREND_TOPICS;
-    return series.length ? series : TREND_TOPICS;
+    const series = remotePoints?.length ? analyticsApi.seriesFromPoints(remotePoints) : USE_SAMPLE_FALLBACK ? TREND_TOPICS : [];
+    return series.length ? series : USE_SAMPLE_FALLBACK ? TREND_TOPICS : [];
   }, [remotePoints]);
 
   useEffect(() => {
@@ -102,7 +109,7 @@ export function TrendsPage({ theme, toggle }: Props) {
     [selected, topics],
   );
   const growth = useMemo(
-    () => (remoteGrowth ?? computeGrowth(points)).filter((g) => selected.has(g.key)),
+    () => (remoteGrowth ?? (USE_SAMPLE_FALLBACK ? computeGrowth(points) : [])).filter((g) => selected.has(g.key)),
     [remoteGrowth, points, selected],
   );
 
@@ -119,6 +126,8 @@ export function TrendsPage({ theme, toggle }: Props) {
   const baseStatus: WidgetStatus =
     demo === "error"
       ? "error"
+      : !USE_SAMPLE_FALLBACK && loadError
+        ? "error"
       : demo === "empty"
         ? "empty"
         : demo === "loading" || loading
@@ -270,15 +279,15 @@ export function TrendsPage({ theme, toggle }: Props) {
           emptyMessage="Chọn chủ đề để dựng mạng từ khóa"
         >
           <CoocNetwork
-            nodes={remoteNetwork?.nodes ?? COOC_NODES}
-            edges={remoteNetwork?.edges ?? COOC_EDGES}
+            nodes={remoteNetwork?.nodes ?? (USE_SAMPLE_FALLBACK ? COOC_NODES : [])}
+            edges={remoteNetwork?.edges ?? (USE_SAMPLE_FALLBACK ? COOC_EDGES : [])}
             selected={selected}
             themeKey={theme}
           />
         </Widget>
       </div>
 
-      <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
+      {SHOW_DEMO_CONTROLS && <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
         <span className="statepick__label">Xem trạng thái</span>
         {(["auto", "loading", "empty", "error"] as Demo[]).map((d) => (
           <button
@@ -289,7 +298,7 @@ export function TrendsPage({ theme, toggle }: Props) {
             {d === "auto" ? "Thực tế" : d === "loading" ? "Đang tải" : d === "empty" ? "Trống" : "Lỗi"}
           </button>
         ))}
-      </div>
+      </div>}
     </main>
   );
 }

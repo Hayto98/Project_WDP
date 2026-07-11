@@ -1,10 +1,11 @@
 const Redis = require('ioredis');
-const { redisUrl } = require('./env');
+const { redisEnabled, redisUrl } = require('./env');
 
 let redis = null;
 
 try {
-  redis = new Redis(redisUrl, {
+  if (redisEnabled) {
+    redis = new Redis(redisUrl, {
     maxRetriesPerRequest: 3,
     retryStrategy(times) {
       if (times > 3) {
@@ -13,11 +14,12 @@ try {
       }
       return Math.min(times * 200, 2000);
     },
-    lazyConnect: true,
-  });
+      lazyConnect: true,
+    });
 
-  redis.on('connect', () => console.log('✅ Redis connected'));
-  redis.on('error', (err) => console.warn('⚠️  Redis error:', err.message));
+    redis.on('connect', () => console.log('✅ Redis connected'));
+    redis.on('error', (err) => console.warn('⚠️  Redis error:', err.message));
+  }
 } catch (err) {
   console.warn('⚠️  Redis unavailable, running without cache');
 }

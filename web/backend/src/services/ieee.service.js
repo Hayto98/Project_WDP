@@ -1,12 +1,8 @@
-const Paper = require('../models/Paper');
 const DataSource = require('../models/DataSource');
 const { sources: sourceConfig } = require('../config/env');
+const { normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
 
 const IEEE_API_URL = 'https://ieeexploreapi.ieee.org/api/v1/search/articles';
-
-function normalizeTitle(title = '') {
-  return title.toLowerCase().replace(/\s+/g, ' ').trim();
-}
 
 function clampMaxRecords(value) {
   const n = parseInt(value, 10) || 25;
@@ -128,29 +124,20 @@ async function importIEEEByQuery(query, maxRecords = 25) {
 
   for (const article of articles) {
     const paper = mapArticleToPaper(article, trimmed);
-    const existing = paper.doi
-      ? await Paper.findOne({ doi: paper.doi }).lean()
-      : await Paper.findOne({
-          title_normalized: paper.title_normalized,
-          publication_year: paper.publication_year,
-        }).lean();
-
-    if (existing) {
-      skipped += 1;
-      continue;
-    }
-
-    await Paper.create(paper);
-    imported += 1;
+    const outcome = await upsertCleanPaper(paper);
+    if (outcome.imported) imported += 1;
+    if (outcome.skipped) skipped += 1;
   }
 
   await DataSource.updateOne(
     { name: 'IEEE Xplore' },
     {
-      enabled: true,
-      last_sync_at: new Date(),
-      last_sync_status: 'Success',
-      last_error: null,
+      $set: {
+        enabled: true,
+        last_sync_at: new Date(),
+        last_sync_status: 'Success',
+        last_error: null,
+      },
       $inc: { papers_synced_count: imported },
     },
   );
@@ -160,4 +147,5 @@ async function importIEEEByQuery(query, maxRecords = 25) {
 
 module.exports = {
   importIEEEByQuery,
+  mapArticleToPaper,
 };

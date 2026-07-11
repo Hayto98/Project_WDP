@@ -4,11 +4,12 @@ const { shouldCountView, invalidateTopPapersCache } = require('../utils/viewDedu
 const { parsePagination } = require('../utils/pagination');
 const redis = require('../config/redis');
 const { ensureAbstracts } = require('./abstract.service');
+const { logAction } = require('../utils/systemLogger');
 
 /**
  * Search papers with full-text, filters, sorting (BR-009~012).
  */
-async function searchPapers(query) {
+async function searchPapers(query, userId = null) {
   const { page, limit, skip } = parsePagination(query);
 
   const filter = { status: { $ne: 'Archived' } };
@@ -143,6 +144,18 @@ async function searchPapers(query) {
     Paper.countDocuments(filter),
   ]);
   const papers = await ensureAbstracts(rawPapers);
+
+  logAction('Search', userId, null, {
+    query: query.q || '',
+    filters: {
+      fields: query.fields,
+      sources: query.sources,
+      yearFrom: query.yearFrom,
+      yearTo: query.yearTo,
+      types: query.types || query.type,
+    },
+    resultsCount: total,
+  });
 
   return { papers, page, limit, total };
 }

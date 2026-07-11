@@ -1,10 +1,6 @@
-const Paper = require('../models/Paper');
 const { sources: sourceConfig } = require('../config/env');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
-
-function normalizeTitle(title) {
-  return String(title || '').toLowerCase().trim().replace(/\s+/g, ' ');
-}
+const { cleanText, normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
 
 function clampMaxRecords(value) {
   const parsed = parseInt(value, 10) || 25;
@@ -12,15 +8,7 @@ function clampMaxRecords(value) {
 }
 
 function stripMarkup(value = '') {
-  return String(value)
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+  return cleanText(value);
 }
 
 function firstArrayValue(value) {
@@ -157,29 +145,9 @@ async function importCrossrefByQuery(query, maxRecords = 25, options = {}) {
       paper.abstract = await findOriginalAbstractWithLlm(paper);
     }
 
-    const existing = await Paper.findOne({
-      $or: [
-        ...(paper.doi ? [{ doi: paper.doi }] : []),
-        { title_normalized: paper.title_normalized, publication_year: paper.publication_year },
-      ],
-    });
-
-    if (existing) {
-      const hasCrossrefSource = existing.sources?.some((source) => source.source_name === 'Crossref');
-      if (!hasCrossrefSource) {
-        existing.sources.push(paper.sources[0]);
-        existing.keywords = Array.from(new Set([...(existing.keywords || []), ...paper.keywords]));
-        existing.research_fields = Array.from(new Set([...(existing.research_fields || []), ...paper.research_fields]));
-        await existing.save();
-        imported += 1;
-      } else {
-        skipped += 1;
-      }
-      continue;
-    }
-
-    await Paper.create(paper);
-    imported += 1;
+    const outcome = await upsertCleanPaper(paper);
+    if (outcome.imported) imported += 1;
+    if (outcome.skipped) skipped += 1;
   }
 
   return {
@@ -192,4 +160,5 @@ async function importCrossrefByQuery(query, maxRecords = 25, options = {}) {
 module.exports = {
   fetchCrossrefWorks,
   importCrossrefByQuery,
+  mapItemToPaper,
 };

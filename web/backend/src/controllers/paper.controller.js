@@ -5,12 +5,27 @@ const DataSource = require('../models/DataSource');
 const { importOpenAlexByQuery } = require('../services/openalex.service');
 const { importArxivByQuery } = require('../services/arxiv.service');
 const { importCrossrefByQuery } = require('../services/crossref.service');
+const { importExaByQuery } = require('../services/exa.service');
+const { importSemanticScholarByQuery } = require('../services/semanticScholar.service');
+const { importAcmByQuery } = require('../services/acm.service');
+const { logAction } = require('../utils/systemLogger');
+const { notifyJobComplete } = require('../services/notification.service');
 
-const IMMEDIATE_SYNC_SOURCES = ['OpenAlex', 'arXiv', 'Crossref'];
+const IMMEDIATE_SYNC_SOURCES = ['OpenAlex', 'Semantic Scholar', 'arXiv', 'Crossref', 'ACM Digital Library', 'Exa'];
+
+const SOURCE_ENDPOINTS = {
+  OpenAlex: 'https://api.openalex.org',
+  'Semantic Scholar': 'https://api.semanticscholar.org',
+  Crossref: 'https://api.crossref.org',
+  arXiv: 'https://export.arxiv.org/api',
+  'IEEE Xplore': 'https://ieeexploreapi.ieee.org',
+  'ACM Digital Library': 'https://dl.acm.org',
+  Exa: 'https://api.exa.ai',
+};
 
 async function search(req, res) {
   try {
-    const { papers, page, limit, total } = await paperService.searchPapers(req.query);
+    const { papers, page, limit, total } = await paperService.searchPapers(req.query, req.user?.id || null);
     return ApiResponse.paginated(res, papers, page, limit, total);
   } catch (err) {
     return ApiResponse.error(res, err.message, err.statusCode || 500);
@@ -99,6 +114,12 @@ async function requestCorpusSync(req, res) {
           result = await importArxivByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         } else if (sourceName === 'Crossref') {
           result = await importCrossrefByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
+        } else if (sourceName === 'Semantic Scholar') {
+          result = await importSemanticScholarByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
+        } else if (sourceName === 'ACM Digital Library') {
+          result = await importAcmByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
+        } else if (sourceName === 'Exa') {
+          result = await importExaByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         } else {
           result = await importOpenAlexByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         }
@@ -114,6 +135,14 @@ async function requestCorpusSync(req, res) {
           source_total: result.sourceTotal,
         };
         await job.save();
+        logAction('BatchJob', req.user?.id || null, sourceName, {
+          query,
+          maxRecords,
+          imported: result.imported,
+          skipped: result.skipped,
+          sourceTotal: result.sourceTotal,
+        });
+        notifyJobComplete(req.user?.id, job);
       } catch (err) {
         job.status = 'failed';
         job.progress = 100;
@@ -121,6 +150,13 @@ async function requestCorpusSync(req, res) {
         job.duration_seconds = Math.max(1, Math.round((job.completed_at - now) / 1000));
         job.error_message = err.message;
         await job.save();
+        logAction('BatchJob', req.user?.id || null, sourceName, {
+          query,
+          maxRecords,
+          success: false,
+          error: err.message,
+        });
+        notifyJobComplete(req.user?.id, job);
         throw err;
       }
     }

@@ -10,6 +10,7 @@ import {
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
 import { notificationApi } from "../lib/api";
+import { USE_SAMPLE_FALLBACK } from "../lib/flags";
 
 type InboxFilter = "all" | "unread" | NotificationKind;
 
@@ -43,21 +44,24 @@ const PRIORITY_LABEL: Record<NotificationPriority, string> = {
 };
 
 export function NotificationPage({ theme, toggle }: Props) {
-  const [notifications, setNotifications] = useState(NOTIFICATIONS);
+  const [notifications, setNotifications] = useState(USE_SAMPLE_FALLBACK ? NOTIFICATIONS : []);
   const [filter, setFilter] = useState<InboxFilter>("all");
-  const [selectedId, setSelectedId] = useState(NOTIFICATIONS[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(USE_SAMPLE_FALLBACK ? NOTIFICATIONS[0]?.id ?? "" : "");
 
   useEffect(() => {
     let alive = true;
     notificationApi
       .list()
       .then((items) => {
-        if (!alive || !items.length) return;
+        if (!alive) return;
         setNotifications(items);
         setSelectedId(items[0]?.id ?? "");
       })
       .catch(() => {
-        // Keep sample notifications when the API is unavailable.
+        if (!USE_SAMPLE_FALLBACK && alive) {
+          setNotifications([]);
+          setSelectedId("");
+        }
       });
     return () => {
       alive = false;

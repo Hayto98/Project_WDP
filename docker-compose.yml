@@ -1,0 +1,65 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./web/backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: 5001
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/wdp_research
+      REDIS_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      CORS_ORIGIN: http://localhost:5173
+      JWT_SECRET: local_docker_jwt_secret_change_before_deploy
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: local_docker_refresh_secret_change_before_deploy
+      JWT_REFRESH_EXPIRES_IN: 30d
+      LLM_PROVIDER: gemini
+      GEMINI_API_KEY: ""
+      GEMINI_MODEL: gemini-2.0-flash
+      OPENALEX_API_URL: https://api.openalex.org
+      OPENALEX_MAILTO: local@example.com
+      EXTERNAL_API_TIMEOUT_MS: 90000
+      SEMANTIC_SCHOLAR_API_URL: https://api.semanticscholar.org/graph/v1
+      SEMANTIC_SCHOLAR_API_KEY: ""
+      CROSSREF_API_URL: https://api.crossref.org
+      CROSSREF_MAILTO: local@example.com
+      IEEE_API_URL: https://ieeexploreapi.ieee.org
+      IEEE_API_KEY: ""
+      IEEE_XPLORE_API_KEY: ""
+      EXA_API_URL: https://api.exa.ai
+      EXA_API_KEY: ""
+    depends_on:
+      mongo:
+        condition: service_healthy
+    command: sh -c "npm run seed && npm start"
+
+  frontend:
+    build:
+      context: ./web/frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:5001/api/v1
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:

@@ -31,7 +31,7 @@ async function updateCollection(userId, collectionId, updates) {
   const col = await UserCollection.findOneAndUpdate(
     { _id: collectionId, user_id: userId },
     { collection_name: updates.collection_name, description: updates.description },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   );
   if (!col) throw Object.assign(new Error('Collection not found'), { statusCode: 404 });
   return col;
@@ -108,10 +108,17 @@ async function savePaper(userId, { paper_id, collection_ids, note }) {
 
   const results = [];
   for (const colId of collection_ids) {
+    const existing = await UserCollection.findOne({
+      _id: colId,
+      user_id: userId,
+      'saved_papers.paper_id': paper._id,
+    }).select('_id').lean();
+    if (existing) continue;
+
     const col = await UserCollection.findOneAndUpdate(
       { _id: colId, user_id: userId },
       { $push: { saved_papers: entry } },
-      { new: true },
+      { returnDocument: 'after' },
     );
     if (col) results.push(col);
   }
@@ -130,7 +137,7 @@ async function updateSavedPaper(userId, collectionId, paperId, updates) {
   const col = await UserCollection.findOneAndUpdate(
     { _id: collectionId, user_id: userId, 'saved_papers.paper_id': paperId },
     { $set: setFields },
-    { new: true },
+    { returnDocument: 'after' },
   );
   if (!col) throw Object.assign(new Error('Paper not found in collection'), { statusCode: 404 });
   return col;
@@ -143,7 +150,7 @@ async function removePaper(userId, collectionId, paperId) {
   const col = await UserCollection.findOneAndUpdate(
     { _id: collectionId, user_id: userId },
     { $pull: { saved_papers: { paper_id: paperId } } },
-    { new: true },
+    { returnDocument: 'after' },
   );
   if (!col) throw Object.assign(new Error('Collection not found'), { statusCode: 404 });
   return col;

@@ -1,10 +1,7 @@
-const Paper = require('../models/Paper');
 const { sources: sourceConfig } = require('../config/env');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
+const { normalizeDoi, normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
 
-function normalizeTitle(title) {
-  return String(title || '').toLowerCase().trim().replace(/\s+/g, ' ');
-}
 
 function clampMaxRecords(value) {
   const parsed = parseInt(value, 10) || 25;
@@ -19,11 +16,6 @@ function decodeAbstract(invertedIndex) {
     for (const position of positions) entries[position] = word;
   }
   return entries.filter(Boolean).join(' ');
-}
-
-function normalizeDoi(doi) {
-  if (!doi) return '';
-  return String(doi).replace(/^https?:\/\/doi\.org\//i, '').trim();
 }
 
 function mapType(work) {
@@ -139,20 +131,9 @@ async function importOpenAlexByQuery(query, maxRecords = 25, options = {}) {
       paper.abstract = await findOriginalAbstractWithLlm(paper);
     }
 
-    const existing = await Paper.findOne({
-      $or: [
-        ...(paper.doi ? [{ doi: paper.doi }] : []),
-        { title_normalized: paper.title_normalized, publication_year: paper.publication_year },
-      ],
-    });
-
-    if (existing) {
-      skipped += 1;
-      continue;
-    }
-
-    await Paper.create(paper);
-    imported += 1;
+    const outcome = await upsertCleanPaper(paper);
+    if (outcome.imported) imported += 1;
+    if (outcome.skipped) skipped += 1;
   }
 
   return {
@@ -165,4 +146,5 @@ async function importOpenAlexByQuery(query, maxRecords = 25, options = {}) {
 module.exports = {
   importOpenAlexByQuery,
   fetchOpenAlexWorks,
+  mapWorkToPaper,
 };

@@ -8,7 +8,8 @@ import { GapScatter } from "../components/GapScatter";
 import { Sparkline } from "../components/Sparkline";
 import { IconGap, IconGrid, IconSparkle, IconTrend } from "../components/icons";
 import { formatInt } from "../lib/format";
-import { analyticsApi } from "../lib/api";
+import { aiApi, analyticsApi } from "../lib/api";
+import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 import {
   GAP_ASPECTS,
   GAP_FIELDS,
@@ -26,7 +27,8 @@ interface Props {
 
 export function GapPage({ theme, toggle }: Props) {
   const [remoteItems, setRemoteItems] = useState<GapItem[] | null>(null);
-  const allItems = useMemo(() => remoteItems ?? buildGaps(), [remoteItems]);
+  const [loadError, setLoadError] = useState(false);
+  const allItems = useMemo(() => remoteItems ?? (USE_SAMPLE_FALLBACK ? buildGaps() : []), [remoteItems]);
   const fieldOptions = useMemo(() => {
     const seen = new Map<string, { key: string; label: string; token: string }>();
     for (const item of allItems) {
@@ -34,17 +36,17 @@ export function GapPage({ theme, toggle }: Props) {
         seen.set(item.fieldKey, { key: item.fieldKey, label: item.fieldLabel, token: item.token });
       }
     }
-    return seen.size ? [...seen.values()] : GAP_FIELDS;
+    return seen.size ? [...seen.values()] : USE_SAMPLE_FALLBACK ? GAP_FIELDS : [];
   }, [allItems]);
   const aspectOptions = useMemo(() => {
     const values = [...new Set(allItems.map((item) => item.aspect))];
-    return values.length ? values : GAP_ASPECTS;
+    return values.length ? values : USE_SAMPLE_FALLBACK ? GAP_ASPECTS : [];
   }, [allItems]);
   const [threshold, setThreshold] = useState(0.35);
   const [fields, setFields] = useState<Set<string>>(
-    () => new Set(GAP_FIELDS.map((f) => f.key)),
+    () => new Set(USE_SAMPLE_FALLBACK ? GAP_FIELDS.map((f) => f.key) : []),
   );
-  const [aspects, setAspects] = useState<Set<string>>(() => new Set(GAP_ASPECTS));
+  const [aspects, setAspects] = useState<Set<string>>(() => new Set(USE_SAMPLE_FALLBACK ? GAP_ASPECTS : []));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [demo, setDemo] = useState<Demo>("auto");
@@ -59,9 +61,14 @@ export function GapPage({ theme, toggle }: Props) {
         setRemoteItems(items);
         setFields(new Set(items.map((item) => item.fieldKey)));
         setAspects(new Set(items.map((item) => item.aspect)));
+        setLoadError(false);
       })
       .catch(() => {
-        if (alive) setRemoteItems(null);
+        if (!alive) return;
+        setRemoteItems(null);
+        setFields(USE_SAMPLE_FALLBACK ? new Set(GAP_FIELDS.map((f) => f.key)) : new Set());
+        setAspects(USE_SAMPLE_FALLBACK ? new Set(GAP_ASPECTS) : new Set());
+        setLoadError(true);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -95,6 +102,8 @@ export function GapPage({ theme, toggle }: Props) {
   const status: WidgetStatus =
     demo === "error"
       ? "error"
+      : !USE_SAMPLE_FALLBACK && loadError
+        ? "error"
       : demo === "empty"
         ? "empty"
         : demo === "loading" || loading
@@ -311,7 +320,7 @@ export function GapPage({ theme, toggle }: Props) {
         </Widget>
       </div>
 
-      <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
+      {SHOW_DEMO_CONTROLS && <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
         <span className="statepick__label">Xem trạng thái</span>
         {(["auto", "loading", "empty", "error"] as Demo[]).map((d) => (
           <button
@@ -322,12 +331,43 @@ export function GapPage({ theme, toggle }: Props) {
             {d === "auto" ? "Thực tế" : d === "loading" ? "Đang tải" : d === "empty" ? "Trống" : "Lỗi"}
           </button>
         ))}
-      </div>
+      </div>}
     </main>
   );
 }
 
 function GapDetail({ item, isGapCell }: { item: GapItem; isGapCell: boolean }) {
+  const [aiText, setAiText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const suggest = async () => {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const result = await aiApi.suggestDirections({ field: item.fieldLabel, gaps: [item] });
+      const first = result.directions[0];
+      setAiText(first ? `${first.topic}: ${first.rationale}` : "AI chưa có gợi ý mới cho khoảng trống này.");
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Không lấy được gợi ý AI.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const explainKeyword = async (keyword: string) => {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const result = await aiApi.explainTerm({ term: keyword, context: `${item.fieldLabel} / ${item.aspect}` });
+      setAiText(result.explanation);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Không giải thích được thuật ngữ.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <div className="gapdetail">
       <div className="gapdetail__head">
@@ -355,9 +395,9 @@ function GapDetail({ item, isGapCell }: { item: GapItem; isGapCell: boolean }) {
         <span className="gapdetail__sublabel">Từ khóa liên quan</span>
         <div className="gapdetail__tags">
           {item.keywords.map((k) => (
-            <span key={k} className="tag">
+            <button key={k} className="tag" type="button" onClick={() => explainKeyword(k)}>
               {k}
-            </span>
+            </button>
           ))}
         </div>
       </div>
@@ -365,6 +405,11 @@ function GapDetail({ item, isGapCell }: { item: GapItem; isGapCell: boolean }) {
       <div className="gapdetail__dir">
         <span className="gapdetail__sublabel">Gợi ý hướng nghiên cứu</span>
         <p>{item.direction}</p>
+        <button className="btn btn--ghost btn--sm" type="button" onClick={suggest} disabled={aiLoading}>
+          {aiLoading ? "Đang hỏi AI..." : "AI gợi ý thêm"}
+        </button>
+        {aiError && <p>{aiError}</p>}
+        {aiText && <p>{aiText}</p>}
       </div>
     </div>
   );

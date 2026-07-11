@@ -16,7 +16,7 @@ export function LoginPage() {
       const result = await authApi.login(email.trim(), password);
       window.location.hash = result.user.roles.includes("Admin") ? "admin" : "overview";
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể đăng nhập. Vui lòng thử lại.");
+      setError(toLoginMessage(err));
     } finally {
       setLoading(false);
     }
@@ -83,4 +83,13 @@ export function LoginPage() {
       </div>
     </main>
   );
+}
+
+function toLoginMessage(err: unknown) {
+  const message = err instanceof Error ? err.message : "";
+  if (message.includes("valid email")) return "Email chưa đúng định dạng.";
+  if (message.includes("Invalid credentials")) return "Email hoặc mật khẩu không đúng.";
+  if (message.includes("banned")) return "Tài khoản đang bị khóa. Vui lòng liên hệ admin.";
+  if (message.includes("Too many authentication")) return "Bạn thử đăng nhập quá nhiều lần. Vui lòng chờ rồi thử lại.";
+  return message || "Không thể đăng nhập. Vui lòng thử lại.";
 }

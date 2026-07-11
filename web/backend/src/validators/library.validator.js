@@ -4,23 +4,23 @@ const objectId = Joi.string().hex().length(24);
 
 const createCollectionSchema = Joi.object({
   collection_name: Joi.string().trim().min(1).max(100).required(),
-  description: Joi.string().trim().max(500).default(''),
+  description: Joi.string().trim().max(500).allow('').default(''),
 });
 
 const updateCollectionSchema = Joi.object({
   collection_name: Joi.string().trim().min(1).max(100).optional(),
-  description: Joi.string().trim().max(500).optional(),
+  description: Joi.string().trim().max(500).allow('').optional(),
 }).min(1);
 
 const savePaperSchema = Joi.object({
   paper_id: objectId.required(),
-  collection_ids: Joi.array().items(objectId).min(1).max(20).required(),
-  note: Joi.string().max(2000).optional().allow(''),
+  collection_ids: Joi.array().items(objectId.required()).min(1).max(20).required(),
+  note: Joi.string().max(2000).allow('').default(''),
 });
 
 const updateSavedPaperSchema = Joi.object({
   status: Joi.string().valid('unread', 'reading', 'done').optional(),
-  note: Joi.string().max(2000).optional().allow(''),
+  note: Joi.string().max(2000).allow('').optional(),
 }).min(1);
 
 module.exports = {
