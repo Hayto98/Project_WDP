@@ -3346,3 +3346,61 @@ Lenh commit goi y:
 git add Minh/docs/phare.md PRODUCTION_CHECKLIST.md web/frontend/.env.example web/frontend/src/lib/flags.ts web/frontend/src/pages/OverviewPage.tsx web/frontend/src/pages/TrendsPage.tsx web/frontend/src/pages/GapPage.tsx web/frontend/src/pages/LibraryPage.tsx web/frontend/src/pages/FollowPage.tsx web/frontend/src/pages/WorkspacePage.tsx web/frontend/src/pages/NotificationPage.tsx
 git commit -m "fix: disable frontend sample fallback in production"
 ```
+
+## Cap nhat 2026-07-11 - Tai lieu ban giao code
+
+Muc tieu:
+
+- Ghi ro phan con lai can lam de dua code cho nguoi khac.
+- Tao mot tai lieu handoff ngan gon, de nguoi nhan code biet cach chay, test, va deploy tiep.
+
+Da them/sua file:
+
+- `HANDOFF.md`
+- `PRODUCTION_CHECKLIST.md`
+- `Minh/docs/phare.md`
+
+Trang thai hien tai:
+
+- `FIXLIST.md` khong con task bat buoc dang `[ ]` hoac `[/]`.
+- FE production da API-only, khong fallback sample mac dinh.
+- Backend unit pass.
+- Frontend build pass.
+- Docker compose config pass.
+- E2E spec compile/list pass.
+
+Phan con lai can nguoi nhan code lam:
+
+- Bat Docker Desktop hoac MongoDB local.
+- Chay lai integration:
+  - `cd web/backend && npm run test:integration`
+- Chay E2E runtime:
+  - `docker compose up --build`
+  - `cd web/frontend && npm run test:e2e`
+- Tao `.env` that tu file example:
+  - `web/backend/.env.example`
+  - `web/backend/.env.test.example`
+  - `web/frontend/.env.example`
+- Rotate toan bo API keys/token da tung lo trong chat/env local.
+- Set production `CORS_ORIGIN` va frontend `VITE_API_BASE_URL`.
+- Cau hinh SMTP staging/production va smoke test:
+  - follow instant email.
+  - daily/weekly digest email.
+- Kiem tra Admin source health voi key that:
+  - OpenAlex/Crossref/Semantic Scholar/IEEE/Exa.
+- Quyet dinh co can refresh-token blacklist/logout-all-devices cho production security hay khong.
+- Cau hinh Mongo backup/monitoring/restore drill.
+- Xac nhan CI pass tren branch ban giao.
+
+Ghi chu blocker moi truong:
+
+- Lan chay integration gan nhat fail vi MongoDB local khong chay o `localhost:27017`.
+- Docker Desktop trong phien nay cung chua active nen khong start duoc `mongo:7`.
+- Day la blocker runtime/moi truong, khong phai loi assertion da biet trong code.
+
+Lenh commit goi y:
+
+```bash
+git add .
+git commit -m "feat: complete fixlist production handoff"
+```

@@ -58,3 +58,17 @@
 - Error logs are visible to maintainers.
 - Admin can disable a broken data source without redeploy.
 - Rollback path is documented for frontend and backend images.
+
+## Handoff Remaining Work
+
+- Start Docker Desktop or a local MongoDB instance, then rerun integration and E2E tests.
+- Create real deployment `.env` files from:
+  - `web/backend/.env.example`
+  - `web/backend/.env.test.example`
+  - `web/frontend/.env.example`
+- Rotate all exposed keys before sharing or deploying.
+- Replace Docker local JWT placeholders with strong secrets in the deploy platform.
+- Verify external source health from Admin after real keys are configured.
+- Configure SMTP only in staging/production, then smoke test instant follow email and digest email.
+- Decide whether v1 client-side logout is enough for the handoff scope. For higher security, add refresh-token blacklist/logout-all-devices.
+- Document the production domain and set `CORS_ORIGIN` plus `VITE_API_BASE_URL` together.
