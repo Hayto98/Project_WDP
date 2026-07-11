@@ -15,7 +15,7 @@ router.delete('/subjects/:id', ctrl.removeSubject);
 
 // Alerts
 router.get('/alerts', ctrl.getAlerts);
-router.put('/alerts/:id/read', ctrl.markAlertRead);
 router.put('/alerts/read-all', ctrl.markAllRead);
+router.put('/alerts/:id/read', ctrl.markAlertRead);
 
 module.exports = router;

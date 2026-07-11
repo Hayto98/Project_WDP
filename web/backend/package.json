@@ -5,11 +5,11 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "dev": "cross-env PORT=5001 NODE_ENV=development REDIS_ENABLED=false nodemon src/app.js",
     "seed": "node src/seeds/seed.js",
-    "test": "NODE_ENV=test node --test",
-    "test:unit": "NODE_ENV=test node --test test/ai.service.test.js test/email.service.test.js test/exa.service.test.js test/follow.service.test.js test/followDigest.service.test.js test/paperCleaning.test.js test/sourceMappers.test.js",
-    "test:integration": "NODE_ENV=test node --test test/api.integration.test.js",
+    "test": "cross-env NODE_ENV=test node --test",
+    "test:unit": "cross-env NODE_ENV=test node --test test/ai.service.test.js test/email.service.test.js test/exa.service.test.js test/follow.service.test.js test/followDigest.service.test.js test/paperCleaning.test.js test/sourceMappers.test.js",
+    "test:integration": "cross-env NODE_ENV=test node --test test/api.integration.test.js",
     "test:all": "npm run test:unit && npm run test:integration"
   },
   "keywords": [],
@@ -31,6 +31,7 @@
     "nodemailer": "^9.0.3"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "nodemon": "^3.1.14"
   }
 }
