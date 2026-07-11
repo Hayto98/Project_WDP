@@ -8,12 +8,14 @@ import {
   IconSearch,
   IconTelescope,
   IconTrend,
+  IconUser,
 } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { Theme } from "../hooks/useTheme";
 import { useReveal } from "../hooks/useReveal";
 import { WelcomeScreen } from "../components/WelcomeScreen";
 import { Footer } from "../components/Footer";
+import { getCurrentUser } from "../lib/api";
 
 interface Props {
   theme: Theme;
@@ -87,10 +89,19 @@ export function HomePage({ theme, toggle }: Props) {
           </div>
           
           <div className="home-nav__auth" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <a href="#login" className="nav-item" style={{ padding: '8px 12px' }}>Đăng nhập</a>
-            <a href="#register" className="btn btn--primary" style={{ padding: '8px 16px', minHeight: '0', borderRadius: '999px', fontSize: '13px' }}>
-              Đăng ký
-            </a>
+            {getCurrentUser() ? (
+              <a href="#overview" className="nav-item" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }} title="Vào Dashboard">
+                <IconUser width={18} height={18} />
+                <span className="hidden md:inline">{getCurrentUser()?.full_name || "Dashboard"}</span>
+              </a>
+            ) : (
+              <>
+                <a href="#login" className="nav-item" style={{ padding: '8px 12px' }}>Đăng nhập</a>
+                <a href="#register" className="btn btn--primary" style={{ padding: '8px 16px', minHeight: '0', borderRadius: '999px', fontSize: '13px' }}>
+                  Đăng ký
+                </a>
+              </>
+            )}
           </div>
         </div>
         </nav>
