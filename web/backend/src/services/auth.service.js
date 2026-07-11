@@ -136,6 +136,62 @@ async function changePassword(userId, { currentPassword, newPassword }) {
 }
 
 /**
+ * Refresh access credentials using a valid refresh token.
+ */
+async function refreshTokens(refreshToken) {
+  let decoded;
+  try {
+    decoded = jwt.verify(refreshToken, jwtConfig.refreshSecret);
+  } catch (err) {
+    const message = err.name === 'TokenExpiredError'
+      ? 'Refresh token expired, please login again'
+      : 'Invalid refresh token';
+    throw Object.assign(new Error(message), { statusCode: 401 });
+  }
+
+  const user = await User.findById(decoded.id).select('-password_hash');
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+  if (user.status === 'Banned') {
+    throw Object.assign(new Error('Account is banned'), { statusCode: 403 });
+  }
+
+  const tokens = generateTokens(user);
+  return {
+    user: {
+      id: user._id,
+      email: user.email,
+      full_name: user.full_name,
+      roles: user.roles,
+      status: user.status,
+    },
+    ...tokens,
+  };
+}
+
+/**
+ * Change password for authenticated user.
+ */
+async function changePassword(userId, currentPassword, newPassword) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { statusCode: 404 });
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) {
+    throw Object.assign(new Error('Current password is incorrect'), { statusCode: 400 });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  user.password_hash = await bcrypt.hash(newPassword, salt);
+  await user.save();
+
+  return { message: 'Password changed successfully' };
+}
+
+/**
  * Get current user profile (including embedded data).
  */
 async function getProfile(userId) {
@@ -191,7 +247,7 @@ async function updateDashboardLayout(userId, layout) {
 module.exports = {
   register,
   login,
-  refreshSession,
+  refreshTokens,
   changePassword,
   getProfile,
   updateProfile,

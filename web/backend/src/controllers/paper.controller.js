@@ -58,26 +58,14 @@ async function getTrending(req, res) {
 
 async function requestCorpusSync(req, res) {
   try {
-    const { query, sourceName = 'OpenAlex' } = req.body;
-    const maxRecords = req.body.maxRecords || 25;
+    const { query, sourceName = 'OpenAlex', maxRecords = 25 } = req.body;
     const syncFilters = {
       yearFrom: req.body.yearFrom,
       yearTo: req.body.yearTo,
       types: req.body.types,
     };
 
-    const source = await DataSource.findOneAndUpdate(
-      { name: sourceName },
-      {
-        $setOnInsert: {
-          name: sourceName,
-          api_endpoint: SOURCE_ENDPOINTS[sourceName] || 'https://api.openalex.org',
-          enabled: true,
-          last_sync_status: 'Partial',
-        },
-      },
-      { returnDocument: 'after', upsert: true },
-    ).lean();
+    const source = await DataSource.findOne({ name: sourceName }).lean();
     const existing = await CrawlerJob.findOne({
       source_name: sourceName,
       query,

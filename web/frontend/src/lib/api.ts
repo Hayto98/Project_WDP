@@ -115,18 +115,24 @@ function redirectToLogin() {
 }
 
 async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  const { _isRetry, ...fetchInit } = init;
   const token = getAccessToken();
-  const headers = new Headers(init.headers);
+  const headers = new Headers(fetchInit.headers);
   headers.set("Accept", "application/json");
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (fetchInit.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
+    ...fetchInit,
     headers,
     cache: "no-store",
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
+  if (res.status === 401 && !_isRetry && path !== "/auth/refresh") {
+    const refreshed = await refreshAuth();
+    if (refreshed) return request<T>(path, { ...fetchInit, _isRetry: true });
+    redirectToLogin();
+  }
   if (!res.ok || !payload.success) {
     if (res.status === 401 && !init._isRetry && path !== "/auth/refresh" && path !== "/auth/login") {
       const nextToken = await refreshAuthTokens().catch(() => null);
@@ -141,18 +147,24 @@ async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
 }
 
 async function requestWithMeta<T>(path: string, init: ApiRequestInit = {}) {
+  const { _isRetry, ...fetchInit } = init;
   const token = getAccessToken();
-  const headers = new Headers(init.headers);
+  const headers = new Headers(fetchInit.headers);
   headers.set("Accept", "application/json");
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (fetchInit.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
+    ...fetchInit,
     headers,
     cache: "no-store",
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
+  if (res.status === 401 && !_isRetry && path !== "/auth/refresh") {
+    const refreshed = await refreshAuth();
+    if (refreshed) return requestWithMeta<T>(path, { ...fetchInit, _isRetry: true });
+    redirectToLogin();
+  }
   if (!res.ok || !payload.success) {
     if (res.status === 401 && !init._isRetry) {
       const nextToken = await refreshAuthTokens().catch(() => null);
@@ -351,38 +363,14 @@ export const authApi = {
     storeAuth(result);
     return result;
   },
-  async me() {
-    return request<AuthUser>("/auth/me");
-  },
   async logout() {
     try {
       await request("/auth/logout", { method: "POST" });
+    } catch {
+      // Local logout should still complete if the server token is already invalid.
     } finally {
       clearAuth();
     }
-  },
-  async changePassword(currentPassword: string, newPassword: string) {
-    return request<{ message: string }>("/auth/change-password", {
-      method: "PUT",
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
-  },
-};
-
-export const userApi = {
-  async updateProfile(patch: { full_name?: string; email?: string }) {
-    const user = await request<AuthUser>("/users/me", {
-      method: "PUT",
-      body: JSON.stringify(patch),
-    });
-    storeCurrentUser(user);
-    return user;
-  },
-  updateDashboardLayout(widgets: string[]) {
-    return request<{ widgets: string[] }>("/users/me/dashboard-layout", {
-      method: "PUT",
-      body: JSON.stringify({ widgets }),
-    });
   },
 };
 

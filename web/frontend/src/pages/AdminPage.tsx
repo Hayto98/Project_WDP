@@ -15,7 +15,7 @@ import {
 } from "../data/adminSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { adminApi, authApi, feedbackApi, getCurrentUser } from "../lib/api";
+import { adminApi, authApi, getCurrentUser } from "../lib/api";
 
 type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "reading" | "logs";
 type AdminReadAction = "refresh" | "export" | "threshold" | "raw";
