@@ -22,10 +22,18 @@ class ApiResponse {
   /**
    * Error response
    */
-  static error(res, message, statusCode = 500, code = 'INTERNAL_ERROR') {
+  static error(res, message, statusCode = 500, code) {
+    let errorCode = code;
+    if (!errorCode) {
+      if (statusCode === 400) errorCode = 'VALIDATION_ERROR';
+      else if (statusCode === 401) errorCode = 'UNAUTHORIZED';
+      else if (statusCode === 403) errorCode = 'FORBIDDEN';
+      else if (statusCode === 404) errorCode = 'NOT_FOUND';
+      else errorCode = 'INTERNAL_ERROR';
+    }
     return res.status(statusCode).json({
       success: false,
-      error: { code, message },
+      error: { code: errorCode, message },
     });
   }
 
