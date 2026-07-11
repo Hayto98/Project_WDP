@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { formatInt } from "../lib/format";
-import { libraryApi, paperApi, searchApi } from "../lib/api";
+import { aiApi, libraryApi, paperApi, searchApi } from "../lib/api";
+import type { LibraryCollection } from "../data/librarySample";
 import {
   RELATED_KEYWORDS,
   SOURCES,
@@ -45,7 +46,7 @@ const SORTS: { id: SortKey; label: string }[] = [
   { id: "year", label: "Mới nhất" },
   { id: "citations", label: "Trích dẫn nhiều" },
 ];
-const SYNCABLE_SOURCES = ["OpenAlex", "arXiv", "Crossref"] as const;
+const SYNCABLE_SOURCES = ["OpenAlex", "Semantic Scholar", "Crossref", "arXiv", "ACM Digital Library", "Exa"] as const;
 
 interface Props {
   theme: Theme;
@@ -77,6 +78,9 @@ export function SearchPage({ theme, toggle }: Props) {
   const [savingPaperId, setSavingPaperId] = useState("");
   const [savingSearch, setSavingSearch] = useState(false);
   const [expandedId, setExpandedId] = useState("");
+  const [collections, setCollections] = useState<LibraryCollection[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState("");
+  const [collectionsLoading, setCollectionsLoading] = useState(false);
 
   const condId = useRef(1);
   const searchRunId = useRef(0);
@@ -89,6 +93,25 @@ export function SearchPage({ theme, toggle }: Props) {
     setSearchNonce((value) => value + 1);
     setSearchError("");
   };
+
+  const loadCollections = async () => {
+    setCollectionsLoading(true);
+    try {
+      const rows = await libraryApi.collections();
+      setCollections(rows);
+      setSelectedCollectionId((current) => current || rows[0]?.id || "");
+      return rows;
+    } catch {
+      setCollections([]);
+      return [];
+    } finally {
+      setCollectionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadCollections();
+  }, []);
 
   // Re-filter briefly when facets/sort change after an initial search.
   useEffect(() => {
@@ -184,12 +207,11 @@ export function SearchPage({ theme, toggle }: Props) {
           : results.length === 0
             ? "empty"
             : "results";
-  const selectedSyncSource = sources.has("Crossref") ? "Crossref" : sources.has("arXiv") ? "arXiv" : "OpenAlex";
+  const selectedSyncSource = SYNCABLE_SOURCES.find((source) => sources.has(source)) ?? "OpenAlex";
   const canSyncSelectedSource =
     (status === "results" || status === "empty") &&
     Boolean((submitted.trim() || query.trim())) &&
     SYNCABLE_SOURCES.some((source) => sources.has(source));
-  const hasExaSource = sources.has("Exa");
   const paginationPages = useMemo(() => {
     const windowSize = 10;
     const start = Math.max(1, Math.min(page - 5, Math.max(1, totalPages - windowSize + 1)));
@@ -222,11 +244,19 @@ export function SearchPage({ theme, toggle }: Props) {
   const removeCondition = (id: number) =>
     setConditions((c) => c.filter((x) => x.id !== id));
 
-  const ensureDefaultCollection = async () => {
-    const collections = await libraryApi.collections();
-    if (collections[0]?.id) return collections[0].id;
+  const ensureSaveCollection = async () => {
+    if (selectedCollectionId) return selectedCollectionId;
+    const currentCollections = collections.length ? collections : await loadCollections();
+    if (currentCollections[0]?.id) {
+      setSelectedCollectionId(currentCollections[0].id);
+      return currentCollections[0].id;
+    }
     const created = await libraryApi.createCollection("Đọc sau", "Bài lưu nhanh từ trang tìm kiếm");
-    return String(created._id ?? created.id ?? "");
+    const id = String(created._id ?? created.id ?? "");
+    const next = { id, name: created.collection_name ?? created.name ?? "Đọc sau", description: created.description ?? "" };
+    setCollections([next]);
+    setSelectedCollectionId(id);
+    return id;
   };
 
   const savePaperToLibrary = async (paper: PaperResult) => {
@@ -234,10 +264,11 @@ export function SearchPage({ theme, toggle }: Props) {
     setSavingPaperId(paper.id);
     setSaveNotice("");
     try {
-      const collectionId = await ensureDefaultCollection();
+      const collectionId = await ensureSaveCollection();
       await libraryApi.savePaper(paper.id, [collectionId]);
       setSaved((current) => new Set(current).add(paper.id));
-      setSaveNotice(`Đã lưu “${paper.title}” vào thư viện.`);
+      const collectionName = collections.find((collection) => collection.id === collectionId)?.name ?? "thư viện";
+      setSaveNotice(`Đã lưu “${paper.title}” vào ${collectionName}.`);
     } catch (err) {
       setSaveNotice(err instanceof Error ? err.message : "Không lưu được bài vào thư viện.");
     } finally {
@@ -470,11 +501,6 @@ export function SearchPage({ theme, toggle }: Props) {
                 onChange={() => toggleSet(sources, s, setSources)}
               />
             ))}
-            {hasExaSource && (
-              <p className="facetgroup__note">
-                Exa đang dùng để lọc corpus; đồng bộ tức thời sẽ được nối ở backend sau.
-              </p>
-            )}
           </FacetGroup>
 
           <FacetGroup title="Loại tài liệu">
@@ -531,10 +557,31 @@ export function SearchPage({ theme, toggle }: Props) {
               <IconChevron className="results__sorticon" width={16} height={16} />
             </label>
             {status === "results" && submitted && (
-              <button className="btn btn--ghost results__save" type="button" onClick={saveCurrentSearch} disabled={savingSearch}>
-                <IconBookmark width={15} height={15} />
-                {savingSearch ? "Đang lưu" : "Lưu tìm kiếm"}
-              </button>
+              <>
+                <label className="results__collection">
+                  <span>Lưu vào</span>
+                  <select
+                    value={selectedCollectionId}
+                    onChange={(event) => setSelectedCollectionId(event.target.value)}
+                    disabled={collectionsLoading}
+                    aria-label="Chọn bộ sưu tập để lưu paper"
+                  >
+                    {collections.length === 0 ? (
+                      <option value="">Đọc sau</option>
+                    ) : (
+                      collections.map((collection) => (
+                        <option key={collection.id} value={collection.id}>
+                          {collection.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+                <button className="btn btn--ghost results__save" type="button" onClick={saveCurrentSearch} disabled={savingSearch}>
+                  <IconBookmark width={15} height={15} />
+                  {savingSearch ? "Đang lưu" : "Lưu tìm kiếm"}
+                </button>
+              </>
             )}
           </div>
 
@@ -713,12 +760,54 @@ function ResultItem({
   onToggleExpand: () => void;
   onOpenSource: () => void;
 }) {
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedPapers, setRelatedPapers] = useState<PaperResult[]>([]);
   const authors =
     paper.authors.length > 3
       ? `${paper.authors.slice(0, 3).join(", ")} +${paper.authors.length - 3}`
       : paper.authors.join(", ");
   const doiHref = paper.doi ? `https://doi.org/${paper.doi.replace(/^https?:\/\/doi\.org\//i, "")}` : paper.url;
   const doiLabel = paper.doi ? paper.doi.replace(/^https?:\/\/doi\.org\//i, "") : paper.url;
+  const summarize = async () => {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const result = await aiApi.summarize({
+        title: paper.title,
+        abstract: paper.abstract,
+        year: paper.year,
+        source: paper.source,
+        keywords: paper.keywords,
+      });
+      setAiSummary(result.summary);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Không tóm tắt được paper.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const loadRelated = async () => {
+    setRelatedLoading(true);
+    setAiError("");
+    try {
+      const results = await aiApi.relatedPapers({
+        paperId: paper.id,
+        title: paper.title,
+        keywords: paper.keywords,
+        fields: paper.fields,
+        limit: 4,
+      });
+      setRelatedPapers(results);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Không lấy được paper liên quan.");
+    } finally {
+      setRelatedLoading(false);
+    }
+  };
 
   return (
     <li className="rcard">
@@ -777,6 +866,26 @@ function ResultItem({
                 </dd>
               </div>
             </dl>
+            <div className="rcard__detail-actions">
+              <button className="btn btn--ghost btn--sm" type="button" onClick={summarize} disabled={aiLoading}>
+                {aiLoading ? "Đang tóm tắt..." : "AI tóm tắt"}
+              </button>
+              <button className="btn btn--ghost btn--sm" type="button" onClick={loadRelated} disabled={relatedLoading}>
+                {relatedLoading ? "Đang tìm..." : "Paper liên quan"}
+              </button>
+            </div>
+            {aiError && <p className="state__body">{aiError}</p>}
+            {aiSummary && <p className="rcard__abstract">{aiSummary}</p>}
+            {relatedPapers.length > 0 && (
+              <div className="rcard__related">
+                {relatedPapers.map((related) => (
+                  <a key={related.id} href={related.url || "#"} target="_blank" rel="noreferrer noopener">
+                    <span>{related.title}</span>
+                    <small>{related.year} · {related.source}</small>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

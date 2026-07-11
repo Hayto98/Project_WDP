@@ -1,5 +1,41 @@
 const Notification = require('../models/Notification');
 
+async function listNotifications(userId, { skip = 0, limit = 20, kind, unread } = {}) {
+  const filter = { user_id: userId };
+  if (kind) filter.notification_type = kind;
+  if (unread === 'true') filter.is_read = false;
+
+  const [items, total] = await Promise.all([
+    Notification.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
+    Notification.countDocuments(filter),
+  ]);
+
+  return { items, total };
+}
+
+async function markNotificationRead(userId, notificationId) {
+  await Notification.updateOne(
+    { _id: notificationId, user_id: userId },
+    { is_read: true },
+  );
+  return { message: 'Marked as read' };
+}
+
+async function markAllNotificationsRead(userId) {
+  await Notification.updateMany(
+    { user_id: userId, is_read: false },
+    { is_read: true },
+  );
+  return { message: 'All notifications marked as read' };
+}
+
+async function countUnreadNotifications(userId) {
+  return Notification.countDocuments({
+    user_id: userId,
+    is_read: false,
+  });
+}
+
 async function createNotification(userId, type, title, content, extra = {}) {
   if (!userId) return null;
   try {
@@ -70,6 +106,10 @@ function notifyJobComplete(userId, job) {
 }
 
 module.exports = {
+  listNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  countUnreadNotifications,
   createNotification,
   notifyInviteReceived,
   notifyCommentAdded,

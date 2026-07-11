@@ -1,5 +1,6 @@
 const CollaborationInvite = require('../models/CollaborationInvite');
 const User = require('../models/User');
+const Workspace = require('../models/Workspace');
 const { notifyInviteReceived } = require('./notification.service');
 
 function initials(name = '') {
@@ -75,6 +76,22 @@ async function listInvites(userId, query = {}) {
 }
 
 async function createInvite(userId, payload) {
+  const workspace = await Workspace.findOne({
+    _id: payload.workspace_id,
+    members: {
+      $elemMatch: {
+        user_id: userId,
+        role: { $in: ['owner', 'editor'] },
+      },
+    },
+  }).select('_id').lean();
+  if (!workspace) {
+    throw Object.assign(new Error('Only workspace owner or editor can invite collaborators'), {
+      statusCode: 403,
+      code: 'FORBIDDEN',
+    });
+  }
+
   const invite = await CollaborationInvite.create({
     workspace_id: payload.workspace_id,
     invitee_email: payload.invitee_email,
@@ -97,7 +114,7 @@ async function respondToInvite(userId, inviteId, status) {
   return CollaborationInvite.findOneAndUpdate(
     { _id: inviteId, $or: [{ sender_id: userId }, { invitee_user_id: userId }] },
     { status, responded_at: new Date() },
-    { new: true },
+    { returnDocument: 'after' },
   );
 }
 

@@ -19,6 +19,7 @@ export const SOURCES = [
   "Crossref",
   "arXiv",
   "IEEE Xplore",
+  "ACM Digital Library",
   "Exa",
 ];
 

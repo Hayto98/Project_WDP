@@ -14,8 +14,11 @@ async function listFeedback(user, query = {}) {
   const filter = isAdmin ? {} : { user_id: user.id };
   if (query.status) filter.status = query.status;
 
+  const feedbackQuery = Feedback.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit);
+  if (isAdmin) feedbackQuery.populate('user_id', 'full_name email roles status');
+
   const [feedbacks, total] = await Promise.all([
-    Feedback.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
+    feedbackQuery.lean(),
     Feedback.countDocuments(filter),
   ]);
 
@@ -29,7 +32,7 @@ async function updateFeedback(feedbackId, payload) {
       status: payload.status,
       admin_note: payload.admin_note,
     },
-    { new: true },
+    { returnDocument: 'after' },
   );
 }
 

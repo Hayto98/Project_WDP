@@ -15,7 +15,7 @@ const sourceRefSchema = new Schema(
   {
     source_name: {
       type: String,
-      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'Exa'],
+      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'ACM Digital Library', 'Exa'],
       required: true,
     },
     external_id: { type: String, required: true },
@@ -28,7 +28,7 @@ const sourceRefSchema = new Schema(
 
 const paperSchema = new Schema(
   {
-    doi: { type: String, sparse: true, trim: true },
+    doi: { type: String, trim: true },
     title: { type: String, required: true, trim: true },
     title_normalized: { type: String, trim: true },
     abstract: { type: String, default: '' },

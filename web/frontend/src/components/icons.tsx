@@ -168,3 +168,10 @@ export const IconQuote = (p: IconProps) => (
     <path d="M7 7H4v6h5V7l-2 4M18 7h-3v6h5V7l-2 4" />
   </svg>
 );
+
+export const IconUser = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </svg>
+);

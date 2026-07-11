@@ -3,7 +3,8 @@ import { IconBookmark, IconExternal, IconLibrary, IconPlus, IconSearch, IconX } 
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { libraryApi } from "../lib/api";
+import { aiApi, libraryApi } from "../lib/api";
+import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 import {
   COLLECTIONS,
   makeLibraryEntries,
@@ -42,13 +43,14 @@ interface Props {
 }
 
 export function LibraryPage({ theme, toggle }: Props) {
-  const [items, setItems] = useState<LibraryEntry[]>(() => makeLibraryEntries());
-  const [collections, setCollections] = useState<LibraryCollection[]>(COLLECTIONS);
+  const initialItems = useMemo(() => (USE_SAMPLE_FALLBACK ? makeLibraryEntries() : []), []);
+  const [items, setItems] = useState<LibraryEntry[]>(initialItems);
+  const [collections, setCollections] = useState<LibraryCollection[]>(USE_SAMPLE_FALLBACK ? COLLECTIONS : []);
   const [activeCollection, setActiveCollection] = useState("all");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortKey>("saved");
-  const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialItems[0]?.id ?? null);
   const [newCollection, setNewCollection] = useState("");
   const [editingCollectionName, setEditingCollectionName] = useState("");
   const [libraryNotice, setLibraryNotice] = useState("");
@@ -61,17 +63,18 @@ export function LibraryPage({ theme, toggle }: Props) {
     Promise.all([libraryApi.collections(), libraryApi.papers()])
       .then(([nextCollections, nextItems]) => {
         if (!alive) return;
-        if (nextCollections.length) {
-          setCollections(nextCollections);
-          setEditingCollectionName(nextCollections[0]?.name ?? "");
-        }
-        if (nextItems.length) {
-          setItems(nextItems);
-          setSelectedId(nextItems[0]?.id ?? null);
-        }
+        setCollections(nextCollections);
+        setEditingCollectionName(nextCollections[0]?.name ?? "");
+        setItems(nextItems);
+        setSelectedId(nextItems[0]?.id ?? null);
       })
-      .catch(() => {
-        // Keep sample library data when the API is unavailable.
+      .catch((err) => {
+        if (!USE_SAMPLE_FALLBACK && alive) {
+          setCollections([]);
+          setItems([]);
+          setSelectedId(null);
+          setLibraryNotice(err instanceof Error ? err.message : "Không tải được thư viện.");
+        }
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -441,7 +444,7 @@ export function LibraryPage({ theme, toggle }: Props) {
         </aside>
       </div>
 
-      <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
+      {SHOW_DEMO_CONTROLS && <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
         <span className="statepick__label">Xem trạng thái</span>
         {(["auto", "loading", "empty", "error"] as Demo[]).map((d) => (
           <button
@@ -452,7 +455,7 @@ export function LibraryPage({ theme, toggle }: Props) {
             {d === "auto" ? "Thực tế" : d === "loading" ? "Đang tải" : d === "empty" ? "Trống" : "Lỗi"}
           </button>
         ))}
-      </div>
+      </div>}
     </main>
   );
 }
@@ -520,10 +523,34 @@ function LibraryDetail({
   onRemove: () => void;
 }) {
   const [draftNote, setDraftNote] = useState(entry.note);
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   useEffect(() => {
     setDraftNote(entry.note);
+    setAiSummary("");
+    setAiError("");
   }, [entry.id, entry.note]);
+
+  const summarize = async () => {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const result = await aiApi.summarize({
+        title: entry.paper.title,
+        abstract: entry.paper.abstract,
+        year: entry.paper.year,
+        source: entry.paper.source,
+        keywords: entry.paper.keywords,
+      });
+      setAiSummary(result.summary);
+    } catch {
+      setAiError("Chưa tóm tắt được bài này. Thử lại sau nhé.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const toggleCollection = (id: string) => {
     const next = new Set(entry.collectionIds);
@@ -599,6 +626,11 @@ function LibraryDetail({
       <div className="libdetail__abstract">
         <span className="libdetail__label">Tóm tắt</span>
         <p>{entry.paper.abstract}</p>
+        <button className="btn btn--ghost" type="button" onClick={summarize} disabled={aiLoading}>
+          {aiLoading ? "Đang tóm tắt..." : "AI tóm tắt"}
+        </button>
+        {aiError && <p className="invite-notice" role="alert">{aiError}</p>}
+        {aiSummary && <p className="invite-notice">{aiSummary}</p>}
       </div>
 
       <div className="libdetail__actions">

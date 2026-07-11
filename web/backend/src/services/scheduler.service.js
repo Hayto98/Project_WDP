@@ -4,22 +4,32 @@ const { importIEEEByQuery } = require('./ieee.service');
 const { importOpenAlexByQuery } = require('./openalex.service');
 const { importArxivByQuery } = require('./arxiv.service');
 const { importCrossrefByQuery } = require('./crossref.service');
+const { importExaByQuery } = require('./exa.service');
+const { importSemanticScholarByQuery } = require('./semanticScholar.service');
+const { importAcmByQuery } = require('./acm.service');
 const { generateAllReports } = require('./report.service');
 const { notifyJobComplete } = require('./notification.service');
+const { sendFollowDigests } = require('./followDigest.service');
 const { logAction } = require('../utils/systemLogger');
 
 const IMPORTERS = {
   OpenAlex: importOpenAlexByQuery,
+  'Semantic Scholar': importSemanticScholarByQuery,
   arXiv: importArxivByQuery,
   Crossref: importCrossrefByQuery,
   'IEEE Xplore': importIEEEByQuery,
+  'ACM Digital Library': importAcmByQuery,
+  Exa: importExaByQuery,
 };
 
 let schedulerStarted = false;
 let queueInterval = null;
 let reportInterval = null;
+let dailyDigestInterval = null;
+let weeklyDigestInterval = null;
 let queueRunning = false;
 let reportsRunning = false;
+let digestRunning = false;
 
 async function runCrawlerJob(jobOrId) {
   const startedAt = new Date();
@@ -73,7 +83,7 @@ async function runCrawlerJob(jobOrId) {
         {
           $set: {
             last_sync_at: completedAt,
-            last_sync_status: 'success',
+            last_sync_status: 'Success',
             last_error: '',
           },
           $inc: { papers_synced_count: job.result.imported },
@@ -108,7 +118,7 @@ async function runCrawlerJob(jobOrId) {
         {
           $set: {
             last_sync_at: completedAt,
-            last_sync_status: 'failed',
+            last_sync_status: 'Failed',
             last_error: err.message,
           },
         },
@@ -159,11 +169,23 @@ async function refreshScheduledReports() {
   }
 }
 
+async function runScheduledFollowDigest(frequency) {
+  if (digestRunning) return { skipped: true, reason: 'digest already running' };
+  digestRunning = true;
+  try {
+    return await sendFollowDigests(frequency);
+  } finally {
+    digestRunning = false;
+  }
+}
+
 function startScheduler(options = {}) {
   if (schedulerStarted) return { started: false, reason: 'already started' };
 
   const queueMs = options.queueMs || 1000 * 60 * 15;
   const reportMs = options.reportMs || 1000 * 60 * 30;
+  const dailyDigestMs = options.dailyDigestMs || 1000 * 60 * 60 * 24;
+  const weeklyDigestMs = options.weeklyDigestMs || 1000 * 60 * 60 * 24 * 7;
   schedulerStarted = true;
 
   queueInterval = setInterval(() => {
@@ -176,9 +198,21 @@ function startScheduler(options = {}) {
       console.warn('⚠️  Scheduled report refresh failed:', err.message);
     });
   }, reportMs);
+  dailyDigestInterval = setInterval(() => {
+    runScheduledFollowDigest('daily').catch((err) => {
+      console.warn('⚠️  Scheduled daily follow digest failed:', err.message);
+    });
+  }, dailyDigestMs);
+  weeklyDigestInterval = setInterval(() => {
+    runScheduledFollowDigest('weekly').catch((err) => {
+      console.warn('⚠️  Scheduled weekly follow digest failed:', err.message);
+    });
+  }, weeklyDigestMs);
 
   if (queueInterval.unref) queueInterval.unref();
   if (reportInterval.unref) reportInterval.unref();
+  if (dailyDigestInterval.unref) dailyDigestInterval.unref();
+  if (weeklyDigestInterval.unref) weeklyDigestInterval.unref();
 
   setTimeout(() => {
     refreshScheduledReports().catch((err) => {
@@ -186,14 +220,24 @@ function startScheduler(options = {}) {
     });
   }, options.initialReportDelayMs || 1000 * 10).unref?.();
 
-  return { started: true, queueMs, reportMs };
+  setTimeout(() => {
+    runScheduledFollowDigest('daily').catch((err) => {
+      console.warn('⚠️  Initial daily follow digest failed:', err.message);
+    });
+  }, options.initialDigestDelayMs || 1000 * 20).unref?.();
+
+  return { started: true, queueMs, reportMs, dailyDigestMs, weeklyDigestMs };
 }
 
 function stopScheduler() {
   if (queueInterval) clearInterval(queueInterval);
   if (reportInterval) clearInterval(reportInterval);
+  if (dailyDigestInterval) clearInterval(dailyDigestInterval);
+  if (weeklyDigestInterval) clearInterval(weeklyDigestInterval);
   queueInterval = null;
   reportInterval = null;
+  dailyDigestInterval = null;
+  weeklyDigestInterval = null;
   schedulerStarted = false;
 }
 
@@ -201,6 +245,7 @@ module.exports = {
   runCrawlerJob,
   runQueuedCrawlerJobs,
   refreshScheduledReports,
+  runScheduledFollowDigest,
   startScheduler,
   stopScheduler,
 };

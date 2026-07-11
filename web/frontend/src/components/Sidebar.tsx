@@ -6,6 +6,7 @@ import {
   IconSearch,
   IconTelescope,
   IconTrend,
+  IconUser,
 } from "./icons";
 
 export const NAV = [
@@ -17,6 +18,7 @@ export const NAV = [
   { id: "gap", label: "Research Gap", icon: IconGap },
   { id: "library", label: "Thư viện", icon: IconLibrary },
   { id: "follow", label: "Theo dõi", icon: IconBell },
+  { id: "account", label: "Tài khoản", icon: IconUser },
 ];
 
 export function Sidebar({ active }: { active: string }) {

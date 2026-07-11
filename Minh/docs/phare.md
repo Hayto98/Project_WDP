@@ -3047,3 +3047,302 @@ Lenh commit goi y:
 git add Minh/docs/phare.md web/backend/src/middleware/rateLimiter.middleware.js web/backend/src/routes/ai.routes.js web/backend/src/services/ai.service.js web/backend/test/ai.service.test.js web/frontend/src/lib/flags.ts web/frontend/src/pages/OverviewPage.tsx web/frontend/src/pages/TrendsPage.tsx web/frontend/src/pages/GapPage.tsx web/frontend/src/pages/LibraryPage.tsx web/frontend/src/pages/FollowPage.tsx web/frontend/src/pages/WorkspacePage.tsx
 git commit -m "fix: harden ai endpoints and hide demo controls"
 ```
+
+## Cap nhat 2026-07-11 - Email notification that cho Follow instant
+
+Muc tieu:
+
+- Trien khai chuc nang that cho kenh Email trong Follow rule.
+- Neu user bat `rule.email=true` va `frequency=instant`, he thong gui email khi paper moi match followed subject.
+- Neu SMTP chua cau hinh, pipeline crawler/notification khong bi fail.
+
+Da sua file:
+
+- `web/backend/package.json`
+- `web/backend/package-lock.json`
+- `web/backend/.env.example`
+- `web/backend/src/config/env.js`
+- `web/backend/src/services/email.service.js`
+- `web/backend/src/services/follow.service.js`
+- `web/backend/test/email.service.test.js`
+- `web/backend/package.json` script `test:unit`
+
+Dependency moi:
+
+- `nodemailer`
+
+Chi tiet backend:
+
+- Them SMTP config:
+  - `EMAIL_ENABLED`
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_SECURE`
+  - `SMTP_USER`
+  - `SMTP_PASS`
+  - `EMAIL_FROM`
+- Them `email.service.js`:
+  - `isConfigured()`
+  - `sendMail()`
+  - `sendFollowPaperEmail()`
+- Khi SMTP chua cau hinh:
+  - `sendMail()` tra `{ sent:false, skipped:true, reason:'EMAIL_NOT_CONFIGURED' }`.
+  - Khong throw, khong lam fail job.
+- `follow.service.notifyFollowersForPaper()`:
+  - Van tao in-app notification neu `rule.in_app !== false`.
+  - Gui email neu:
+    - `rule.email === true`
+    - `rule.frequency === 'instant'`
+  - Daily/weekly email chua gui ngay tung paper de tranh sai semantics; can digest scheduler rieng o phase sau.
+- Return them `emailed` count.
+
+Da test:
+
+- Frontend:
+  - `npm run build` pass.
+- Backend unit:
+  - `npm run test:unit` pass.
+  - tests: 19
+  - pass: 19
+  - fail: 0
+- Backend full integration:
+  - `npm test` dang bi chan vi MongoDB local khong listen tai `localhost:27017`.
+  - Loi moi truong: `connect ECONNREFUSED ::1:27017, 127.0.0.1:27017`.
+  - `lsof -iTCP:27017` khong thay process.
+  - `mongod` khong co trong PATH.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/backend/package.json web/backend/package-lock.json web/backend/.env.example web/backend/src/config/env.js web/backend/src/services/email.service.js web/backend/src/services/follow.service.js web/backend/test/email.service.test.js
+git commit -m "feat: send instant follow email notifications"
+```
+
+## Cap nhat 2026-07-11 - Daily/weekly Follow email digest
+
+Muc tieu:
+
+- Hoan thanh not phan Follow email frequency.
+- `instant` gui tung email khi paper match.
+- `daily/weekly` gom thanh digest thay vi gui tung paper.
+
+Da sua file:
+
+- `web/backend/src/services/email.service.js`
+- `web/backend/src/services/followDigest.service.js`
+- `web/backend/src/services/scheduler.service.js`
+- `web/backend/test/followDigest.service.test.js`
+- `web/backend/package.json`
+
+Chi tiet:
+
+- Them `sendFollowDigestEmail(user, frequency, items)`.
+- Them service `followDigest.service.js`:
+  - `sinceForFrequency(frequency)`.
+  - `digestSubjects(user, frequency)`.
+  - `buildDigestItems(user, frequency, now)`.
+  - `sendFollowDigests(frequency, now)`.
+- Digest lay notification `paper` gan voi `follow_id` cua subject:
+  - daily: 24h gan nhat.
+  - weekly: 7 ngay gan nhat.
+- Scheduler them:
+  - daily digest moi 24h.
+  - weekly digest moi 7 ngay.
+  - initial daily digest sau khi app start.
+- `follow.service.notifyFollowersForPaper()` chi gui email truc tiep khi:
+  - `rule.email=true`
+  - `rule.frequency='instant'`
+- Daily/weekly khong spam tung paper, se gui digest.
+
+Da test:
+
+- Backend unit:
+  - `npm run test:unit` pass.
+  - tests: 21
+  - pass: 21
+  - fail: 0
+- Frontend:
+  - `npm run build` pass.
+
+Ghi chu:
+
+- Full `npm test` integration van can MongoDB local chay lai tai `localhost:27017`.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/backend/src/services/email.service.js web/backend/src/services/followDigest.service.js web/backend/src/services/follow.service.js web/backend/src/services/scheduler.service.js web/backend/test/followDigest.service.test.js web/backend/package.json
+git commit -m "feat: add follow email digests"
+```
+
+## Cap nhat 2026-07-11 - Production-ready hardening, Docker, CI, E2E
+
+Muc tieu:
+
+- Trien khai plan production-ready con lai sau khi `FIXLIST.md` khong con task bat buoc dang `[ ]`/`[/]`.
+- Bo sung moi truong chay that bang Docker, test script, CI, Playwright smoke E2E, env test va checklist deploy.
+- Giu repo khong commit secret that.
+
+Da them/sua file:
+
+- `docker-compose.yml`
+- `web/backend/Dockerfile`
+- `web/backend/.dockerignore`
+- `web/backend/.env.test.example`
+- `web/backend/package.json`
+- `web/frontend/Dockerfile`
+- `web/frontend/.dockerignore`
+- `web/frontend/nginx.conf`
+- `web/frontend/package.json`
+- `web/frontend/package-lock.json`
+- `web/frontend/playwright.config.ts`
+- `web/frontend/e2e/smoke.spec.ts`
+- `.github/workflows/ci.yml`
+- `PRODUCTION_CHECKLIST.md`
+
+Chi tiet:
+
+- Root Docker compose co 3 service:
+  - MongoDB `mongo:7`, expose `27017`, healthcheck bang `mongosh`.
+  - Backend expose `5001`, connect `mongodb://mongo:27017/wdp_research`, seed du lieu truoc khi start cho local smoke.
+  - Frontend build static bang Vite va serve qua nginx tai `5173`.
+- Backend:
+  - Them Dockerfile runtime Node 24 Alpine.
+  - Them `.env.test.example` dung DB test rieng `wdp_research_test`.
+  - Them script `test:all = test:unit + test:integration`.
+- Frontend:
+  - Cai `@playwright/test`.
+  - Them script `test:e2e` va `test:e2e:ui`.
+  - Them Playwright config mac dinh base URL `http://127.0.0.1:5173`.
+  - Them smoke E2E:
+    - Student login.
+    - Search paper.
+    - Save paper neu co ket qua.
+    - Library note/status smoke.
+    - Account page load.
+    - Follow subject add smoke.
+    - Workspace permission UI smoke.
+    - Admin source health page load.
+- CI:
+  - Backend unit job.
+  - Backend integration job voi Mongo service.
+  - Frontend build job.
+- Production checklist:
+  - Rotate API keys da lo.
+  - Set JWT secret manh.
+  - Set SMTP/CORS/Mongo/academic source configs.
+  - Verify IEEE/source health.
+  - Ghi ro logout v1 hien tai la client-side; refresh-token blacklist/logout-all-devices la hardening tiep theo.
+
+Da test:
+
+- Backend unit:
+  - `cd web/backend && npm run test:unit` pass.
+  - tests: 21
+  - pass: 21
+  - fail: 0
+- Frontend:
+  - `cd web/frontend && npm run build` pass.
+- Docker compose config:
+  - `docker compose config` pass.
+- Playwright:
+  - `cd web/frontend && npx playwright --version` -> `Version 1.61.1`.
+  - `cd web/frontend && npm run test:e2e -- --list` pass, list duoc 2 smoke tests.
+- Backend integration:
+  - `cd web/backend && npm run test:integration` van bi chan boi moi truong vi MongoDB local khong chay.
+  - Loi: `connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017`.
+  - Docker daemon cung chua chay nen chua the `docker compose up -d mongo` trong phien nay.
+  - Loi Docker: khong connect duoc `unix:///Users/blaosak/.docker/run/docker.sock`.
+
+Trang thai:
+
+- Code/config production hardening da trien khai.
+- Unit/build/config/E2E compile-list da pass.
+- Integration/E2E runtime can chay lai sau khi bat Docker Desktop hoac MongoDB local.
+
+Lenh chay tiep khi Docker Desktop da bat:
+
+```bash
+docker compose up --build
+```
+
+```bash
+cd web/backend && npm run test:integration
+```
+
+```bash
+cd web/frontend && npm run test:e2e
+```
+
+Lenh commit goi y:
+
+```bash
+git add .github/workflows/ci.yml PRODUCTION_CHECKLIST.md docker-compose.yml Minh/docs/phare.md web/backend/.dockerignore web/backend/.env.test.example web/backend/Dockerfile web/backend/package.json web/frontend/.dockerignore web/frontend/Dockerfile web/frontend/e2e/smoke.spec.ts web/frontend/nginx.conf web/frontend/package.json web/frontend/package-lock.json web/frontend/playwright.config.ts
+git commit -m "chore: add production docker ci and e2e smoke setup"
+```
+
+## Cap nhat 2026-07-11 - FE strict API mode, bo sample fallback o production
+
+Muc tieu:
+
+- Xu ly fixlist FE API that con lai.
+- Production khong tu fallback ve sample data khi API rong/loi.
+- Dev van co sample fallback de lam UI nhanh, co the tat bang `VITE_STRICT_API=true`.
+
+Da sua/them file:
+
+- `web/frontend/src/lib/flags.ts`
+- `web/frontend/src/pages/OverviewPage.tsx`
+- `web/frontend/src/pages/TrendsPage.tsx`
+- `web/frontend/src/pages/GapPage.tsx`
+- `web/frontend/src/pages/LibraryPage.tsx`
+- `web/frontend/src/pages/FollowPage.tsx`
+- `web/frontend/src/pages/WorkspacePage.tsx`
+- `web/frontend/src/pages/NotificationPage.tsx`
+- `web/frontend/.env.example`
+- `PRODUCTION_CHECKLIST.md`
+
+Chi tiet:
+
+- Them flag `USE_SAMPLE_FALLBACK`:
+  - Dev mac dinh van co fallback sample neu khong set `VITE_STRICT_API=true`.
+  - Production mac dinh khong fallback sample.
+  - Co escape hatch `VITE_USE_SAMPLE_FALLBACK=true` cho visual UI work, khong dung production.
+- Library:
+  - Production khoi tao rong, API tra rong thi hien empty that.
+  - API loi thi hien notice, khong giu sample library.
+- Follow:
+  - Production khoi tao subjects/alerts rong.
+  - API loi thi clear data va hien notice.
+- Workspace:
+  - Production khoi tao workspace/member/item/invite/researcher/activity rong.
+  - API rong/loi khong giu sample workspace.
+  - Activity khong fallback ve sample trong production.
+- Notification:
+  - Production khoi tao inbox rong.
+  - API rong/loi khong giu sample notification.
+- Overview:
+  - Production dung empty dashboard khi chua co API data.
+  - API loi hien error state thay vi sample dashboard.
+- Trends:
+  - Production khong fallback trend points/growth/network sang sample.
+  - API loi hien error state.
+- Gap:
+  - Production khong fallback gap matrix sang sample.
+  - API loi hien error state.
+- Checklist production them bien frontend:
+  - `VITE_API_BASE_URL`
+  - `VITE_STRICT_API`
+  - `VITE_USE_SAMPLE_FALLBACK`
+
+Da test:
+
+- Frontend:
+  - `cd web/frontend && npm run build` pass.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md PRODUCTION_CHECKLIST.md web/frontend/.env.example web/frontend/src/lib/flags.ts web/frontend/src/pages/OverviewPage.tsx web/frontend/src/pages/TrendsPage.tsx web/frontend/src/pages/GapPage.tsx web/frontend/src/pages/LibraryPage.tsx web/frontend/src/pages/FollowPage.tsx web/frontend/src/pages/WorkspacePage.tsx web/frontend/src/pages/NotificationPage.tsx
+git commit -m "fix: disable frontend sample fallback in production"
+```

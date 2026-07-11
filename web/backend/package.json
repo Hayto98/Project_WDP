@@ -7,7 +7,10 @@
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "seed": "node src/seeds/seed.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_ENV=test node --test",
+    "test:unit": "NODE_ENV=test node --test test/ai.service.test.js test/email.service.test.js test/exa.service.test.js test/follow.service.test.js test/followDigest.service.test.js test/paperCleaning.test.js test/sourceMappers.test.js",
+    "test:integration": "NODE_ENV=test node --test test/api.integration.test.js",
+    "test:all": "npm run test:unit && npm run test:integration"
   },
   "keywords": [],
   "author": "",
@@ -24,7 +27,8 @@
     "joi": "^18.2.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.3",
-    "morgan": "^1.11.0"
+    "morgan": "^1.11.0",
+    "nodemailer": "^9.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

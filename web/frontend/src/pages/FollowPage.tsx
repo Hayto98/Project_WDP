@@ -24,6 +24,7 @@ import {
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
 import { followApi } from "../lib/api";
+import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 
 type FeedFilter = "all" | "unread" | "high";
 type SortKey = "newest" | "priority";
@@ -65,8 +66,8 @@ interface Props {
 }
 
 export function FollowPage({ theme, toggle }: Props) {
-  const [subjects, setSubjects] = useState<FollowSubject[]>(FOLLOW_SUBJECTS);
-  const [alerts, setAlerts] = useState(FOLLOW_ALERTS);
+  const [subjects, setSubjects] = useState<FollowSubject[]>(USE_SAMPLE_FALLBACK ? FOLLOW_SUBJECTS : []);
+  const [alerts, setAlerts] = useState(USE_SAMPLE_FALLBACK ? FOLLOW_ALERTS : []);
   const [activeId, setActiveId] = useState("all");
   const [filter, setFilter] = useState<FeedFilter>("all");
   const [sort, setSort] = useState<SortKey>("newest");
@@ -75,21 +76,31 @@ export function FollowPage({ theme, toggle }: Props) {
   const [newType, setNewType] = useState<FollowType>("keyword");
   const [loading, setLoading] = useState(true);
   const [demo, setDemo] = useState<Demo>("auto");
+  const [notice, setNotice] = useState("");
+
+  const reloadFollowData = async () => {
+    const [nextSubjects, nextAlerts] = await Promise.all([followApi.subjects(), followApi.alerts()]);
+    setSubjects(nextSubjects);
+    setAlerts(nextAlerts);
+    return [nextSubjects, nextAlerts] as const;
+  };
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    Promise.all([followApi.subjects(), followApi.alerts()])
-      .then(([nextSubjects, nextAlerts]) => {
+    reloadFollowData()
+      .then(([nextSubjects]) => {
         if (!alive) return;
-        if (nextSubjects.length) {
-          setSubjects(nextSubjects);
-          setActiveId("all");
-        }
-        if (nextAlerts.length) setAlerts(nextAlerts);
+        if (nextSubjects.length) setActiveId("all");
       })
-      .catch(() => {
-        // Keep sample follow data when the API is unavailable.
+      .catch((err) => {
+        if (alive) {
+          if (!USE_SAMPLE_FALLBACK) {
+            setSubjects([]);
+            setAlerts([]);
+          }
+          setNotice(err instanceof Error ? err.message : "Không tải được dữ liệu theo dõi.");
+        }
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -141,42 +152,80 @@ export function FollowPage({ theme, toggle }: Props) {
           ? "empty"
           : "ready";
 
-  const updateSubject = (id: string, patch: Partial<FollowSubject>) => {
+  const updateSubject = async (id: string, patch: Partial<FollowSubject>) => {
+    setNotice("");
+    const previous = subjects;
     setSubjects((current) => current.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    try {
+      const updated = await followApi.updateSubject(id, { active: patch.active });
+      setSubjects((current) => current.map((s) => (s.id === id ? updated : s)));
+    } catch (err) {
+      setSubjects(previous);
+      setNotice(err instanceof Error ? err.message : "Không cập nhật được mục theo dõi.");
+    }
   };
 
-  const updateRule = (id: string, patch: Partial<FollowRule>) => {
+  const updateRule = async (id: string, patch: Partial<FollowRule>) => {
+    setNotice("");
+    const previous = subjects;
     setSubjects((current) =>
       current.map((s) => (s.id === id ? { ...s, rule: { ...s.rule, ...patch } } : s)),
     );
+    try {
+      const updated = await followApi.updateSubject(id, { rule: patch });
+      setSubjects((current) => current.map((s) => (s.id === id ? updated : s)));
+    } catch (err) {
+      setSubjects(previous);
+      setNotice(err instanceof Error ? err.message : "Không cập nhật được luật theo dõi.");
+    }
   };
 
-  const removeSubject = (id: string) => {
+  const removeSubject = async (id: string) => {
+    setNotice("");
+    const previousSubjects = subjects;
+    const previousAlerts = alerts;
     setSubjects((current) => current.filter((s) => s.id !== id));
     setAlerts((current) => current.filter((a) => a.subjectId !== id));
     setActiveId((current) => (current === id ? "all" : current));
+    try {
+      await followApi.removeSubject(id);
+      setNotice("Đã xóa mục theo dõi.");
+    } catch (err) {
+      setSubjects(previousSubjects);
+      setAlerts(previousAlerts);
+      setNotice(err instanceof Error ? err.message : "Không xóa được mục theo dõi.");
+    }
   };
 
-  const addSubject = () => {
+  const addSubject = async () => {
     const label = newLabel.trim();
     if (!label) return;
-    const id = `custom-${Date.now()}`;
-    const subject: FollowSubject = {
-      id,
-      label,
-      type: newType,
-      active: true,
-      newPapers: 0,
-      papers7d: 0,
-      rule: { frequency: "daily", threshold: "all", email: false, inApp: true, exclude: [] },
-    };
-    setSubjects((current) => [subject, ...current]);
-    setNewLabel("");
-    setActiveId(id);
+    setNotice("");
+    try {
+      const subject = await followApi.addSubject({
+        value: label,
+        type: newType,
+        rule: { frequency: "daily", threshold: "all", email: false, inApp: true, exclude: [] },
+      });
+      setSubjects((current) => [subject, ...current]);
+      setNewLabel("");
+      setActiveId(subject.id);
+      setNotice("Đã thêm mục theo dõi.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Không thêm được mục theo dõi.");
+    }
   };
 
-  const markAlert = (id: string, unread: boolean) => {
+  const markAlert = async (id: string, unread: boolean) => {
+    setNotice("");
     setAlerts((current) => current.map((a) => (a.id === id ? { ...a, unread } : a)));
+    if (unread) return;
+    try {
+      await followApi.markAlertRead(id);
+    } catch (err) {
+      setAlerts((current) => current.map((a) => (a.id === id ? { ...a, unread: true } : a)));
+      setNotice(err instanceof Error ? err.message : "Không đánh dấu được thông báo.");
+    }
   };
 
   return (
@@ -199,6 +248,7 @@ export function FollowPage({ theme, toggle }: Props) {
         <Summary label="Ưu tiên cao" value={formatInt(highCount)} />
         <Summary label="Bài mới 7 ngày" value={formatInt(subjects.reduce((a, s) => a + s.papers7d, 0))} />
       </div>
+      {notice && <p className="notice">{notice}</p>}
 
       <div className="follow-layout">
         <aside className="follow-side" aria-label="Mục đang theo dõi">
@@ -383,7 +433,7 @@ export function FollowPage({ theme, toggle }: Props) {
         </aside>
       </div>
 
-      <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
+      {SHOW_DEMO_CONTROLS && <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
         <span className="statepick__label">Xem trạng thái</span>
         {(["auto", "loading", "empty", "error"] as Demo[]).map((d) => (
           <button
@@ -394,7 +444,7 @@ export function FollowPage({ theme, toggle }: Props) {
             {d === "auto" ? "Thực tế" : d === "loading" ? "Đang tải" : d === "empty" ? "Trống" : "Lỗi"}
           </button>
         ))}
-      </div>
+      </div>}
     </main>
   );
 }

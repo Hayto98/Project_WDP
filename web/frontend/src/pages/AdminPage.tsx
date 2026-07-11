@@ -15,10 +15,11 @@ import {
 } from "../data/adminSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { adminApi, clearAuth, getCurrentUser } from "../lib/api";
+import { adminApi, authApi, feedbackApi, getCurrentUser } from "../lib/api";
 
-type AdminTab = "overview" | "jobs" | "sources" | "users" | "reading" | "logs";
+type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "reading" | "logs";
 type AdminReadAction = "refresh" | "export" | "threshold" | "raw";
+type FeedbackStatus = "Pending" | "Reviewed" | "Resolved";
 
 interface TopReadPaper {
   paperId: string;
@@ -38,6 +39,17 @@ interface ReadChartItem {
   detail: string;
 }
 
+interface FeedbackItem {
+  _id?: string;
+  id?: string;
+  user_id?: string | { _id?: string; full_name?: string; email?: string };
+  content: string;
+  status: FeedbackStatus;
+  admin_note?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface Props {
   theme: Theme;
   toggle: () => void;
@@ -48,6 +60,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "jobs", label: "Batch jobs" },
   { id: "sources", label: "Nguồn dữ liệu" },
   { id: "users", label: "Người dùng" },
+  { id: "feedback", label: "Phản hồi" },
   { id: "reading", label: "Thống kê lượt đọc" },
   { id: "logs", label: "Audit log" },
 ];
@@ -78,6 +91,12 @@ const READING_STATUS_LABEL: Record<ReadingPersistStatus, string> = {
   skipped: "Không ghi",
 };
 
+const FEEDBACK_STATUS_LABEL: Record<FeedbackStatus, string> = {
+  Pending: "Đang chờ",
+  Reviewed: "Đã xem",
+  Resolved: "Đã xử lý",
+};
+
 export function AdminPage({ theme, toggle }: Props) {
   const [tab, setTab] = useState<AdminTab>("overview");
   const [jobs, setJobs] = useState<AdminJob[]>([]);
@@ -85,11 +104,13 @@ export function AdminPage({ theme, toggle }: Props) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [readLogs, setReadLogs] = useState<PaperReadLog[]>([]);
+  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
   const [stats, setStats] = useState({ totalPapers: 0, totalUsers: 0, activeJobs: 0, dataSources: 0 });
   const [query, setQuery] = useState("");
   const [readNotice, setReadNotice] = useState("Thống kê đang dùng cửa sổ 30 phút gần nhất.");
   const [jobNotice, setJobNotice] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
+  const [feedbackNotice, setFeedbackNotice] = useState("");
   const [checkingSources, setCheckingSources] = useState(false);
   const currentUser = getCurrentUser();
 
@@ -101,14 +122,16 @@ export function AdminPage({ theme, toggle }: Props) {
       adminApi.auditLogs(),
       adminApi.paperReads(),
       adminApi.stats(),
+      feedbackApi.list({ page: 1, limit: 50 }),
     ])
-      .then(([nextJobs, nextSources, nextUsers, nextAuditLogs, nextReadLogs, nextStats]) => {
+      .then(([nextJobs, nextSources, nextUsers, nextAuditLogs, nextReadLogs, nextStats, nextFeedbacks]) => {
         setJobs(nextJobs);
         setSources(nextSources);
         setUsers(nextUsers);
         setAuditLogs(nextAuditLogs);
         setReadLogs(nextReadLogs);
         setStats(nextStats);
+        setFeedbacks(Array.isArray(nextFeedbacks.data) ? nextFeedbacks.data : []);
       })
       .catch(() => {
         setJobs([]);
@@ -116,6 +139,7 @@ export function AdminPage({ theme, toggle }: Props) {
         setUsers([]);
         setAuditLogs([]);
         setReadLogs([]);
+        setFeedbacks([]);
       });
   }, []);
 
@@ -162,7 +186,10 @@ export function AdminPage({ theme, toggle }: Props) {
     }
   };
 
-  const toggleSource = (id: string) => {
+  const toggleSource = async (id: string) => {
+    const currentSource = sources.find((source) => source.id === id);
+    if (!currentSource) return;
+    const previous = sources;
     setSources((current) =>
       current.map((source) =>
         source.id === id
@@ -175,14 +202,33 @@ export function AdminPage({ theme, toggle }: Props) {
           : source,
       ),
     );
+    try {
+      const updated = await adminApi.updateDataSource(id, { enabled: !currentSource.enabled });
+      setSources((current) => current.map((source) => (source.id === id ? updated : source)));
+      setSourceNotice(`${updated.name}: ${updated.enabled ? "đã bật" : "đã tạm dừng"}.`);
+    } catch (err) {
+      setSources(previous);
+      setSourceNotice(err instanceof Error ? err.message : "Không cập nhật được nguồn dữ liệu.");
+    }
   };
 
-  const toggleUserLock = (id: string) => {
+  const toggleUserLock = async (id: string) => {
+    const currentUserRow = users.find((user) => user.id === id);
+    if (!currentUserRow) return;
+    const previous = users;
+    const nextStatus = currentUserRow.status === "locked" ? "Active" : "Banned";
     setUsers((current) =>
       current.map((user) =>
         user.id === id ? { ...user, status: user.status === "locked" ? "active" : "locked" } : user,
       ),
     );
+    try {
+      const updated = await adminApi.updateUser(id, { status: nextStatus });
+      setUsers((current) => current.map((user) => (user.id === id ? updated : user)));
+    } catch (err) {
+      setUsers(previous);
+      setSourceNotice(err instanceof Error ? err.message : "Không cập nhật được người dùng.");
+    }
   };
 
   const handleReadAction = (action: AdminReadAction) => {
@@ -207,6 +253,27 @@ export function AdminPage({ theme, toggle }: Props) {
       setSourceNotice(err instanceof Error ? err.message : "Không kiểm tra được API nguồn.");
     } finally {
       setCheckingSources(false);
+    }
+  };
+
+  const refreshReports = async () => {
+    setJobNotice("");
+    try {
+      const result = await adminApi.refreshReports();
+      setJobNotice(`Đã refresh ${formatInt(result.reports.length)} báo cáo phân tích.`);
+    } catch (err) {
+      setJobNotice(err instanceof Error ? err.message : "Không refresh được reports.");
+    }
+  };
+
+  const updateFeedback = async (id: string, patch: { status?: FeedbackStatus; admin_note?: string | null }) => {
+    setFeedbackNotice("");
+    try {
+      const updated = (await feedbackApi.update(id, patch)) as FeedbackItem;
+      setFeedbacks((current) => current.map((item) => (feedbackId(item) === id ? updated : item)));
+      setFeedbackNotice("Đã cập nhật phản hồi.");
+    } catch (err) {
+      setFeedbackNotice(err instanceof Error ? err.message : "Không cập nhật được phản hồi.");
     }
   };
 
@@ -249,8 +316,8 @@ export function AdminPage({ theme, toggle }: Props) {
           <button
             className="btn btn--ghost"
             type="button"
-            onClick={() => {
-              clearAuth();
+            onClick={async () => {
+              await authApi.logout();
               window.location.hash = "login";
             }}
           >
@@ -328,6 +395,11 @@ export function AdminPage({ theme, toggle }: Props) {
         {tab === "jobs" && (
           <section className="admin-panel">
             <PanelHead title="Batch jobs thu thập dữ liệu" meta="OpenAlex, Crossref, arXiv, Semantic Scholar và IEEE" />
+            <div className="admin-read-actions" aria-label="Thao tác batch reports">
+              <button className="btn btn--primary" type="button" onClick={refreshReports}>
+                <IconRefresh width={15} height={15} /> Refresh reports
+              </button>
+            </div>
             {jobNotice && <p className="invite-notice admin-read-notice" role="status">{jobNotice}</p>}
             <div className="admin-job-stack">
               {jobs.map((job) => (
@@ -375,6 +447,25 @@ export function AdminPage({ theme, toggle }: Props) {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </section>
+        )}
+
+        {tab === "feedback" && (
+          <section className="admin-panel">
+            <PanelHead title="Phản hồi người dùng" meta={`${feedbacks.length} phản hồi gần nhất`} />
+            {feedbackNotice && <p className="invite-notice admin-read-notice" role="status">{feedbackNotice}</p>}
+            <div className="admin-feedback-list">
+              {feedbacks.length === 0 ? (
+                <div className="state state--empty">
+                  <p className="state__title">Chưa có phản hồi</p>
+                  <p className="state__body">Khi người dùng gửi phản hồi, admin sẽ xử lý tại đây.</p>
+                </div>
+              ) : (
+                feedbacks.map((item) => (
+                  <FeedbackRow key={feedbackId(item)} feedback={item} onUpdate={updateFeedback} />
+                ))
+              )}
             </div>
           </section>
         )}
@@ -710,6 +801,55 @@ function UserRow({ user, onToggleLock }: { user: AdminUser; onToggleLock: (id: s
   );
 }
 
+function FeedbackRow({
+  feedback,
+  onUpdate,
+}: {
+  feedback: FeedbackItem;
+  onUpdate: (id: string, patch: { status?: FeedbackStatus; admin_note?: string | null }) => void;
+}) {
+  const [note, setNote] = useState(feedback.admin_note ?? "");
+  const id = feedbackId(feedback);
+  const userLabel = feedbackUserLabel(feedback);
+
+  useEffect(() => {
+    setNote(feedback.admin_note ?? "");
+  }, [feedback.admin_note]);
+
+  return (
+    <article className="admin-feedback-card">
+      <div className="admin-feedback-card__body">
+        <div className="admin-feedback-card__head">
+          <span>
+            <strong>{userLabel}</strong>
+            <small>{formatDate(feedback.created_at)}</small>
+          </span>
+          <StatusPill status={feedback.status.toLowerCase()} label={FEEDBACK_STATUS_LABEL[feedback.status]} />
+        </div>
+        <p>{feedback.content}</p>
+      </div>
+      <div className="admin-feedback-card__actions">
+        <select
+          value={feedback.status}
+          onChange={(event) => onUpdate(id, { status: event.target.value as FeedbackStatus })}
+          aria-label="Cập nhật trạng thái phản hồi"
+        >
+          <option value="Pending">Đang chờ</option>
+          <option value="Reviewed">Đã xem</option>
+          <option value="Resolved">Đã xử lý</option>
+        </select>
+        <textarea
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          onBlur={() => onUpdate(id, { admin_note: note.trim() || null })}
+          placeholder="Ghi chú admin"
+          rows={3}
+        />
+      </div>
+    </article>
+  );
+}
+
 function ReadLogRow({ log }: { log: PaperReadLog }) {
   return (
     <tr>
@@ -766,6 +906,24 @@ function AuditList({ logs }: { logs: AuditLog[] }) {
 
 function StatusPill({ status, label }: { status: string; label: string }) {
   return <span className={`admin-status admin-status--${status}`}>{label}</span>;
+}
+
+function feedbackId(feedback: FeedbackItem) {
+  return feedback._id ?? feedback.id ?? "";
+}
+
+function feedbackUserLabel(feedback: FeedbackItem) {
+  if (typeof feedback.user_id === "object" && feedback.user_id) {
+    return feedback.user_id.full_name || feedback.user_id.email || "Người dùng";
+  }
+  return typeof feedback.user_id === "string" ? feedback.user_id : "Người dùng";
+}
+
+function formatDate(value?: string) {
+  if (!value) return "vừa xong";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("vi-VN");
 }
 
 function initials(name: string) {

@@ -36,7 +36,7 @@ async function updateUser(req, res) {
     if (req.body.status) allowed.status = req.body.status;
     if (req.body.roles) allowed.roles = req.body.roles;
 
-    const user = await User.findByIdAndUpdate(req.params.id, allowed, { new: true })
+    const user = await User.findByIdAndUpdate(req.params.id, allowed, { returnDocument: 'after' })
       .select('-password_hash');
     if (!user) return ApiResponse.notFound(res);
     return ApiResponse.success(res, user);
@@ -63,7 +63,7 @@ async function updateDataSource(req, res) {
     if (req.body.sync_schedule) allowed.sync_schedule = req.body.sync_schedule;
     if (req.body.api_endpoint) allowed.api_endpoint = req.body.api_endpoint;
 
-    const source = await DataSource.findByIdAndUpdate(req.params.id, allowed, { new: true });
+    const source = await DataSource.findByIdAndUpdate(req.params.id, allowed, { returnDocument: 'after' });
     if (!source) return ApiResponse.notFound(res);
     return ApiResponse.success(res, source);
   } catch (err) {

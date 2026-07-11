@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-const sourceName = Joi.string().valid('OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'Exa');
+const sourceName = Joi.string().valid('OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'ACM Digital Library', 'Exa');
 
 const updateUserSchema = Joi.object({
   status: Joi.string().valid('Active', 'Inactive', 'Banned').optional(),

@@ -26,7 +26,7 @@ async function createSavedSearch(userId, payload) {
   const user = await User.findByIdAndUpdate(
     userId,
     { $push: { saved_searches: savedSearch } },
-    { new: true },
+    { returnDocument: 'after' },
   ).select('saved_searches');
 
   return user.saved_searches[user.saved_searches.length - 1];

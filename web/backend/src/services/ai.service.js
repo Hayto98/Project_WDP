@@ -1,13 +1,49 @@
 const AnalysisReport = require('../models/AnalysisReport');
+const Paper = require('../models/Paper');
 const { llm, sources } = require('../config/env');
 
 const DEFAULT_TIMEOUT_MS = Math.min(sources.externalApiTimeoutMs || 30000, 90000);
+const AI_CACHE_TTL_MS = 10 * 60 * 1000;
+const aiCache = new Map();
 
 function compactText(value, limit = 4000) {
   return String(value || '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, limit);
+}
+
+function redactPII(value) {
+  return compactText(value, 10000)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+    .replace(/(?:\+?\d[\s-.()]*){8,}\d/g, '[redacted-phone]');
+}
+
+function cleanPublicText(value, limit = 4000) {
+  return compactText(redactPII(value), limit);
+}
+
+function cacheKey(scope, payload) {
+  return `${scope}:${JSON.stringify(payload)}`;
+}
+
+function getCached(key) {
+  const hit = aiCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.createdAt > AI_CACHE_TTL_MS) {
+    aiCache.delete(key);
+    return null;
+  }
+  return { ...hit.value, cached: true };
+}
+
+function setCached(key, value) {
+  aiCache.set(key, { value, createdAt: Date.now() });
+  if (aiCache.size > 500) {
+    const oldestKey = aiCache.keys().next().value;
+    if (oldestKey) aiCache.delete(oldestKey);
+  }
+  return value;
 }
 
 function safeJsonParse(text, fallback) {
@@ -32,8 +68,8 @@ function reasonCode(err) {
 }
 
 function fallbackSummary(title, abstract) {
-  const cleanTitle = compactText(title, 180) || 'Bài báo';
-  const cleanAbstract = compactText(abstract, 900);
+  const cleanTitle = cleanPublicText(title, 180) || 'Bài báo';
+  const cleanAbstract = cleanPublicText(abstract, 900);
   if (!cleanAbstract) {
     return `${cleanTitle}: chưa có abstract công khai để tóm tắt.`;
   }
@@ -94,12 +130,15 @@ async function callGemini(prompt, options = {}) {
 
 async function summarizePaper({ title, abstract, year, source, keywords = [] }) {
   const publicContext = {
-    title: compactText(title, 250),
-    abstract: compactText(abstract, 5000),
+    title: cleanPublicText(title, 250),
+    abstract: cleanPublicText(abstract, 5000),
     year,
-    source,
-    keywords: Array.isArray(keywords) ? keywords.slice(0, 8).map((k) => compactText(k, 80)) : [],
+    source: cleanPublicText(source, 100),
+    keywords: Array.isArray(keywords) ? keywords.slice(0, 8).map((k) => cleanPublicText(k, 80)) : [],
   };
+  const key = cacheKey('summary', publicContext);
+  const cached = getCached(key);
+  if (cached) return cached;
 
   try {
     const text = await callGemini(
@@ -112,19 +151,22 @@ async function summarizePaper({ title, abstract, year, source, keywords = [] }) 
       ].join('\n'),
       { maxOutputTokens: 500 },
     );
-    return { summary: text, provider: 'gemini', model: llm.geminiModel };
+    return setCached(key, { summary: text, provider: 'gemini', model: llm.geminiModel });
   } catch (err) {
-    return {
+    return setCached(key, {
       summary: fallbackSummary(title, abstract),
       provider: 'fallback',
       reason: reasonCode(err),
-    };
+    });
   }
 }
 
 async function explainTerm({ term, context }) {
-  const cleanTerm = compactText(term, 120);
-  const cleanContext = compactText(context, 1200);
+  const cleanTerm = cleanPublicText(term, 120);
+  const cleanContext = cleanPublicText(context, 1200);
+  const key = cacheKey('term', { term: cleanTerm, context: cleanContext });
+  const cached = getCached(key);
+  if (cached) return cached;
 
   try {
     const explanation = await callGemini(
@@ -138,29 +180,32 @@ async function explainTerm({ term, context }) {
       ].join('\n'),
       { maxOutputTokens: 450 },
     );
-    return { term: cleanTerm, explanation, provider: 'gemini', model: llm.geminiModel };
+    return setCached(key, { term: cleanTerm, explanation, provider: 'gemini', model: llm.geminiModel });
   } catch (err) {
-    return {
+    return setCached(key, {
       term: cleanTerm,
       explanation: `"${cleanTerm}" là một thuật ngữ cần được giải thích dựa trên ngữ cảnh nghiên cứu cụ thể. Hiện AI service chưa khả dụng nên hệ thống trả lời fallback.`,
       provider: 'fallback',
       reason: reasonCode(err),
-    };
+    });
   }
 }
 
 async function suggestDirections({ field, gaps = [] }) {
-  const cleanField = compactText(field, 160) || 'lĩnh vực đã chọn';
+  const cleanField = cleanPublicText(field, 160) || 'lĩnh vực đã chọn';
   const publicGaps = Array.isArray(gaps)
     ? gaps.slice(0, 8).map((gap) => ({
-      field: compactText(gap.field || gap.fieldLabel || cleanField, 120),
-      aspect: compactText(gap.aspect, 120),
+      field: cleanPublicText(gap.field || gap.fieldLabel || cleanField, 120),
+      aspect: cleanPublicText(gap.aspect, 120),
       density: Number(gap.density || 0),
       interest: Number(gap.interest || 0),
       papers: Number(gap.papers || 0),
-      keywords: Array.isArray(gap.keywords) ? gap.keywords.slice(0, 5).map((k) => compactText(k, 80)) : [],
+      keywords: Array.isArray(gap.keywords) ? gap.keywords.slice(0, 5).map((k) => cleanPublicText(k, 80)) : [],
     }))
     : [];
+  const key = cacheKey('directions', { field: cleanField, gaps: publicGaps });
+  const cached = getCached(key);
+  if (cached) return cached;
 
   const fallbackDirections = publicGaps.length
     ? publicGaps.slice(0, 3).map((gap) => ({
@@ -184,15 +229,15 @@ async function suggestDirections({ field, gaps = [] }) {
       { json: true, maxOutputTokens: 800, temperature: 0.45 },
     );
     const parsed = safeJsonParse(text, { directions: fallbackDirections });
-    return {
+    return setCached(key, {
       directions: Array.isArray(parsed.directions) && parsed.directions.length
         ? parsed.directions.slice(0, 5)
         : fallbackDirections,
       provider: 'gemini',
       model: llm.geminiModel,
-    };
+    });
   } catch (err) {
-    return { directions: fallbackDirections, provider: 'fallback', reason: reasonCode(err) };
+    return setCached(key, { directions: fallbackDirections, provider: 'fallback', reason: reasonCode(err) });
   }
 }
 
@@ -222,6 +267,9 @@ async function getInsights() {
     })),
     evidence,
   };
+  const key = cacheKey('insights', { gaps, evidence });
+  const cached = getCached(key);
+  if (cached) return cached;
 
   try {
     const text = await callGemini(
@@ -236,16 +284,66 @@ async function getInsights() {
       { json: true, maxOutputTokens: 900, temperature: 0.4 },
     );
     const parsed = safeJsonParse(text, fallback);
-    return {
+    return setCached(key, {
       summary: parsed.summary || fallback.summary,
       directions: Array.isArray(parsed.directions) ? parsed.directions.slice(0, 3) : fallback.directions,
       evidence: Array.isArray(parsed.evidence) ? parsed.evidence.slice(0, 8) : fallback.evidence,
       provider: 'gemini',
       model: llm.geminiModel,
-    };
+    });
   } catch (err) {
-    return { ...fallback, provider: 'fallback', reason: reasonCode(err) };
+    return setCached(key, { ...fallback, provider: 'fallback', reason: reasonCode(err) });
   }
+}
+
+async function getRelatedPapers({ paperId, title, keywords = [], fields = [], limit = 5 }) {
+  const cleanKeywords = Array.isArray(keywords) ? keywords.map((k) => compactText(k, 80)).filter(Boolean) : [];
+  const cleanFields = Array.isArray(fields) ? fields.map((f) => compactText(f, 120)).filter(Boolean) : [];
+  const cleanTitle = compactText(title, 240);
+  const queryText = [cleanTitle, ...cleanKeywords, ...cleanFields].filter(Boolean).join(' ');
+  const cappedLimit = Math.max(1, Math.min(Number(limit) || 5, 10));
+
+  const filter = { status: { $ne: 'Archived' } };
+  if (paperId) filter._id = { $ne: paperId };
+
+  const or = [];
+  if (cleanKeywords.length) or.push({ keywords: { $in: cleanKeywords } });
+  if (cleanFields.length) or.push({ research_fields: { $in: cleanFields } });
+  if (queryText) or.push({ $text: { $search: queryText } });
+
+  const query = or.length ? { ...filter, $or: or } : filter;
+  const projection = queryText ? { score: { $meta: 'textScore' } } : {};
+  const sort = queryText ? { score: { $meta: 'textScore' }, citation_count: -1 } : { citation_count: -1, publication_year: -1 };
+
+  let papers = await Paper.find(query, projection)
+    .sort(sort)
+    .limit(cappedLimit)
+    .lean();
+
+  if (!papers.length && queryText) {
+    papers = await Paper.find(filter)
+      .sort({ citation_count: -1, publication_year: -1 })
+      .limit(cappedLimit)
+      .lean();
+  }
+
+  return {
+    related: papers.map((paper) => ({
+      id: paper._id,
+      title: paper.title,
+      authors: (paper.authors || []).map((author) => author.name).filter(Boolean),
+      year: paper.publication_year,
+      source: paper.source_name,
+      type: paper.type,
+      fields: paper.research_fields || [],
+      keywords: paper.keywords || [],
+      abstract: paper.abstract || '',
+      citations: paper.citation_count || 0,
+      doi: paper.doi || '',
+      url: paper.original_url || '',
+    })),
+    provider: 'corpus',
+  };
 }
 
 module.exports = {
@@ -253,4 +351,9 @@ module.exports = {
   explainTerm,
   suggestDirections,
   getInsights,
+  getRelatedPapers,
+  _private: {
+    redactPII,
+    cleanPublicText,
+  },
 };

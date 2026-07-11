@@ -24,7 +24,7 @@
 
 ---
 
-##### `[ ]` 1.1.1 — File: `src/validators/auth.validator.js`
+##### `[x]` 1.1.1 — File: `src/validators/auth.validator.js`
 
 ```javascript
 // registerSchema
@@ -55,7 +55,7 @@
 
 ---
 
-##### `[ ]` 1.1.2 — File: `src/validators/paper.validator.js`
+##### `[x]` 1.1.2 — File: `src/validators/paper.validator.js`
 
 ```javascript
 // syncRequestSchema
@@ -73,7 +73,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.3 — File: `src/validators/workspace.validator.js`
+##### `[x]` 1.1.3 — File: `src/validators/workspace.validator.js`
 
 ```javascript
 // createWorkspaceSchema
@@ -135,7 +135,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.4 — File: `src/validators/library.validator.js`
+##### `[x]` 1.1.4 — File: `src/validators/library.validator.js`
 
 ```javascript
 // createCollectionSchema
@@ -165,7 +165,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.5 — File: `src/validators/follow.validator.js`
+##### `[x]` 1.1.5 — File: `src/validators/follow.validator.js`
 
 ```javascript
 // addSubjectSchema
@@ -196,7 +196,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.6 — File: `src/validators/collaboration.validator.js`
+##### `[x]` 1.1.6 — File: `src/validators/collaboration.validator.js`
 
 ```javascript
 // createInviteSchema
@@ -218,7 +218,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.7 — File: `src/validators/feedback.validator.js`
+##### `[x]` 1.1.7 — File: `src/validators/feedback.validator.js`
 
 ```javascript
 // createFeedbackSchema
@@ -235,7 +235,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.8 — File: `src/validators/admin.validator.js`
+##### `[x]` 1.1.8 — File: `src/validators/admin.validator.js`
 
 ```javascript
 // updateUserSchema
@@ -264,7 +264,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.9 — File: `src/validators/search.validator.js`
+##### `[x]` 1.1.9 — File: `src/validators/search.validator.js`
 
 ```javascript
 // createSavedSearchSchema
@@ -284,7 +284,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.10 — File: `src/validators/user.validator.js`
+##### `[x]` 1.1.10 — File: `src/validators/user.validator.js`
 
 ```javascript
 // updateProfileSchema
@@ -305,7 +305,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 ---
 
-##### `[ ]` 1.1.11 — File: `src/validators/ai.validator.js`
+##### `[x]` 1.1.11 — File: `src/validators/ai.validator.js`
 
 ```javascript
 // summarizeSchema
@@ -332,7 +332,7 @@ Lưu ý: Hiện `paper.controller.js` validate thủ công `if (!query)` — c�
 
 Sau khi tạo xong các file validators, cần sửa **11 route files** để gắn `validate()`:
 
-##### `[ ]` 1.2.1 — File: `src/routes/auth.routes.js`
+##### `[x]` 1.2.1 — File: `src/routes/auth.routes.js`
 
 ```diff
  const { authLimiter } = require('../middleware/rateLimiter.middleware');
@@ -345,7 +345,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.post('/login', authLimiter, validate(loginSchema), ctrl.login);
 ```
 
-##### `[ ]` 1.2.2 — File: `src/routes/paper.routes.js`
+##### `[x]` 1.2.2 — File: `src/routes/paper.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -355,7 +355,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.post('/sync-request', optionalAuth, validate(syncRequestSchema), ctrl.requestCorpusSync);
 ```
 
-##### `[ ]` 1.2.3 — File: `src/routes/workspace.routes.js`
+##### `[x]` 1.2.3 — File: `src/routes/workspace.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -388,7 +388,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.post('/:id/items/:itemId/comments', validate(addCommentSchema), ctrl.addComment);
 ```
 
-##### `[ ]` 1.2.4 — File: `src/routes/library.routes.js`
+##### `[x]` 1.2.4 — File: `src/routes/library.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -410,7 +410,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.put('/papers/:collectionId/:paperId', validate(updateSavedPaperSchema), ctrl.updatePaper);
 ```
 
-##### `[ ]` 1.2.5 — File: `src/routes/follow.routes.js`
+##### `[x]` 1.2.5 — File: `src/routes/follow.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -423,7 +423,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.put('/subjects/:id', validate(updateSubjectSchema), ctrl.updateSubject);
 ```
 
-##### `[ ]` 1.2.6 — File: `src/routes/collaboration.routes.js`
+##### `[x]` 1.2.6 — File: `src/routes/collaboration.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -436,7 +436,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.put('/invites/:id', validate(respondInviteSchema), ctrl.respondToInvite);
 ```
 
-##### `[ ]` 1.2.7 — File: `src/routes/feedback.routes.js`
+##### `[x]` 1.2.7 — File: `src/routes/feedback.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -449,7 +449,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.put('/:id', rbac('Admin'), validate(updateFeedbackSchema), ctrl.update);
 ```
 
-##### `[ ]` 1.2.8 — File: `src/routes/admin.routes.js`
+##### `[x]` 1.2.8 — File: `src/routes/admin.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -465,7 +465,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.put('/data-sources/:id', validate(updateDataSourceSchema), ctrl.updateDataSource);
 ```
 
-##### `[ ]` 1.2.9 — File: `src/routes/search.routes.js`
+##### `[x]` 1.2.9 — File: `src/routes/search.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -475,7 +475,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.post('/', validate(createSavedSearchSchema), ctrl.createSavedSearch);
 ```
 
-##### `[ ]` 1.2.10 — File: `src/routes/user.routes.js`
+##### `[x]` 1.2.10 — File: `src/routes/user.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -488,7 +488,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 +router.put('/me/dashboard-layout', validate(updateDashboardLayoutSchema), ctrl.updateDashboardLayout);
 ```
 
-##### `[ ]` 1.2.11 — File: `src/routes/ai.routes.js`
+##### `[x]` 1.2.11 — File: `src/routes/ai.routes.js`
 
 ```diff
 +const { validate } = require('../middleware/validate.middleware');
@@ -512,7 +512,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 
 ---
 
-##### `[ ]` 1.3.1 — File: `src/controllers/workspace.controller.js` — `createWorkspace()`
+##### `[x]` 1.3.1 — File: `src/controllers/workspace.controller.js` — `createWorkspace()`
 
 ```diff
  async function createWorkspace(req, res) {
@@ -534,7 +534,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
      });
 ```
 
-##### `[ ]` 1.3.2 — File: `src/controllers/workspace.controller.js` — `createItem()`
+##### `[x]` 1.3.2 — File: `src/controllers/workspace.controller.js` — `createItem()`
 
 ```diff
  async function createItem(req, res) {
@@ -547,7 +547,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
      });
 ```
 
-##### `[ ]` 1.3.3 — File: `src/controllers/workspace.controller.js` — `updateItem()`
+##### `[x]` 1.3.3 — File: `src/controllers/workspace.controller.js` — `updateItem()`
 
 ```diff
  async function updateItem(req, res) {
@@ -565,7 +565,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
      );
 ```
 
-##### `[ ]` 1.3.4 — File: `src/controllers/admin.controller.js` — `createJob()`
+##### `[x]` 1.3.4 — File: `src/controllers/admin.controller.js` — `createJob()`
 
 ```diff
  async function createJob(req, res) {
@@ -585,7 +585,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
      return ApiResponse.created(res, job);
 ```
 
-##### `[ ]` 1.3.5 — File: `src/controllers/collaboration.controller.js` — `createInvite()`
+##### `[x]` 1.3.5 — File: `src/controllers/collaboration.controller.js` — `createInvite()`
 
 ```diff
  async function createInvite(req, res) {
@@ -621,7 +621,7 @@ Sau khi tạo xong các file validators, cần sửa **11 route files** để g�
 
 ---
 
-##### `[ ]` 2.1.1 — File: `src/services/auth.service.js`
+##### `[x]` 2.1.1 — File: `src/services/auth.service.js`
 
 Thêm function `refreshTokens()`:
 
@@ -670,7 +670,7 @@ Thêm vào `module.exports`: `refreshTokens`
 
 ---
 
-##### `[ ]` 2.1.2 — File: `src/controllers/auth.controller.js`
+##### `[x]` 2.1.2 — File: `src/controllers/auth.controller.js`
 
 Thêm function:
 
@@ -689,7 +689,7 @@ Thêm `refresh` vào `module.exports`
 
 ---
 
-##### `[ ]` 2.1.3 — File: `src/routes/auth.routes.js`
+##### `[x]` 2.1.3 — File: `src/routes/auth.routes.js`
 
 Thêm route (public, có rate limit):
 
@@ -713,7 +713,7 @@ Thêm route (public, có rate limit):
 
 ---
 
-##### `[ ]` 2.2.1 — File: `src/services/auth.service.js`
+##### `[x]` 2.2.1 — File: `src/services/auth.service.js`
 
 Thêm function `changePassword()`:
 
@@ -744,7 +744,7 @@ Thêm vào `module.exports`: `changePassword`
 
 ---
 
-##### `[ ]` 2.2.2 — File: `src/controllers/auth.controller.js`
+##### `[x]` 2.2.2 — File: `src/controllers/auth.controller.js`
 
 Thêm function:
 
@@ -767,7 +767,7 @@ Thêm `changePassword` vào `module.exports`
 
 ---
 
-##### `[ ]` 2.2.3 — File: `src/routes/auth.routes.js`
+##### `[x]` 2.2.3 — File: `src/routes/auth.routes.js`
 
 Thêm protected route:
 
@@ -786,7 +786,7 @@ Thêm protected route:
 
 ---
 
-##### `[ ]` 2.3.1 — File: `src/routes/notification.routes.js`
+##### `[x]` 2.3.1 — File: `src/routes/notification.routes.js`
 
 ```diff
 -router.put('/:id/read', ctrl.markRead);
@@ -795,7 +795,7 @@ Thêm protected route:
 +router.put('/:id/read', ctrl.markRead);         // Parameterized sau
 ```
 
-##### `[ ]` 2.3.2 — File: `src/routes/follow.routes.js`
+##### `[x]` 2.3.2 — File: `src/routes/follow.routes.js`
 
 ```diff
 -router.put('/alerts/:id/read', ctrl.markAlertRead);
@@ -819,7 +819,7 @@ Thêm protected route:
 
 ---
 
-##### `[ ]` 3.1.1 — File mới: `src/utils/asyncHandler.js`
+##### `[x]` 3.1.1 — File mới: `src/utils/asyncHandler.js`
 
 ```javascript
 /**
@@ -848,7 +848,7 @@ module.exports = { asyncHandler };
 
 ---
 
-##### `[ ]` 3.2.1 — File mới: `src/services/workspace.service.js`
+##### `[x]` 3.2.1 — File mới: `src/services/workspace.service.js`
 
 Di chuyển logic từ `workspace.controller.js`:
 
@@ -871,7 +871,7 @@ Di chuyển logic từ `workspace.controller.js`:
 
 ---
 
-##### `[ ]` 3.2.2 — File mới: `src/services/notification.service.js`
+##### `[x]` 3.2.2 — File mới: `src/services/notification.service.js`
 
 Di chuyển logic từ `notification.controller.js`:
 
@@ -885,7 +885,7 @@ Di chuyển logic từ `notification.controller.js`:
 
 ---
 
-##### `[ ]` 3.2.3 — File mới: `src/services/collaboration.service.js`
+##### `[x]` 3.2.3 — File mới: `src/services/collaboration.service.js`
 
 Di chuyển logic từ `collaboration.controller.js`:
 
@@ -898,7 +898,7 @@ Di chuyển logic từ `collaboration.controller.js`:
 
 ---
 
-##### `[ ]` 3.2.4 — File mới: `src/services/feedback.service.js`
+##### `[x]` 3.2.4 — File mới: `src/services/feedback.service.js`
 
 Di chuyển logic từ `feedback.controller.js`:
 
@@ -910,7 +910,7 @@ Di chuyển logic từ `feedback.controller.js`:
 
 ---
 
-##### `[ ]` 3.2.5 — File mới: `src/services/search.service.js`
+##### `[x]` 3.2.5 — File mới: `src/services/search.service.js`
 
 Di chuyển logic từ `search.controller.js`:
 
@@ -922,15 +922,15 @@ Di chuyển logic từ `search.controller.js`:
 
 ---
 
-##### `[ ]` 3.2.6 — Sửa 5 controller tương ứng
+##### `[x]` 3.2.6 — Sửa 5 controller tương ứng
 
 Mỗi controller chỉ giữ lại logic xử lý req/res, gọi service function:
 
-- `[ ]` `workspace.controller.js` → import `workspace.service.js`
-- `[ ]` `notification.controller.js` → import `notification.service.js`
-- `[ ]` `collaboration.controller.js` → import `collaboration.service.js`
-- `[ ]` `feedback.controller.js` → import `feedback.service.js`
-- `[ ]` `search.controller.js` → import `search.service.js`
+- `[x]` `workspace.controller.js` → import `workspace.service.js`
+- `[x]` `notification.controller.js` → import `notification.service.js`
+- `[x]` `collaboration.controller.js` → import `collaboration.service.js`
+- `[x]` `feedback.controller.js` → import `feedback.service.js`
+- `[x]` `search.controller.js` → import `search.service.js`
 
 ---
 
@@ -948,7 +948,7 @@ Mỗi controller chỉ giữ lại logic xử lý req/res, gọi service functio
 
 ---
 
-##### `[ ]` 4.1.1 — File mới: `src/utils/systemLogger.js`
+##### `[x]` 4.1.1 — File mới: `src/utils/systemLogger.js`
 
 ```javascript
 const SystemLog = require('../models/SystemLog');
@@ -987,7 +987,7 @@ module.exports = { logAction };
 
 ---
 
-##### `[ ]` 4.2.1 — File: `src/services/auth.service.js` — Log Login
+##### `[x]` 4.2.1 — File: `src/services/auth.service.js` — Log Login
 
 ```diff
  async function login({ email, password }) {
@@ -1021,7 +1021,7 @@ const { logAction } = require('../utils/systemLogger');
 
 ---
 
-##### `[ ]` 4.2.2 — File: `src/services/paper.service.js` — Log Search
+##### `[x]` 4.2.2 — File: `src/services/paper.service.js` — Log Search
 
 Trong function `searchPapers()`, thêm log sau khi query:
 
@@ -1038,7 +1038,7 @@ logAction('Search', userId || null, null, {
 
 ---
 
-##### `[ ]` 4.2.3 — File: `src/controllers/paper.controller.js` — Log Batch Job
+##### `[x]` 4.2.3 — File: `src/controllers/paper.controller.js` — Log Batch Job
 
 Trong `requestCorpusSync()`, sau khi sync thành công:
 
@@ -1057,7 +1057,7 @@ logAction('BatchJob', req.user?.id, sourceName, {
 
 ---
 
-##### `[ ]` 4.2.4 — File: `src/app.js` — Log Unhandled Errors
+##### `[x]` 4.2.4 — File: `src/app.js` — Log Unhandled Errors
 
 Trong global error handler:
 
@@ -1083,7 +1083,7 @@ Trong global error handler:
 
 ---
 
-##### `[ ]` 4.3.1 — File: `src/services/notification.service.js`
+##### `[x]` 4.3.1 — File: `src/services/notification.service.js`
 
 Thêm các helper functions (sau khi tách service ở Phase 3):
 
@@ -1180,7 +1180,7 @@ async function notifyJobComplete(userId, job) {
 
 ---
 
-##### `[ ]` 4.3.2 — Gắn auto-notification vào collaboration flow
+##### `[x]` 4.3.2 — Gắn auto-notification vào collaboration flow
 
 File: `src/services/collaboration.service.js` (hoặc controller nếu chưa tách)
 
@@ -1195,7 +1195,7 @@ if (invite.invitee_user_id) {
 
 ---
 
-##### `[ ]` 4.3.3 — Gắn auto-notification vào workspace comment
+##### `[x]` 4.3.3 — Gắn auto-notification vào workspace comment
 
 File: `src/services/workspace.service.js` (hoặc controller)
 
@@ -1208,7 +1208,7 @@ const { notifyCommentAdded } = require('./notification.service');
 
 ---
 
-##### `[ ]` 4.3.4 — Gắn auto-notification khi sync paper xong
+##### `[x]` 4.3.4 — Gắn auto-notification khi sync paper xong
 
 File: `src/controllers/paper.controller.js`
 
@@ -1229,7 +1229,7 @@ notifyJobComplete(req.user?.id, job);
 
 ### 5.1 Frontend Thiếu Refresh Token Flow
 
-##### `[ ]` 5.1.1 — File: `frontend/src/lib/api.ts`
+##### `[x]` 5.1.1 — File: `frontend/src/lib/api.ts`
 
 Trong function `request()`, thêm logic auto-refresh khi nhận 401:
 
@@ -1263,7 +1263,7 @@ if (res.status === 401 && !init._isRetry) {
 
 ### 5.2 Frontend Không Gọi Logout API
 
-##### `[ ]` 5.2.1 — File: `frontend/src/lib/api.ts`
+##### `[x]` 5.2.1 — File: `frontend/src/lib/api.ts`
 
 Thêm vào `authApi`:
 
@@ -1286,7 +1286,7 @@ export const authApi = {
 
 ### 5.3 Frontend RecordView Dùng GET Gây Side-Effect
 
-##### `[ ]` 5.3.1 — File: `frontend/src/lib/api.ts`
+##### `[x]` 5.3.1 — File: `frontend/src/lib/api.ts`
 
 Hiện tại `recordView` gọi `GET /papers/:id` — ổn vì backend đã handle ghi view trong `getById`. Không cần sửa nhưng nên document.
 
@@ -1294,7 +1294,7 @@ Hiện tại `recordView` gọi `GET /papers/:id` — ổn vì backend đã hand
 
 ### 5.4 Frontend Chưa Gọi Saved Searches API
 
-##### `[ ]` 5.4.1 — File: `frontend/src/lib/api.ts`
+##### `[x]` 5.4.1 — File: `frontend/src/lib/api.ts`
 
 Thêm `searchApi` object:
 
@@ -1319,7 +1319,7 @@ export const searchApi = {
 
 ### 5.5 Frontend Chưa Gọi AI API
 
-##### `[ ]` 5.5.1 — File: `frontend/src/lib/api.ts`
+##### `[x]` 5.5.1 — File: `frontend/src/lib/api.ts`
 
 Thêm `aiApi` object:
 
@@ -1362,7 +1362,7 @@ export const aiApi = {
 
 **Liên quan BR:** BR-033 (Tóm tắt AI), BR-035 (Giải thích thuật ngữ), BR-036 (Đề xuất hướng NC)
 
-##### `[ ]` 6.1.1 — File: `src/services/ai.service.js` (mới)
+##### `[x]` 6.1.1 — File: `src/services/ai.service.js` (mới)
 
 - Tạo service gọi Gemini API dùng config `llm.geminiApiKey` + `llm.geminiModel` từ `config/env.js`
 - Implement `summarize(title, abstract)` — gọi Gemini API
@@ -1370,7 +1370,7 @@ export const aiApi = {
 - Implement `suggestDirections(field, gaps)` — gọi Gemini API với context gap analysis
 - Implement `getInsights()` — gọi Gemini API với data tổng hợp
 
-##### `[ ]` 6.1.2 — Sửa `src/controllers/ai.controller.js`
+##### `[x]` 6.1.2 — Sửa `src/controllers/ai.controller.js`
 
 - Import `ai.service.js` thay vì trả về hardcoded strings
 
@@ -1382,7 +1382,7 @@ export const aiApi = {
 
 **Liên quan BR:** BR-017 (Đề xuất liên quan)
 
-##### `[ ]` 6.2.1 — File: `src/services/collaboration.service.js`
+##### `[x]` 6.2.1 — File: `src/services/collaboration.service.js`
 
 Implement tính match score thực dựa trên:
 - Overlap giữa `followed_subjects` của current user và researcher
@@ -1405,7 +1405,7 @@ function calculateMatchScore(mySubjects, theirSubjects) {
 
 **Vấn đề:** Hiện chỉ derive từ `WorkspaceItem.updated_at` — không biết ai làm gì.
 
-##### `[ ]` 6.3.1 — Thêm `WorkspaceActivity` model hoặc log vào `SystemLog`
+##### `[x]` 6.3.1 — Thêm `WorkspaceActivity` model hoặc log vào `SystemLog`
 
 Ghi lại khi:
 - Tạo/sửa/xóa item
@@ -1417,7 +1417,7 @@ Ghi lại khi:
 
 ### 6.4 Xóa Logic Validate Thủ Công Sau Khi Có Joi
 
-##### `[ ]` 6.4.1 — File: `src/controllers/paper.controller.js`
+##### `[x]` 6.4.1 — File: `src/controllers/paper.controller.js`
 
 Xóa validation thủ công trong `requestCorpusSync()` vì Joi đã handle:
 
@@ -1435,9 +1435,9 @@ Xóa validation thủ công trong `requestCorpusSync()` vì Joi đã handle:
 
 | Loại | Số file | Phase |
 |------|---------|-------|
-| **File mới tạo** | 17 | P1: 11 validators, P3: 1 asyncHandler + 5 services |
-| **File backend sửa** | 20 | P1: 11 routes + 3 controllers, P2: 3 files, P4: 4 files |
-| **File frontend sửa** | 1 | P5: api.ts |
+| **File mới tạo** | 20+ | P1: validators, P3/P4/P6 services, WorkspaceActivity, tests |
+| **File backend sửa** | 30+ | Routes/controllers/services/models/config/app/test scripts |
+| **File frontend sửa** | 8+ | api.ts + route pages + App lazy loading |
 | **File xóa** | 0 | — |
 
 | Phase | Effort | Ưu tiên |
@@ -1448,7 +1448,7 @@ Xóa validation thủ công trong `requestCorpusSync()` vì Joi đã handle:
 | P4 — Observability | ~2-3h | 🟡 Trung bình |
 | P5 — Frontend fixes | ~1h | 🟢 Nhẹ |
 | P6 — Feature completion | ~3-4h | 🟢 Khi có thời gian |
-| **TỔNG** | **~11-15h** | |
+| **TỔNG** | **Đã triển khai** | |
 
 ---
 
@@ -1456,11 +1456,11 @@ Xóa validation thủ công trong `requestCorpusSync()` vì Joi đã handle:
 
 | BR ID | Mô tả | Backend Status | Cần Fix? |
 |-------|--------|----------------|----------|
-| BR-001 | Liên kết nguồn học thuật | ✅ OpenAlex, arXiv, Crossref đã implement | Không |
-| BR-002 | Chuẩn hóa dữ liệu | ✅ Schema chung trong Paper model | Không |
-| BR-003 | Deduplication | ✅ DOI unique index + title_normalized | Không |
-| BR-004 | Lập lịch cập nhật tự động | ⚠️ Model CrawlerJob + DataSource có `sync_schedule` nhưng chưa có scheduler thực | P6 |
-| BR-005 | Data cleaning | ⚠️ Paper status pipeline (Raw→Cleaned→Rejected) nhưng chưa có auto-clean job | P6 |
+| BR-001 | Liên kết nguồn học thuật | ✅ OpenAlex, Semantic Scholar, Crossref, arXiv, IEEE, ACM Digital Library, Exa có importer/sync path | Không |
+| BR-002 | Chuẩn hóa dữ liệu | ✅ `paperCleaning.service.js` dùng chung cho importers | Không |
+| BR-003 | Deduplication | ✅ DOI unique index + title_normalized + upsert/merge source | Không |
+| BR-004 | Lập lịch cập nhật tự động | ✅ `scheduler.service.js` xử lý queued crawler jobs + report refresh định kỳ | Không |
+| BR-005 | Data cleaning | ✅ Normalize/validate/dedupe/mark Cleaned-Rejected trong import pipeline | Không |
 | BR-006 | Chính sách lưu giữ | ✅ Paper status `Archived` excluded from search | Không |
 | BR-007 | Giám sát kết nối nguồn | ✅ `sourceHealth.service.js` + admin endpoint | Không |
 | BR-009 | Tìm kiếm cơ bản | ✅ Text search index hoạt động | Không |
@@ -1476,13 +1476,13 @@ Xóa validation thủ công trong `requestCorpusSync()` vì Joi đã handle:
 | BR-027 | Lưu tài liệu | ✅ Library service | Không |
 | BR-028 | Quản lý bộ sưu tập | ✅ UserCollection model + CRUD | Không |
 | BR-029 | Theo dõi chủ đề | ✅ followed_subjects trong User + follow service | Không |
-| BR-030 | Thông báo cập nhật | ⚠️ Model + TTL 30 ngày OK, nhưng **chưa auto-create** | **P4** |
-| BR-033 | AI tóm tắt | ⚠️ Endpoint tồn tại nhưng **placeholder** | **P6** |
-| BR-035 | AI giải thích thuật ngữ | ⚠️ Placeholder | **P6** |
-| BR-036 | AI đề xuất hướng NC | ⚠️ Placeholder | **P6** |
-| BR-038 | Quản lý tài khoản | ⚠️ Thiếu change password, refresh token | **P2** |
+| BR-030 | Thông báo cập nhật | ✅ Notification service + auto invite/comment/job notifications | Không |
+| BR-033 | AI tóm tắt | ✅ Gemini service + fallback an toàn + FE actions | Không |
+| BR-035 | AI giải thích thuật ngữ | ✅ Gemini service + fallback an toàn + FE actions | Không |
+| BR-036 | AI đề xuất hướng NC | ✅ Gemini service + fallback an toàn + FE actions | Không |
+| BR-038 | Quản lý tài khoản | ✅ Refresh token + change password + FE auto refresh | Không |
 | BR-039 | RBAC | ✅ Middleware + Admin routes | Không |
-| BR-041 | Giám sát nhật ký | ⚠️ Model tồn tại nhưng **không ghi log** | **P4** |
+| BR-041 | Giám sát nhật ký | ✅ systemLogger ghi login/search/batch/system errors | Không |
 | BR-042 | Phản hồi người dùng | ✅ Feedback CRUD | Không |
-| BR-043 | Unique Views | ✅ Redis-based dedup 30 phút | Không |
+| BR-043 | Unique Views | ✅ Redis-based dedup khi Redis bật, fallback an toàn khi tắt local | Không |
 | BR-044 | Top bài báo thịnh hành | ✅ `getTrendingPapers()` | Không |

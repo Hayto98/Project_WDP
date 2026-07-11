@@ -5,10 +5,23 @@ const DataSource = require('../models/DataSource');
 const { importOpenAlexByQuery } = require('../services/openalex.service');
 const { importArxivByQuery } = require('../services/arxiv.service');
 const { importCrossrefByQuery } = require('../services/crossref.service');
+const { importExaByQuery } = require('../services/exa.service');
+const { importSemanticScholarByQuery } = require('../services/semanticScholar.service');
+const { importAcmByQuery } = require('../services/acm.service');
 const { logAction } = require('../utils/systemLogger');
 const { notifyJobComplete } = require('../services/notification.service');
 
-const IMMEDIATE_SYNC_SOURCES = ['OpenAlex', 'arXiv', 'Crossref'];
+const IMMEDIATE_SYNC_SOURCES = ['OpenAlex', 'Semantic Scholar', 'arXiv', 'Crossref', 'ACM Digital Library', 'Exa'];
+
+const SOURCE_ENDPOINTS = {
+  OpenAlex: 'https://api.openalex.org',
+  'Semantic Scholar': 'https://api.semanticscholar.org',
+  Crossref: 'https://api.crossref.org',
+  arXiv: 'https://export.arxiv.org/api',
+  'IEEE Xplore': 'https://ieeexploreapi.ieee.org',
+  'ACM Digital Library': 'https://dl.acm.org',
+  Exa: 'https://api.exa.ai',
+};
 
 async function search(req, res) {
   try {
@@ -45,20 +58,26 @@ async function getTrending(req, res) {
 
 async function requestCorpusSync(req, res) {
   try {
-    const query = String(req.body.query || '').trim();
-    const sourceName = req.body.sourceName || 'OpenAlex';
-    const maxRecords = Math.max(1, Math.min(parseInt(req.body.maxRecords, 10) || 25, 50));
+    const { query, sourceName = 'OpenAlex' } = req.body;
+    const maxRecords = req.body.maxRecords || 25;
     const syncFilters = {
       yearFrom: req.body.yearFrom,
       yearTo: req.body.yearTo,
       types: req.body.types,
     };
 
-    if (!query) {
-      return ApiResponse.validationError(res, 'Query is required');
-    }
-
-    const source = await DataSource.findOne({ name: sourceName }).lean();
+    const source = await DataSource.findOneAndUpdate(
+      { name: sourceName },
+      {
+        $setOnInsert: {
+          name: sourceName,
+          api_endpoint: SOURCE_ENDPOINTS[sourceName] || 'https://api.openalex.org',
+          enabled: true,
+          last_sync_status: 'Partial',
+        },
+      },
+      { returnDocument: 'after', upsert: true },
+    ).lean();
     const existing = await CrawlerJob.findOne({
       source_name: sourceName,
       query,
@@ -107,6 +126,12 @@ async function requestCorpusSync(req, res) {
           result = await importArxivByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         } else if (sourceName === 'Crossref') {
           result = await importCrossrefByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
+        } else if (sourceName === 'Semantic Scholar') {
+          result = await importSemanticScholarByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
+        } else if (sourceName === 'ACM Digital Library') {
+          result = await importAcmByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
+        } else if (sourceName === 'Exa') {
+          result = await importExaByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         } else {
           result = await importOpenAlexByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         }

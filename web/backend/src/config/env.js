@@ -8,6 +8,7 @@ module.exports = {
   mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/wdp_research',
 
   // Redis
+  redisEnabled: process.env.REDIS_ENABLED !== 'false',
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 
   // JWT
@@ -20,6 +21,17 @@ module.exports = {
 
   // CORS
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+
+  // Email / SMTP
+  email: {
+    enabled: process.env.EMAIL_ENABLED === 'true',
+    smtpHost: process.env.SMTP_HOST || '',
+    smtpPort: parseInt(process.env.SMTP_PORT, 10) || 587,
+    smtpSecure: process.env.SMTP_SECURE === 'true',
+    smtpUser: process.env.SMTP_USER || '',
+    smtpPass: process.env.SMTP_PASS || '',
+    from: process.env.EMAIL_FROM || 'ResearchTrends <no-reply@researchtrends.local>',
+  },
 
   // AI / LLM
   llm: {

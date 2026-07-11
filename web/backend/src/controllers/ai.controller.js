@@ -37,4 +37,13 @@ async function getInsights(req, res) {
   }
 }
 
-module.exports = { summarize, explainTerm, suggestDirections, getInsights };
+async function relatedPapers(req, res) {
+  try {
+    const result = await aiService.getRelatedPapers(req.body);
+    return ApiResponse.success(res, result);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, 500);
+  }
+}
+
+module.exports = { summarize, explainTerm, suggestDirections, getInsights, relatedPapers };

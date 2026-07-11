@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log*
+coverage
+playwright-report
+test-results
+.env
+.env.local
+.env.*.local
+dist
+dist-ssr
+tmp
+temp

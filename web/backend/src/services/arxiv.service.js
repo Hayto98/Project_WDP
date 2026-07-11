@@ -1,9 +1,5 @@
-const Paper = require('../models/Paper');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
-
-function normalizeTitle(title) {
-  return String(title || '').toLowerCase().trim().replace(/\s+/g, ' ');
-}
+const { normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
 
 function clampMaxRecords(value) {
   const parsed = parseInt(value, 10) || 25;
@@ -123,27 +119,9 @@ async function importArxivByQuery(query, maxRecords = 25, options = {}) {
       paper.abstract = await findOriginalAbstractWithLlm(paper);
     }
 
-    const existing = await Paper.findOne({
-      title_normalized: paper.title_normalized,
-      publication_year: paper.publication_year,
-    });
-
-    if (existing) {
-      const hasArxivSource = existing.sources?.some((source) => source.source_name === 'arXiv');
-      if (!hasArxivSource) {
-        existing.sources.push(paper.sources[0]);
-        existing.keywords = Array.from(new Set([...(existing.keywords || []), ...paper.keywords]));
-        existing.research_fields = Array.from(new Set([...(existing.research_fields || []), ...paper.research_fields]));
-        await existing.save();
-        imported += 1;
-      } else {
-        skipped += 1;
-      }
-      continue;
-    }
-
-    await Paper.create(paper);
-    imported += 1;
+    const outcome = await upsertCleanPaper(paper);
+    if (outcome.imported) imported += 1;
+    if (outcome.skipped) skipped += 1;
   }
 
   return {
@@ -156,4 +134,5 @@ async function importArxivByQuery(query, maxRecords = 25, options = {}) {
 module.exports = {
   fetchArxivPapers,
   importArxivByQuery,
+  mapEntryToPaper,
 };

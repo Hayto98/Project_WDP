@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-const sourceName = Joi.string().valid('OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'Exa');
+const sourceName = Joi.string().valid('OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'ACM Digital Library', 'Exa');
 
 const syncRequestSchema = Joi.object({
   query: Joi.string().trim().min(1).max(500).required(),
