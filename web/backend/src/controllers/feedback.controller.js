@@ -1,49 +1,21 @@
-const Feedback = require('../models/Feedback');
 const ApiResponse = require('../utils/apiResponse');
-const { parsePagination } = require('../utils/pagination');
+const asyncHandler = require('../utils/asyncHandler');
+const feedbackService = require('../services/feedback.service');
 
-async function create(req, res) {
-  try {
-    const feedback = await Feedback.create({
-      user_id: req.user.id,
-      content: req.body.content,
-    });
-    return ApiResponse.created(res, feedback);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const create = asyncHandler(async (req, res) => {
+  const feedback = await feedbackService.createFeedback(req.user.id, req.body);
+  return ApiResponse.created(res, feedback);
+});
 
-async function list(req, res) {
-  try {
-    const { page, limit, skip } = parsePagination(req.query);
-    const isAdmin = req.user.roles.includes('Admin');
-    const filter = isAdmin ? {} : { user_id: req.user.id };
-    if (req.query.status) filter.status = req.query.status;
+const list = asyncHandler(async (req, res) => {
+  const { feedbacks, page, limit, total } = await feedbackService.listFeedback(req.user, req.query);
+  return ApiResponse.paginated(res, feedbacks, page, limit, total);
+});
 
-    const [feedbacks, total] = await Promise.all([
-      Feedback.find(filter).sort({ created_at: -1 }).skip(skip).limit(limit).lean(),
-      Feedback.countDocuments(filter),
-    ]);
-
-    return ApiResponse.paginated(res, feedbacks, page, limit, total);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
-
-async function update(req, res) {
-  try {
-    const feedback = await Feedback.findByIdAndUpdate(
-      req.params.id,
-      { status: req.body.status, admin_note: req.body.admin_note },
-      { new: true },
-    );
-    if (!feedback) return ApiResponse.notFound(res);
-    return ApiResponse.success(res, feedback);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const update = asyncHandler(async (req, res) => {
+  const feedback = await feedbackService.updateFeedback(req.params.id, req.body);
+  if (!feedback) return ApiResponse.notFound(res);
+  return ApiResponse.success(res, feedback);
+});
 
 module.exports = { create, list, update };

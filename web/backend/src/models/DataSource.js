@@ -8,7 +8,7 @@ const dataSourceSchema = new Schema(
       required: true,
       unique: true,
       trim: true,
-      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore'],
+      enum: ['OpenAlex', 'Semantic Scholar', 'Crossref', 'arXiv', 'IEEE Xplore', 'ACM Digital Library', 'Exa'],
     },
     api_endpoint: { type: String, required: true, trim: true },
     enabled: { type: Boolean, default: true },
@@ -31,7 +31,6 @@ const dataSourceSchema = new Schema(
 );
 
 /* ── Indexes ── */
-dataSourceSchema.index({ name: 1 }, { unique: true });
 dataSourceSchema.index({ enabled: 1, last_sync_status: 1 });
 
 module.exports = mongoose.model('DataSource', dataSourceSchema);

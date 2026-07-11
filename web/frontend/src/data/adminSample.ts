@@ -161,6 +161,26 @@ export const DATA_SOURCES: DataSource[] = [
     errorRate: "—",
     enabled: false,
   },
+  {
+    id: "src-acm",
+    name: "ACM Digital Library",
+    status: "active",
+    coverage: "ACM/Crossref",
+    lastSync: "Chưa đồng bộ",
+    latency: "—",
+    errorRate: "—",
+    enabled: true,
+  },
+  {
+    id: "src-exa",
+    name: "Exa",
+    status: "active",
+    coverage: "Web",
+    lastSync: "Chưa đồng bộ",
+    latency: "—",
+    errorRate: "—",
+    enabled: true,
+  },
 ];
 
 export const ADMIN_USERS: AdminUser[] = [

@@ -4,8 +4,9 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const connectDB = require('./config/database');
-const { port, corsOrigin, nodeEnv } = require('./config/env');
+const { port, corsOrigin, nodeEnv, redisEnabled } = require('./config/env');
 const { apiLimiter } = require('./middleware/rateLimiter.middleware');
+const { logAction } = require('./utils/systemLogger');
 
 // Route imports
 const authRoutes = require('./routes/auth.routes');
@@ -22,6 +23,7 @@ const workspaceRoutes = require('./routes/workspace.routes');
 const collaborationRoutes = require('./routes/collaboration.routes');
 const adminRoutes = require('./routes/admin.routes');
 const feedbackRoutes = require('./routes/feedback.routes');
+const { startScheduler } = require('./services/scheduler.service');
 
 const app = express();
 
@@ -69,6 +71,11 @@ app.use((_req, res) => {
 /* ── Global Error Handler ── */
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err);
+  logAction('SystemError', null, null, {
+    message: err.message,
+    stack: nodeEnv === 'production' ? undefined : err.stack,
+    statusCode: err.statusCode || 500,
+  });
   res.status(err.statusCode || 500).json({
     success: false,
     error: {
@@ -82,21 +89,32 @@ app.use((err, _req, res, _next) => {
 async function start() {
   await connectDB();
 
-  // Try connecting Redis (non-blocking)
-  try {
-    const redis = require('./config/redis');
-    if (redis) await redis.connect();
-  } catch {
-    console.warn('⚠️  Redis not available, running without cache');
+  if (redisEnabled) {
+    try {
+      const redis = require('./config/redis');
+      if (redis) await redis.connect();
+    } catch {
+      console.warn('⚠️  Redis not available, running without cache');
+    }
   }
 
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`🚀 WDP Backend running on port ${port} [${nodeEnv}]`);
     console.log(`   Health: http://localhost:${port}/api/health`);
     console.log(`   API:    http://localhost:${port}/api/v1`);
+    if (nodeEnv !== 'test') {
+      const scheduler = startScheduler();
+      if (scheduler.started) {
+        console.log(`   Scheduler: crawler ${Math.round(scheduler.queueMs / 60000)}m, reports ${Math.round(scheduler.reportMs / 60000)}m`);
+      }
+    }
   });
+
+  return server;
 }
 
-start();
+if (require.main === module) {
+  start();
+}
 
-module.exports = app;
+module.exports = { app, start };

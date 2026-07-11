@@ -39,4 +39,21 @@ const authLimiter = rateLimit({
   },
 });
 
-module.exports = { apiLimiter, authLimiter };
+/**
+ * AI endpoints can call paid/slow providers, so keep a separate budget.
+ */
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isDev ? 120 : 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Too many AI requests, please try again later.',
+    },
+  },
+});
+
+module.exports = { apiLimiter, authLimiter, aiLimiter };

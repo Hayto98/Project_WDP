@@ -178,6 +178,8 @@ async function seed() {
     { name: 'Crossref', api_endpoint: 'https://api.crossref.org', enabled: true, coverage: '69%', latency: '4.8s', error_rate: '3.1%', last_sync_status: 'Partial' },
     { name: 'arXiv', api_endpoint: 'https://export.arxiv.org/api', enabled: true, coverage: '60%', latency: '2.1s', error_rate: '0.5%', last_sync_status: 'Success' },
     { name: 'IEEE Xplore', api_endpoint: 'https://ieeexploreapi.ieee.org', enabled: false, coverage: '54%', latency: '—', error_rate: '—', last_sync_status: 'Failed' },
+    { name: 'ACM Digital Library', api_endpoint: 'https://dl.acm.org', enabled: true, coverage: 'ACM/Crossref', latency: '—', error_rate: '—', last_sync_status: 'Partial' },
+    { name: 'Exa', api_endpoint: 'https://api.exa.ai', enabled: true, coverage: 'Web', latency: '—', error_rate: '—', last_sync_status: 'Partial' },
   ]);
 
   console.log(`✅ Data Sources: ${dataSources.length}`);

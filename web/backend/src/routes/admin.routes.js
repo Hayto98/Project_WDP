@@ -23,6 +23,9 @@ router.get('/jobs', ctrl.getJobs);
 router.post('/jobs', validate(createJobSchema), ctrl.createJob);
 router.post('/jobs/:id/run', ctrl.runJob);
 
+// Analysis Reports
+router.post('/reports/refresh', ctrl.refreshReports);
+
 // Audit Logs
 router.get('/audit-logs', ctrl.getAuditLogs);
 

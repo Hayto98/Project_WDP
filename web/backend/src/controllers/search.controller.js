@@ -1,37 +1,20 @@
-const User = require('../models/User');
 const ApiResponse = require('../utils/apiResponse');
+const asyncHandler = require('../utils/asyncHandler');
+const searchService = require('../services/search.service');
 
-async function getSavedSearches(req, res) {
-  try {
-    const user = await User.findById(req.user.id).select('saved_searches').lean();
-    return ApiResponse.success(res, user?.saved_searches || []);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const getSavedSearches = asyncHandler(async (req, res) => {
+  const searches = await searchService.getSavedSearches(req.user.id);
+  return ApiResponse.success(res, searches);
+});
 
-async function createSavedSearch(req, res) {
-  try {
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $push: { saved_searches: req.body } },
-      { new: true },
-    ).select('saved_searches');
-    return ApiResponse.created(res, user.saved_searches[user.saved_searches.length - 1]);
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const createSavedSearch = asyncHandler(async (req, res) => {
+  const search = await searchService.createSavedSearch(req.user.id, req.body);
+  return ApiResponse.created(res, search);
+});
 
-async function deleteSavedSearch(req, res) {
-  try {
-    await User.findByIdAndUpdate(req.user.id, {
-      $pull: { saved_searches: { search_id: req.params.id } },
-    });
-    return ApiResponse.success(res, { message: 'Saved search deleted' });
-  } catch (err) {
-    return ApiResponse.error(res, err.message, 500);
-  }
-}
+const deleteSavedSearch = asyncHandler(async (req, res) => {
+  const result = await searchService.deleteSavedSearch(req.user.id, req.params.id);
+  return ApiResponse.success(res, result);
+});
 
 module.exports = { getSavedSearches, createSavedSearch, deleteSavedSearch };

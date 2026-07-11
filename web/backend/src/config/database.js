@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { mongodbUri } = require('./env');
+const { mongodbUri, nodeEnv } = require('./env');
 
 const connectDB = async () => {
   try {
@@ -12,7 +12,9 @@ const connectDB = async () => {
 };
 
 mongoose.connection.on('disconnected', () => {
-  console.warn('⚠️  MongoDB disconnected');
+  if (nodeEnv !== 'test') {
+    console.warn('⚠️  MongoDB disconnected');
+  }
 });
 
 module.exports = connectDB;

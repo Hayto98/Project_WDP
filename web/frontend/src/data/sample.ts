@@ -111,19 +111,19 @@ const TRENDING = [
 ];
 
 const GAP_FIELDS = [
-  "Large Language Models",
-  "Computer Vision",
-  "Federated Learning",
-  "Graph Neural Networks",
-  "Quantum ML",
-  "Edge & TinyML",
+  { key: "llm", label: "Large Language Models", token: "--c1" },
+  { key: "cv", label: "Computer Vision", token: "--c2" },
+  { key: "fl", label: "Federated Learning", token: "--c3" },
+  { key: "gnn", label: "Graph Neural Networks", token: "--c4" },
+  { key: "quantum", label: "Quantum ML", token: "--c5" },
+  { key: "edge", label: "Edge & TinyML", token: "--c6" },
 ];
 const GAP_ASPECTS = [
-  "Lý thuyết",
-  "Hiệu năng",
-  "An toàn & Riêng tư",
-  "Y sinh",
-  "Bền vững",
+  { key: "theory", label: "Lý thuyết" },
+  { key: "performance", label: "Hiệu năng" },
+  { key: "security", label: "An toàn & Riêng tư" },
+  { key: "biomed", label: "Y sinh" },
+  { key: "sustainability", label: "Bền vững" },
 ];
 
 // density normalized 0..1; gaps = high potential + low density
@@ -145,8 +145,8 @@ const GAP_MATRIX: { d: number; p: number; gap?: boolean }[][] = [
 export function makeDashboardData(range: TimeRange): DashboardData {
   const gaps = GAP_FIELDS.flatMap((field, fi) =>
     GAP_ASPECTS.map((aspect, ai) => ({
-      field,
-      aspect,
+      field: field.label,
+      aspect: aspect.label,
       density: GAP_MATRIX[fi][ai].d,
       papers: GAP_MATRIX[fi][ai].p,
       gap: Boolean(GAP_MATRIX[fi][ai].gap),
