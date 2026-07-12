@@ -1486,3 +1486,20 @@ Xóa validation thủ công trong `requestCorpusSync()` vì Joi đã handle:
 | BR-042 | Phản hồi người dùng | ✅ Feedback CRUD | Không |
 | BR-043 | Unique Views | ✅ Redis-based dedup khi Redis bật, fallback an toàn khi tắt local | Không |
 | BR-044 | Top bài báo thịnh hành | ✅ `getTrendingPapers()` | Không |
+
+---
+
+## 🚀 CÁC BẢN VÁ PHÁT SINH — NÂNG CẤP WORKSPACE & BẢO MẬT
+*(Đã hoàn thành trong đợt refactor Workspace)*
+
+### 1. Nâng cấp Validator & Schema (Backend)
+- `[x]` **Đa người phụ trách (Multi-assignee)**: Đã đổi trường `assignee_id` thành `assignee_ids` để hỗ trợ 1 task có thể được giao cho nhiều người.
+- `[x]` **Việt hóa Joi Validator**: Đã áp dụng `messages()` tiếng Việt cho toàn bộ schema (title, status, kind, priority, due, note) trong `workspace.validator.js`.
+
+### 2. Nâng cấp UI/UX (Frontend)
+- `[x]` **Global Confirm Modal**: Khai tử hoàn toàn `window.confirm`. Đã xây dựng `ConfirmModal` xịn xò, tích hợp vào toàn bộ các trường hợp rủi ro: Xóa workspace, Rời workspace, Thu hồi lời mời, Kick member, Xóa comment, Xóa task, Thoát task.
+- `[x]` **Notice Modal**: Xóa bỏ text lỗi thô hiển thị ngoài màn hình, nâng cấp thành dạng Modal thông báo (Thành công xanh lá / Thất bại đỏ).
+- `[x]` **Dọn dẹp giao diện**: Gỡ bỏ thanh công cụ Demo Mode (chọn trạng thái tự động) dưới đáy màn hình Workspace.
+
+### 3. Vá Lỗi Bảo Mật (Security Hotfix)
+- `[x]` **Secret Leak (GitHub Alert)**: Đã loại bỏ chuỗi kết nối MongoDB chứa thông tin tài khoản dạng hardcode trong file script backend (`fix-name.js`). Sử dụng `require('dotenv').config()` và `process.env.MONGODB_URI` thay thế. User đã được yêu cầu đổi mật khẩu MongoDB Atlas.
