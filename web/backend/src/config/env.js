@@ -19,8 +19,9 @@ module.exports = {
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   },
 
-  // CORS
+  // CORS and URLs
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  frontendUrl: process.env.FRONTEND_URL || (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',')[0] : 'http://localhost:5173'),
 
   // Email / SMTP
   email: {

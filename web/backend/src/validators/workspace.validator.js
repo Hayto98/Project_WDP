@@ -52,6 +52,10 @@ const addCommentSchema = Joi.object({
   author_name: Joi.string().trim().max(100).allow('').optional(),
 });
 
+const editCommentSchema = Joi.object({
+  content: Joi.string().trim().min(1).max(2000).required(),
+});
+
 module.exports = {
   createWorkspaceSchema,
   updateWorkspaceSchema,
@@ -60,4 +64,6 @@ module.exports = {
   addMemberSchema,
   updateMemberSchema,
   addCommentSchema,
+  editCommentSchema,
 };
+

@@ -1,15 +1,37 @@
 import { PAPERS, type PaperResult } from "./searchSample";
+import type { LibraryEntry } from "./librarySample";
 
 export type MemberRole = "owner" | "editor" | "viewer";
 export type WorkStatus = "backlog" | "doing" | "done";
 export type WorkKind = "task" | "note" | "discussion";
 export type InviteStatus = "pending" | "accepted" | "declined";
 
+export { PAPERS };
+
+export const STATUS_LABEL: Record<WorkStatus, string> = {
+  backlog: "Backlog",
+  doing: "Đang làm",
+  done: "Đã xong",
+};
+
+export const KIND_LABEL: Record<WorkKind, string> = {
+  task: "Task",
+  note: "Ghi chú",
+  discussion: "Thảo luận",
+};
+
+export const ROLE_LABEL: Record<MemberRole, string> = {
+  owner: "Owner",
+  editor: "Editor",
+  viewer: "Viewer",
+};
+
 export interface Workspace {
   id: string;
   name: string;
   description: string;
   active: boolean;
+  ownerId?: string;
 }
 
 export interface WorkspaceMember {
@@ -43,6 +65,14 @@ export interface CollaborationInvite {
   sentAt: string;
 }
 
+export interface WorkspaceComment {
+  id: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+}
+
 export interface WorkspaceItem {
   id: string;
   workspaceId: string;
@@ -52,7 +82,7 @@ export interface WorkspaceItem {
   assigneeId: string;
   paperId: string;
   due: string;
-  comments: string[];
+  comments: WorkspaceComment[];
   note: string;
 }
 
@@ -201,7 +231,10 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     assigneeId: "m-lan",
     paperId: "s1",
     due: "08/07",
-    comments: ["Ưu tiên biểu đồ routing entropy.", "Cần thêm so sánh với dense model."],
+    comments: [
+      { id: "c1", authorId: "u-lan", content: "Ưu tiên biểu đồ routing entropy.", authorName: "Lan Anh", createdAt: "2 ngày trước" },
+      { id: "c2", authorId: "u-minh", content: "Cần thêm so sánh với dense model.", authorName: "Minh Thành", createdAt: "1 ngày trước" },
+    ],
     note: "Dùng cho phần bối cảnh mô hình ngôn ngữ lớn đa ngôn ngữ.",
   },
   {
@@ -213,7 +246,10 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     assigneeId: "m-minh",
     paperId: "s6",
     due: "10/07",
-    comments: ["K. Adebayo paper có metric hallucination tốt.", "Cần kiểm tra dữ liệu tiếng Việt."],
+    comments: [
+      { id: "c3", authorId: "u-minh", content: "K. Adebayo paper có metric hallucination tốt.", authorName: "Minh Thành", createdAt: "5 giờ trước" },
+      { id: "c4", authorId: "u-lan", content: "Cần kiểm tra dữ liệu tiếng Việt.", authorName: "Lan Anh", createdAt: "3 giờ trước" },
+    ],
     note: "Thảo luận phạm vi demo, tránh mở quá rộng sang clinical NLP.",
   },
   {
@@ -225,7 +261,10 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     assigneeId: "m-thao",
     paperId: "s3",
     due: "05/07",
-    comments: ["Đã trích bảng benchmark.", "Cần format citation sau."],
+    comments: [
+      { id: "c5", authorId: "u-thao", content: "Đã trích bảng benchmark.", authorName: "Thảo Phạm", createdAt: "hôm qua" },
+      { id: "c6", authorId: "u-minh", content: "Cần format citation sau.", authorName: "Minh Thành", createdAt: "hôm qua" },
+    ],
     note: "Benchmark 1.2M crystalline structures, phù hợp đoạn so sánh model đồ thị.",
   },
   {
@@ -237,7 +276,10 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     assigneeId: "m-minh-t",
     paperId: "s12",
     due: "12/07",
-    comments: ["Liên kết với concept drift.", "Đừng dùng quá nhiều thuật ngữ chưa giải thích."],
+    comments: [
+      { id: "c7", authorId: "u-huy", content: "Liên kết với concept drift.", authorName: "Huy Trần", createdAt: "2 giờ trước" },
+      { id: "c8", authorId: "u-minh", content: "Đừng dùng quá nhiều thuật ngữ chưa giải thích.", authorName: "Minh Thành", createdAt: "1 giờ trước" },
+    ],
     note: "Tập trung vào thay đổi phân phối dữ liệu theo thời gian.",
   },
   {
@@ -249,7 +291,10 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     assigneeId: "m-chi",
     paperId: "s7",
     due: "09/07",
-    comments: ["Cần một bảng ưu/nhược điểm.", "Quang sẽ review phần MPC."],
+    comments: [
+      { id: "c9", authorId: "u-chi", content: "Cần một bảng ưu/nhược điểm.", authorName: "Chi Đỗ", createdAt: "hôm qua" },
+      { id: "c10", authorId: "u-quang", content: "Quang sẽ review phần MPC.", authorName: "Quang Lê", createdAt: "hôm qua" },
+    ],
     note: "Nền cho buổi reading group tuần này.",
   },
   {
@@ -261,7 +306,9 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     assigneeId: "m-quang",
     paperId: "s2",
     due: "14/07",
-    comments: ["Đọc phần gradient sketching trước."],
+    comments: [
+      { id: "c11", authorId: "u-quang", content: "Đọc phần gradient sketching trước.", authorName: "Quang Lê", createdAt: "hôm nay" },
+    ],
     note: "Liên quan trực tiếp đến triển khai thiết bị không đồng nhất.",
   },
 ];
@@ -276,16 +323,37 @@ export const ACTIVITIES: WorkspaceActivity[] = [
 export function makeWorkspaceEntries(
   items: WorkspaceItem[] = WORK_ITEMS,
   members: WorkspaceMember[] = MEMBERS,
+  libraryPapers: LibraryEntry[] = [],
 ): WorkspaceItemEntry[] {
-  return items.flatMap((item) => {
-    const paper = PAPERS.find((p) => p.id === item.paperId);
-    if (!paper) return [];
-    return [
-      {
-        ...item,
-        paper,
-        assignee: members.find((m) => m.id === item.assigneeId),
-      },
-    ];
+  return items.map((item) => {
+    const anyItem = item as any;
+    // Priority 1: populated paper from backend (available to ALL members, not library-dependent)
+    // Priority 2: library papers of the current user
+    // Priority 3: sample data fallback
+    // Priority 4: unknown stub
+    const libraryEntry = libraryPapers.find((e) => e.paperId === item.paperId);
+    const paper: PaperResult = anyItem._populatedPaper
+      ? anyItem._populatedPaper
+      : libraryEntry
+        ? libraryEntry.paper
+        : PAPERS.find((p) => p.id === item.paperId) || {
+            id: "unknown",
+            title: "Chưa liên kết bài báo",
+            authors: [],
+            year: new Date().getFullYear(),
+            source: "System",
+            type: "Preprint" as const,
+            fields: [],
+            keywords: [],
+            abstract: "",
+            citations: 0,
+            doi: "",
+            url: "#",
+          };
+    return {
+      ...item,
+      paper,
+      assignee: members.find((m) => m.id === item.assigneeId),
+    };
   });
 }

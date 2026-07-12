@@ -298,6 +298,8 @@ function mapWorkspace(workspace: any): Workspace {
 }
 
 function mapWorkspaceItem(item: any, workspaceId: string): WorkspaceItem {
+  // paper_id may be populated by backend (object) or just an ID string
+  const rawPaper = item.paper_id && typeof item.paper_id === "object" ? item.paper_id : null;
   return {
     id: asId(item._id),
     workspaceId,
@@ -305,11 +307,19 @@ function mapWorkspaceItem(item: any, workspaceId: string): WorkspaceItem {
     title: item.title,
     status: item.status,
     assigneeId: asId(item.assignee_id),
-    paperId: asId(item.paper_id),
+    paperId: rawPaper ? asId(rawPaper._id) : asId(item.paper_id),
     due: item.due || "Chưa đặt",
-    comments: (item.comments ?? []).map((comment: any) => comment.content ?? String(comment)),
+    comments: (item.comments ?? []).map((comment: any) => ({
+      id: String(comment.comment_id || comment.id || ""),
+      authorId: asId(comment.author_id || comment.authorId),
+      content: typeof comment === "string" ? comment : (comment.content ?? ""),
+      authorName: comment.author_name ?? comment.authorName ?? "Thành viên",
+      createdAt: formatWhen(comment.created_at ?? comment.createdAt ?? null),
+    })),
     note: item.note ?? "",
-  };
+    // Store populated paper data so the UI can display it without a library lookup
+    _populatedPaper: rawPaper ? mapPaper(rawPaper) : undefined,
+  } as WorkspaceItem & { _populatedPaper?: PaperResult };
 }
 
 function mapInvite(invite: any): CollaborationInvite {
@@ -1031,9 +1041,20 @@ export const workspaceApi = {
     return request(`/workspaces/${workspaceId}/items/${itemId}`, { method: "DELETE" });
   },
   addComment(workspaceId: string, itemId: string, payload: { content: string; author_name?: string }) {
-    return request<{ content: string; author_name?: string; created_at?: string }>(`/workspaces/${workspaceId}/items/${itemId}/comments`, {
+    return request<{ content: string; author_name?: string; created_at?: string; comment_id?: string; author_id?: string }>(`/workspaces/${workspaceId}/items/${itemId}/comments`, {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  },
+  editComment(workspaceId: string, itemId: string, commentId: string, content: string) {
+    return request<{ content: string }>(`/workspaces/${workspaceId}/items/${itemId}/comments/${commentId}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  },
+  deleteComment(workspaceId: string, itemId: string, commentId: string) {
+    return request(`/workspaces/${workspaceId}/items/${itemId}/comments/${commentId}`, {
+      method: "DELETE",
     });
   },
   async activities(workspaceId: string): Promise<WorkspaceActivity[]> {
@@ -1089,6 +1110,11 @@ export const workspaceApi = {
       method: "PUT",
       body: JSON.stringify({ status }),
     }));
+  },
+  async deleteInvite(id: string): Promise<void> {
+    await request(`/collaboration/invites/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 

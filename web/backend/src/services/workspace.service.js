@@ -1,6 +1,7 @@
 const Workspace = require('../models/Workspace');
 const WorkspaceItem = require('../models/WorkspaceItem');
 const WorkspaceActivity = require('../models/WorkspaceActivity');
+const CollaborationInvite = require('../models/CollaborationInvite');
 const { notifyCommentAdded } = require('./notification.service');
 
 function pickWorkspaceFields(payload = {}) {
@@ -152,10 +153,14 @@ async function removeMember(userId, workspaceId, memberId, user = null) {
     { $pull: { members: { user_id: memberId } } },
     { returnDocument: 'after' },
   );
-  if (workspace) await recordActivity(workspaceId, user || { id: userId }, 'member_removed', 'member', {
-    id: memberId,
-    name: removed?.name || '',
-  });
+  if (workspace) {
+    await recordActivity(workspaceId, user || { id: userId }, 'member_removed', 'member', {
+      id: memberId,
+      name: removed?.name || '',
+    });
+    // Delete any accepted/pending invites for this user to completely clear their invite state
+    await CollaborationInvite.deleteMany({ workspace_id: workspaceId, invitee_user_id: memberId });
+  }
   return workspace;
 }
 
@@ -166,7 +171,10 @@ async function listItems(userId, workspaceId, query = {}) {
   if (query.status) filter.status = query.status;
   if (query.kind) filter.kind = query.kind;
 
-  return WorkspaceItem.find(filter).sort({ updated_at: -1 }).lean();
+  return WorkspaceItem.find(filter)
+    .populate('paper_id', 'title abstract publication_year source_name authors citation_count doi original_url type research_fields keywords')
+    .sort({ updated_at: -1 })
+    .lean();
 }
 
 async function createItem(workspaceId, payload, user = null) {
@@ -240,6 +248,33 @@ async function addComment(user, workspaceId, itemId, payload) {
   return comment;
 }
 
+async function editComment(userId, workspaceId, itemId, commentId, content) {
+  const role = await getMemberRole(userId, workspaceId);
+  if (!role) return null;
+  const item = await WorkspaceItem.findOneAndUpdate(
+    { _id: itemId, workspace_id: workspaceId, 'comments.comment_id': commentId, 'comments.author_id': userId },
+    { $set: { 'comments.$.content': content } },
+    { returnDocument: 'after' },
+  );
+  if (!item) return null;
+  return item.comments.find((c) => c.comment_id === commentId) || null;
+}
+
+async function deleteComment(userId, workspaceId, itemId, commentId) {
+  const role = await getMemberRole(userId, workspaceId);
+  if (!role) return null;
+  const canDeleteAny = role === 'owner' || role === 'editor';
+  const filter = canDeleteAny
+    ? { _id: itemId, workspace_id: workspaceId, 'comments.comment_id': commentId }
+    : { _id: itemId, workspace_id: workspaceId, 'comments.comment_id': commentId, 'comments.author_id': userId };
+  const item = await WorkspaceItem.findOneAndUpdate(
+    filter,
+    { $pull: { comments: { comment_id: commentId } } },
+    { returnDocument: 'after' },
+  );
+  return item ? { message: 'Comment deleted' } : null;
+}
+
 async function listActivities(userId, workspaceId) {
   const role = await getMemberRole(userId, workspaceId);
   if (!role) return null;
@@ -292,5 +327,7 @@ module.exports = {
   updateItem,
   deleteItem,
   addComment,
+  editComment,
+  deleteComment,
   listActivities,
 };

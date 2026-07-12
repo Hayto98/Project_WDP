@@ -1,30 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  IconExternal,
   IconGrid,
-  IconLibrary,
   IconPlus,
   IconSparkle,
-  IconX,
 } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import {
   ACTIVITIES,
   COLLAB_INVITES,
+  KIND_LABEL,
   MEMBERS,
   RESEARCHERS,
+  STATUS_LABEL,
   WORK_ITEMS,
   WORKSPACES,
   makeWorkspaceEntries,
   type CollaborationInvite,
   type InviteStatus,
-  type MemberRole,
   type ResearcherProfile,
   type WorkKind,
   type WorkStatus,
   type Workspace,
   type WorkspaceItem,
-  type WorkspaceItemEntry,
   type WorkspaceMember,
 } from "../data/workspaceSample";
 import { PAPERS } from "../data/searchSample";
@@ -33,32 +30,16 @@ import { formatInt } from "../lib/format";
 import { getCurrentUser, workspaceApi } from "../lib/api";
 import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 
+import { WorkspaceSkeleton } from "../components/workspace/WorkspaceSkeleton";
+import { WorkspaceEmpty } from "../components/workspace/WorkspaceEmpty";
+import { WorkItemRow } from "../components/workspace/WorkItemRow";
+import { CollaborationInbox } from "../components/workspace/CollaborationInbox";
+import { WorkspaceInvitePanel } from "../components/workspace/WorkspaceInvitePanel";
+import { WorkspaceDetail } from "../components/workspace/WorkspaceDetail";
+import { nameFromEmail, initialsFromName } from "../components/workspace/utils";
+
 type Demo = "auto" | "loading" | "empty" | "error";
 type WorkspaceMode = "board" | "createTask" | "invites";
-
-const STATUS_LABEL: Record<WorkStatus, string> = {
-  backlog: "Backlog",
-  doing: "Đang làm",
-  done: "Đã xong",
-};
-
-const KIND_LABEL: Record<WorkKind, string> = {
-  task: "Task",
-  note: "Ghi chú",
-  discussion: "Thảo luận",
-};
-
-const ROLE_LABEL: Record<MemberRole, string> = {
-  owner: "Owner",
-  editor: "Editor",
-  viewer: "Viewer",
-};
-
-const INVITE_STATUS_LABEL: Record<InviteStatus, string> = {
-  pending: "Đang chờ",
-  accepted: "Đã chấp nhận",
-  declined: "Đã từ chối",
-};
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -85,6 +66,8 @@ export function WorkspacePage({ theme, toggle }: Props) {
   const [newItemPaperId, setNewItemPaperId] = useState(USE_SAMPLE_FALLBACK ? PAPERS[0]?.id ?? "" : "");
   const [newItemNote, setNewItemNote] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState("");
+  const [editingCommentContent, setEditingCommentContent] = useState("");
   const [inviteEmail, setInviteEmail] = useState(USE_SAMPLE_FALLBACK ? RESEARCHERS[0]?.email ?? "" : "");
   const [inviteTopic, setInviteTopic] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
@@ -281,15 +264,55 @@ export function WorkspacePage({ theme, toggle }: Props) {
     if (!activeWorkspace) return;
     const comment = newComment.trim();
     if (!comment) return;
+    const authorName = currentUser?.full_name ?? "Người dùng";
     const previous = items;
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, comments: [...item.comments, comment] } : item)));
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, comments: [...item.comments, { id: Date.now().toString(), content: comment, authorId: currentUser?.id ?? "", authorName, createdAt: "vừa xong" }] } : item)));
     try {
-      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: "Minh Thành" });
+      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: authorName });
       setNewComment("");
       await refreshWorkspaceDetails(activeWorkspace.id);
-    } catch (err) {
+    } catch {
       setItems(previous);
-      setWorkspaceNotice(err instanceof Error ? err.message : "Không thêm được bình luận.");
+      setWorkspaceNotice("Không thêm được bình luận.");
+    }
+  };
+
+  const handleEditComment = async (itemId: string, commentId: string) => {
+    if (!activeWorkspace) return;
+    const content = editingCommentContent.trim();
+    if (!content) return;
+    const previous = items;
+    setItems((current) => current.map((item) => {
+      if (item.id === itemId) {
+        return { ...item, comments: item.comments.map(c => c.id === commentId ? { ...c, content } : c) };
+      }
+      return item;
+    }));
+    try {
+      await workspaceApi.editComment(activeWorkspace.id, itemId, commentId, content);
+      setEditingCommentId("");
+      await refreshWorkspaceDetails(activeWorkspace.id);
+    } catch {
+      setItems(previous);
+      setWorkspaceNotice("Không sửa được bình luận.");
+    }
+  };
+
+  const handleDeleteComment = async (itemId: string, commentId: string) => {
+    if (!activeWorkspace) return;
+    const previous = items;
+    setItems((current) => current.map((item) => {
+      if (item.id === itemId) {
+        return { ...item, comments: item.comments.filter(c => c.id !== commentId) };
+      }
+      return item;
+    }));
+    try {
+      await workspaceApi.deleteComment(activeWorkspace.id, itemId, commentId);
+      await refreshWorkspaceDetails(activeWorkspace.id);
+    } catch {
+      setItems(previous);
+      setWorkspaceNotice("Không xóa được bình luận.");
     }
   };
 
@@ -690,6 +713,13 @@ export function WorkspacePage({ theme, toggle }: Props) {
               newComment={newComment}
               onNewComment={setNewComment}
               onAddComment={() => addComment(selected.id)}
+              editingCommentId={editingCommentId}
+              editingCommentContent={editingCommentContent}
+              onEditingCommentId={setEditingCommentId}
+              onEditingCommentContent={setEditingCommentContent}
+              onEditComment={(commentId) => handleEditComment(selected.id, commentId)}
+              onDeleteComment={(commentId) => handleDeleteComment(selected.id, commentId)}
+              currentUserId={currentUser?.id || ""}
               activities={activities}
               canEdit={canEditWorkspace}
               canManageMembers={canManageMembers}
@@ -724,517 +754,6 @@ function Summary({ label, value }: { label: string; value: string }) {
     <div className="sumstat">
       <span className="sumstat__label">{label}</span>
       <span className="sumstat__value num">{value}</span>
-    </div>
-  );
-}
-
-function nameFromEmail(email: string) {
-  const local = email.split("@")[0] ?? "collaborator";
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function initialsFromName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
-  return initials || "NC";
-}
-
-function getInvitePerson(invite: CollaborationInvite, researchers: ResearcherProfile[]) {
-  const researcher = researchers.find((item) => item.id === invite.researcherId);
-  const name = invite.inviteeName ?? researcher?.name ?? nameFromEmail(invite.inviteeEmail);
-  return {
-    name,
-    initials: researcher?.initials ?? initialsFromName(name),
-    email: invite.inviteeEmail,
-  };
-}
-
-function WorkItemRow({
-  item,
-  selected,
-  onSelect,
-}: {
-  item: WorkspaceItemEntry;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <li className={`workitem ${selected ? "is-selected" : ""}`}>
-      <button onClick={onSelect} aria-pressed={selected}>
-        <span className={`workitem__kind workitem__kind--${item.kind}`}>{KIND_LABEL[item.kind]}</span>
-        <strong>{item.title}</strong>
-        <span className="workitem__paper">
-          <IconLibrary width={13} height={13} /> {item.paper.title}
-        </span>
-        <span className="workitem__meta">
-          <span>{item.assignee?.initials ?? "—"}</span>
-          <span className="num">{item.due}</span>
-          <span>{item.comments.length} bình luận</span>
-        </span>
-      </button>
-    </li>
-  );
-}
-
-function CollaborationInbox({
-  invites,
-  researchers,
-  workspaces,
-}: {
-  invites: CollaborationInvite[];
-  researchers: ResearcherProfile[];
-  workspaces: Workspace[];
-}) {
-  const groups: Array<{ status: InviteStatus; label: string }> = [
-    { status: "pending", label: "Chờ xác nhận" },
-    { status: "accepted", label: "Đã chấp nhận" },
-    { status: "declined", label: "Đã từ chối" },
-  ];
-
-  return (
-    <section className="collab-inbox" aria-label="Lời mời nghiên cứu chung">
-      <div className="collab-inbox__head">
-        <span>Lời mời nghiên cứu chung</span>
-        <span className="num">{invites.length}</span>
-      </div>
-      {invites.length === 0 ? (
-        <p className="collab-inbox__empty">Không có lời mời đang chờ. Khi có nhóm mời bạn nghiên cứu chung, lời mời sẽ hiện ở đây.</p>
-      ) : (
-        <div className="invite-watch">
-          {groups.map((group) => {
-            const groupInvites = invites.filter((invite) => invite.status === group.status);
-            return (
-              <section className="invite-watch__group" key={group.status}>
-                <div className="invite-watch__head">
-                  <span>{group.label}</span>
-                  <span className="num">{groupInvites.length}</span>
-                </div>
-                {groupInvites.slice(0, 2).map((invite) => {
-                  const workspace = workspaces.find((item) => item.id === invite.workspaceId);
-                  const person = getInvitePerson(invite, researchers);
-                  return (
-                    <div className="invite-watch__item" key={invite.id}>
-                      <strong>{person.name}</strong>
-                      <small>{person.email} · {workspace?.name ?? "Workspace"}</small>
-                    </div>
-                  );
-                })}
-              </section>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function WorkspaceInvitePanel({
-  researchers,
-  invites,
-  inviteEmail,
-  inviteTopic,
-  inviteMessage,
-  inviteNotice,
-  onInviteEmail,
-  onInviteTopic,
-  onInviteMessage,
-  onSendInvite,
-  onConfirmInvite,
-  onDeclineInvite,
-  onClose,
-}: {
-  researchers: ResearcherProfile[];
-  invites: CollaborationInvite[];
-  inviteEmail: string;
-  inviteTopic: string;
-  inviteMessage: string;
-  inviteNotice: string;
-  onInviteEmail: (email: string) => void;
-  onInviteTopic: (topic: string) => void;
-  onInviteMessage: (message: string) => void;
-  onSendInvite: () => void;
-  onConfirmInvite: (inviteId: string) => void;
-  onDeclineInvite: (inviteId: string) => void;
-  onClose: () => void;
-}) {
-  const outgoingInvites = invites.filter((invite) => invite.direction === "outgoing");
-  const inviteGroups: Array<{ status: InviteStatus; label: string; empty: string }> = [
-    { status: "pending", label: "Chờ xác nhận", empty: "Chưa có email nào đang chờ xác nhận." },
-    { status: "accepted", label: "Đã chấp nhận", empty: "Chưa có lời mời nào được chấp nhận." },
-    { status: "declined", label: "Đã từ chối", empty: "Chưa có lời mời nào bị từ chối." },
-  ];
-
-  return (
-    <form
-      className="research-invite workspace-panel workspace-pageform"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSendInvite();
-      }}
-    >
-      <div className="workspace-pageform__hero">
-        <div>
-          <span className="workspace-detail__label">Lời mời nghiên cứu chung</span>
-          <h3>Gửi email mời cộng tác</h3>
-          <p>Theo dõi email đang chờ xác nhận, đã chấp nhận và đã từ chối trong cùng một màn quản lý workspace.</p>
-        </div>
-        <button className="btn btn--ghost btn--sm" type="button" onClick={onClose}>
-          Quay lại board
-        </button>
-      </div>
-      <label>
-        <span>Email người muốn hợp tác</span>
-        <input
-          type="email"
-          value={inviteEmail}
-          onChange={(e) => onInviteEmail(e.target.value)}
-          placeholder="ten.nguoi.nhan@truong.edu.vn"
-          autoComplete="email"
-        />
-      </label>
-      <label>
-        <span>Chủ đề muốn nghiên cứu chung</span>
-        <input
-          value={inviteTopic}
-          onChange={(e) => onInviteTopic(e.target.value)}
-          placeholder="Ví dụ: Đồng viết survey về biomedical RAG"
-        />
-      </label>
-      <label>
-        <span>Nội dung gửi trong email</span>
-        <textarea
-          value={inviteMessage}
-          onChange={(e) => onInviteMessage(e.target.value)}
-          placeholder="Ví dụ: Mình đang tổng hợp paper nền và muốn mời bạn cùng đọc, ghi chú và phân tích hướng nghiên cứu."
-          rows={4}
-        />
-      </label>
-      <div className="researcher-suggestions" aria-label="Gợi ý nhà nghiên cứu">
-        {researchers.slice(0, 3).map((researcher) => (
-          <button
-            key={researcher.id}
-            type="button"
-            className={`researcher-chip ${inviteEmail.toLowerCase() === researcher.email.toLowerCase() ? "is-active" : ""}`}
-            onClick={() => onInviteEmail(researcher.email)}
-          >
-            <span className="member-avatar" aria-hidden>
-              {researcher.initials}
-            </span>
-            <span>
-              <strong>{researcher.name}</strong>
-              <small>{researcher.email} · {researcher.match}% phù hợp</small>
-            </span>
-          </button>
-        ))}
-      </div>
-      <p className="email-preview">
-        Đây là chức năng cấp workspace: email chứa chủ đề, nội dung lời mời và link xác nhận tham gia workspace.
-      </p>
-      <button className="btn btn--primary" type="submit">
-        <IconPlus width={15} height={15} /> Gửi email mời
-      </button>
-      {inviteNotice && <p className="invite-notice" role="status">{inviteNotice}</p>}
-      {outgoingInvites.length > 0 && (
-        <div className="invite-status-groups" aria-label="Danh sách lời mời theo trạng thái">
-          {inviteGroups.map((group) => {
-            const groupInvites = outgoingInvites.filter((invite) => invite.status === group.status);
-            return (
-              <section className="invite-status-group" key={group.status}>
-                <div className="invite-status-group__head">
-                  <span>{group.label}</span>
-                  <span className="num">{groupInvites.length}</span>
-                </div>
-                {groupInvites.length === 0 ? (
-                  <p>{group.empty}</p>
-                ) : (
-                  <ul className="sent-invites">
-                    {groupInvites.map((invite) => {
-                      const person = getInvitePerson(invite, researchers);
-                      return (
-                        <li key={invite.id}>
-                          <span>
-                            <strong>{person.name}</strong>
-                            <small>{person.email}</small>
-                          </span>
-                          <span className={`sent-invites__status sent-invites__status--${invite.status}`}>
-                            {INVITE_STATUS_LABEL[invite.status]}
-                          </span>
-                          <p className="sent-invites__message">{invite.message}</p>
-                          {invite.status === "pending" && (
-                            <span className="sent-invites__actions">
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--sm"
-                                onClick={() => onConfirmInvite(invite.id)}
-                              >
-                                Chấp nhận
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--sm"
-                                onClick={() => onDeclineInvite(invite.id)}
-                              >
-                                Từ chối
-                              </button>
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            );
-          })}
-        </div>
-      )}
-    </form>
-  );
-}
-
-function WorkspaceDetail({
-  item,
-  members,
-  onUpdate,
-  onMember,
-  onRemove,
-  newComment,
-  onNewComment,
-  onAddComment,
-  activities,
-  canEdit,
-  canManageMembers,
-}: {
-  item: WorkspaceItemEntry;
-  members: WorkspaceMember[];
-  onUpdate: (patch: Partial<WorkspaceItem>) => void;
-  onMember: (id: string, patch: Partial<WorkspaceMember>) => void;
-  onRemove: () => void;
-  newComment: string;
-  onNewComment: (comment: string) => void;
-  onAddComment: () => void;
-  activities: { id: string; actor: string; action: string; when: string }[];
-  canEdit: boolean;
-  canManageMembers: boolean;
-}) {
-  return (
-    <div className="workspace-detail__body">
-      <div className="workspace-detail__head">
-        <span className={`workitem__kind workitem__kind--${item.kind}`}>{KIND_LABEL[item.kind]}</span>
-        {canEdit && (
-          <button className="btn btn--ghost btn--sm" onClick={onRemove}>
-            <IconX width={15} height={15} /> Xóa
-          </button>
-        )}
-      </div>
-
-      <h2>{item.title}</h2>
-      <div className="item-meta-strip" aria-label="Tóm tắt item">
-        <span>{KIND_LABEL[item.kind]}</span>
-        <span>{item.assignee?.name ?? "Chưa phân công"}</span>
-        <span className="num">{item.due}</span>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Trạng thái</span>
-        <div className="seg" role="group" aria-label="Cập nhật trạng thái item">
-          {(["backlog", "doing", "done"] as WorkStatus[]).map((status) => (
-            <button
-              key={status}
-              className={`seg__btn ${item.status === status ? "is-active" : ""}`}
-              onClick={() => onUpdate({ status })}
-              aria-pressed={item.status === status}
-              disabled={!canEdit}
-            >
-              {STATUS_LABEL[status]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="workspace-detail__grid">
-        <label>
-          <span className="workspace-detail__label">Phụ trách</span>
-          <select value={item.assigneeId} onChange={(e) => onUpdate({ assigneeId: e.target.value })} disabled={!canEdit}>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="workspace-detail__label">Deadline</span>
-          <input
-            value={item.due}
-            onChange={(e) => onUpdate({ due: e.target.value })}
-            placeholder="Ví dụ: 18/07"
-            disabled={!canEdit}
-          />
-        </label>
-        <label>
-          <span className="workspace-detail__label">Bài liên kết</span>
-          <select value={item.paperId} onChange={(e) => onUpdate({ paperId: e.target.value })} disabled={!canEdit}>
-            {PAPERS.slice(0, 8).map((paper) => (
-              <option key={paper.id} value={paper.id}>
-                {paper.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <label className="workspace-detail__section">
-        <span className="workspace-detail__label">Nội dung ghi chú</span>
-        <textarea
-          value={item.note}
-          onChange={(e) => onUpdate({ note: e.target.value })}
-          rows={4}
-          placeholder="Ghi lại mục tiêu, kết luận đọc paper, hoặc câu hỏi cần nhóm phản hồi."
-          readOnly={!canEdit}
-        />
-      </label>
-
-      <div className="workspace-paper">
-        <span className="workspace-detail__label">Bài báo</span>
-        <a href={item.paper.url} target="_blank" rel="noreferrer noopener">
-          <IconExternal width={15} height={15} /> {item.paper.title}
-        </a>
-        <p>
-          {item.paper.authors.slice(0, 3).join(", ")} · <span className="num">{item.paper.year}</span> ·{" "}
-          {item.paper.source}
-        </p>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Thành viên & quyền</span>
-        <ul className="member-list">
-          {members.map((member) => (
-            <li key={member.id}>
-              <span className="member-avatar" aria-hidden>
-                {member.initials}
-              </span>
-              <span className="member-name">{member.name}</span>
-              <select
-                value={member.role}
-                onChange={(e) => onMember(member.id, { role: e.target.value as MemberRole })}
-                aria-label={`Quyền của ${member.name}`}
-                disabled={!canManageMembers || member.role === "owner"}
-              >
-                {(["editor", "viewer", ...(member.role === "owner" ? ["owner" as const] : [])] as MemberRole[]).map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABEL[role]}
-                  </option>
-                ))}
-              </select>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Discussion</span>
-        <ul className="comment-list">
-          {item.comments.map((comment, idx) => (
-            <li key={`${item.id}-${idx}`}>{comment}</li>
-          ))}
-        </ul>
-        <form
-          className="comment-compose"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onAddComment();
-          }}
-        >
-          <textarea
-            value={newComment}
-            onChange={(e) => onNewComment(e.target.value)}
-            rows={3}
-            placeholder="Thêm bình luận cho nhóm…"
-            aria-label="Thêm bình luận cho item"
-          />
-          <button className="btn btn--primary btn--sm" type="submit">
-            Gửi bình luận
-          </button>
-        </form>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Hoạt động của item</span>
-        <ItemActivityTimeline item={item} activities={activities} />
-      </div>
-    </div>
-  );
-}
-
-function ItemActivityTimeline({
-  item,
-  activities,
-}: {
-  item: WorkspaceItemEntry;
-  activities: { id: string; actor: string; action: string; when: string }[];
-}) {
-  const timeline = [
-    {
-      id: `${item.id}-status`,
-      actor: item.assignee?.name ?? "Nhóm",
-      action: `đang giữ trạng thái "${STATUS_LABEL[item.status]}"`,
-      when: "hiện tại",
-    },
-    {
-      id: `${item.id}-paper`,
-      actor: "Workspace",
-      action: `liên kết với paper "${item.paper.title}"`,
-      when: item.due,
-    },
-    ...activities.slice(0, 2),
-  ];
-
-  return (
-    <ul className="activity-list activity-list--item">
-      {timeline.map((activity) => (
-        <li key={activity.id}>
-          <strong>{activity.actor}</strong> {activity.action}
-          <span>{activity.when}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function WorkspaceSkeleton() {
-  return (
-    <div className="workboard" aria-hidden>
-      {Array.from({ length: 3 }, (_, c) => (
-        <section className="workcol" key={c}>
-          <div className="skel" style={{ height: 18, width: "52%", marginBottom: 14 }} />
-          {Array.from({ length: 2 }, (_, i) => (
-            <div className="workitem workitem--skel" key={i}>
-              <div className="skel" style={{ height: 16, width: "70%" }} />
-              <div className="skel" style={{ height: 12, width: "92%", marginTop: 10 }} />
-              <div className="skel" style={{ height: 12, width: "46%", marginTop: 10 }} />
-            </div>
-          ))}
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function WorkspaceEmpty({ onReset }: { onReset: () => void }) {
-  return (
-    <div className="state state--empty">
-      <p className="state__title">Chưa có workspace nhóm</p>
-      <p className="state__body">
-        Tạo workspace đầu tiên để chia sẻ thư viện, gắn paper vào task và phân công người phụ trách.
-      </p>
-      <button className="btn btn--primary" onClick={onReset}>
-        Bắt đầu tạo workspace
-      </button>
     </div>
   );
 }

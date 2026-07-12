@@ -2,6 +2,7 @@ const CollaborationInvite = require('../models/CollaborationInvite');
 const User = require('../models/User');
 const Workspace = require('../models/Workspace');
 const { notifyInviteReceived } = require('./notification.service');
+const { sendInviteEmail } = require('./email.service');
 
 function initials(name = '') {
   return name
@@ -70,9 +71,14 @@ function buildInviteFilter(userId, query = {}) {
 }
 
 async function listInvites(userId, query = {}) {
-  return CollaborationInvite.find(buildInviteFilter(userId, query))
+  const invites = await CollaborationInvite.find(buildInviteFilter(userId, query))
     .sort({ sent_at: -1 })
     .lean();
+    
+  return invites.map(invite => ({
+    ...invite,
+    direction: invite.sender_id.toString() === userId.toString() ? 'outgoing' : 'incoming'
+  }));
 }
 
 async function createInvite(userId, payload) {
@@ -84,13 +90,29 @@ async function createInvite(userId, payload) {
         role: { $in: ['owner', 'editor'] },
       },
     },
-  }).select('_id').lean();
+  }).select('_id name').lean();
   if (!workspace) {
     throw Object.assign(new Error('Only workspace owner or editor can invite collaborators'), {
       statusCode: 403,
       code: 'FORBIDDEN',
     });
   }
+
+  // Check for existing pending invite
+  const existingInvite = await CollaborationInvite.findOne({
+    workspace_id: payload.workspace_id,
+    invitee_email: payload.invitee_email.toLowerCase(),
+    status: 'pending'
+  }).lean();
+
+  if (existingInvite) {
+    throw Object.assign(new Error('Người này đã có một lời mời đang chờ xác nhận trong workspace này.'), {
+      statusCode: 400,
+      code: 'DUPLICATE_INVITE',
+    });
+  }
+
+  const sender = await User.findById(userId).select('full_name').lean();
 
   const invite = await CollaborationInvite.create({
     workspace_id: payload.workspace_id,
@@ -107,15 +129,60 @@ async function createInvite(userId, payload) {
     notifyInviteReceived(invite.invitee_user_id, invite);
   }
 
+  sendInviteEmail({
+    to: invite.invitee_email,
+    inviteeName: invite.invitee_name || invite.invitee_email,
+    workspaceName: workspace.name || 'Workspace',
+    senderName: sender?.full_name || 'Một thành viên',
+    topic: invite.topic,
+    message: invite.message,
+  }).catch((err) => {
+    console.error('Failed to send invite email:', err);
+  });
+
   return invite;
 }
 
 async function respondToInvite(userId, inviteId, status) {
-  return CollaborationInvite.findOneAndUpdate(
-    { _id: inviteId, $or: [{ sender_id: userId }, { invitee_user_id: userId }] },
+  const invite = await CollaborationInvite.findOneAndUpdate(
+    { _id: inviteId, invitee_user_id: userId },
     { status, responded_at: new Date() },
-    { returnDocument: 'after' },
-  );
+    { new: true }
+  ).lean();
+
+  if (invite && status === 'accepted') {
+    const user = await User.findById(userId).select('full_name email').lean();
+    if (user) {
+      const name = invite.invitee_name || user.full_name || user.email.split('@')[0];
+      const parts = name.trim().split(/\s+/).filter(Boolean);
+      const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "NC";
+
+      await Workspace.updateOne(
+        { _id: invite.workspace_id, 'members.user_id': { $ne: userId } },
+        {
+          $push: {
+            members: {
+              user_id: userId,
+              name: name,
+              initials: initials,
+              role: 'editor',
+              joined_at: new Date()
+            }
+          }
+        }
+      );
+    }
+  }
+
+  return invite;
+}
+
+async function deleteInvite(userId, inviteId) {
+  const invite = await CollaborationInvite.findOne({ _id: inviteId, sender_id: userId });
+  if (!invite) throw new Error('Invite not found or you are not the sender');
+  
+  await CollaborationInvite.findByIdAndDelete(inviteId);
+  return { success: true };
 }
 
 module.exports = {
@@ -123,4 +190,5 @@ module.exports = {
   listInvites,
   createInvite,
   respondToInvite,
+  deleteInvite,
 };
