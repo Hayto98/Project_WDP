@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { IconExternal, IconX } from "../icons";
-import { KIND_LABEL, STATUS_LABEL, ROLE_LABEL, PAPERS } from "../../data/workspaceSample";
+import { KIND_LABEL, STATUS_LABEL, ROLE_LABEL } from "../../data/workspaceSample";
 import type { WorkStatus, MemberRole, WorkspaceMember, WorkspaceItem, WorkspaceItemEntry } from "../../data/workspaceSample";
 import { ItemActivityTimeline } from "./ItemActivityTimeline";
+import { ConfirmModal, type ConfirmConfig } from "../ConfirmModal";
 
 export function WorkspaceDetail({
   item,
   members,
+  papers,
   onUpdate,
   onMember,
   onRemove,
@@ -25,6 +28,7 @@ export function WorkspaceDetail({
 }: {
   item: WorkspaceItemEntry;
   members: WorkspaceMember[];
+  papers: { id: string; title: string }[];
   onUpdate: (patch: Partial<WorkspaceItem>) => void;
   onMember: (id: string, patch: Partial<WorkspaceMember>) => void;
   onRemove: () => void;
@@ -42,22 +46,65 @@ export function WorkspaceDetail({
   canEdit: boolean;
   canManageMembers: boolean;
 }) {
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({ isOpen: false, title: "", message: "", onConfirm: () => {}, onCancel: () => {} });
+  const showConfirm = (title: string, message: string, onConfirm: () => void, danger = true, confirmText = "Xác nhận") => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      danger,
+      confirmText,
+      onConfirm,
+      onCancel: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
+    });
+  };
+  const formatDue = (due?: string) => {
+    if (!due || due === "Chưa đặt") return "Chưa đặt";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(due)) {
+      const [, month, day] = due.split("-");
+      return `${day}/${month}`;
+    }
+    return due;
+  };
+
   return (
     <div className="workspace-detail__body">
       <div className="workspace-detail__head">
         <span className={`workitem__kind workitem__kind--${item.kind}`}>{KIND_LABEL[item.kind]}</span>
-        {canEdit && (
-          <button className="btn btn--ghost btn--sm" onClick={onRemove}>
+        {canManageMembers ? (
+          <button className="btn btn--ghost btn--sm" onClick={() => {
+            showConfirm(
+              "Xóa item",
+              `Bạn có chắc chắn muốn xóa "${item.title}"?`,
+              onRemove
+            );
+          }}>
             <IconX width={15} height={15} /> Xóa
           </button>
-        )}
+        ) : item.assigneeIds?.includes(currentUserId) ? (
+          <button className="btn btn--ghost btn--sm" style={{ color: "var(--danger)" }} onClick={() => {
+            showConfirm(
+              "Thoát task",
+              `Bạn có chắc chắn muốn thoát khỏi task "${item.title}"?`,
+              () => onUpdate({ assigneeIds: (item.assigneeIds ?? []).filter(id => id !== currentUserId) }),
+              true,
+              "Thoát task"
+            );
+          }}>
+            Thoát task
+          </button>
+        ) : null}
       </div>
 
       <h2>{item.title}</h2>
       <div className="item-meta-strip" aria-label="Tóm tắt item">
         <span>{KIND_LABEL[item.kind]}</span>
-        <span>{item.assignee?.name ?? "Chưa phân công"}</span>
-        <span className="num">{item.due || "Chưa đặt"}</span>
+        <span>
+          {item.assignees?.length
+            ? item.assignees.map(a => a.name).join(", ")
+            : "Chưa phân công"}
+        </span>
+        <span className="num">{formatDue(item.due)}</span>
       </div>
 
       <div className="workspace-detail__section">
@@ -78,29 +125,112 @@ export function WorkspaceDetail({
       </div>
 
       <div className="workspace-detail__grid">
-        <label>
+        <div>
           <span className="workspace-detail__label">Phụ trách</span>
-          <select value={item.assigneeId} onChange={(e) => onUpdate({ assigneeId: e.target.value })} disabled={!canEdit}>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px", marginTop: "4px", alignItems: "center" }}>
+            {item.assignees?.map((member) => {
+              const canToggle = canEdit || member.id === currentUserId;
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  title={canToggle ? `Bỏ ${member.name}` : member.name}
+                  onClick={() => {
+                    if (!canToggle) return;
+                    showConfirm(
+                      member.id === currentUserId ? "Thoát task" : "Bỏ người phụ trách",
+                      member.id === currentUserId 
+                        ? `Bạn có chắc chắn muốn thoát khỏi task "${item.title}"?`
+                        : `Bạn có chắc chắn muốn bỏ "${member.name}" khỏi task "${item.title}"?`,
+                      () => onUpdate({ assigneeIds: (item.assigneeIds ?? []).filter(id => id !== member.id) }),
+                      true,
+                      member.id === currentUserId ? "Thoát task" : "Bỏ"
+                    );
+                  }}
+                  style={{
+                    background: "var(--primary)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "16px",
+                    height: "28px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: canToggle ? "pointer" : "default",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "0 10px 0 4px",
+                    transition: "opacity 0.15s",
+                  }}
+                  aria-label={`Bỏ ${member.name}`}
+                >
+                  <span style={{ 
+                    background: "rgba(255,255,255,0.2)", 
+                    borderRadius: "50%", 
+                    width: "20px", height: "20px", 
+                    display: "flex", alignItems: "center", justifyContent: "center", 
+                    fontSize: "10px" 
+                  }}>
+                    {member.initials}
+                  </span>
+                  {member.name}
+                  {canToggle && <span style={{ opacity: 0.7, marginLeft: "2px", fontSize: "10px" }}>✕</span>}
+                </button>
+              );
+            })}
+            
+            {(item.assignees?.length ?? 0) === 0 && (
+              <span style={{ fontSize: "13px", color: "var(--text-muted)", fontStyle: "italic" }}>Chưa phân công</span>
+            )}
+
+            {canEdit && members.length > (item.assignees?.length ?? 0) && (
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    onUpdate({ assigneeIds: [...(item.assigneeIds ?? []), e.target.value] });
+                  }
+                }}
+                style={{
+                  height: "28px",
+                  borderRadius: "14px",
+                  padding: "0 24px 0 10px",
+                  fontSize: "12px",
+                  background: "var(--surface)",
+                  border: "1px dashed var(--border)",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  width: "auto"
+                }}
+              >
+                <option value="" disabled>+ Thêm</option>
+                {members
+                  .filter(m => !(item.assigneeIds ?? []).includes(m.id))
+                  .map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+              </select>
+            )}
+          </div>
+        </div>
         <label>
           <span className="workspace-detail__label">Deadline</span>
           <input
-            value={item.due}
+            type="date"
+            className="input"
+            value={item.due && /^\d{4}-\d{2}-\d{2}$/.test(item.due) ? item.due : ""}
             onChange={(e) => onUpdate({ due: e.target.value })}
-            placeholder="Ví dụ: 18/07"
             disabled={!canEdit}
+            min={new Date().toISOString().split('T')[0]}
           />
         </label>
         <label>
           <span className="workspace-detail__label">Bài liên kết</span>
-          <select value={item.paperId} onChange={(e) => onUpdate({ paperId: e.target.value })} disabled={!canEdit}>
-            {PAPERS.slice(0, 8).map((paper) => (
+          <select value={item.paperId} onChange={(e) => onUpdate({ paperId: e.target.value })} disabled={!canEdit || papers.length === 0}>
+            {papers.every((paper) => paper.id !== item.paperId) && (
+              <option value={item.paperId}>{item.paper.title}</option>
+            )}
+            {papers.map((paper) => (
               <option key={paper.id} value={paper.id}>
                 {paper.title}
               </option>
@@ -162,8 +292,9 @@ export function WorkspaceDetail({
         <ul className="comment-list">
           {item.comments.map((comment, idx) => {
             const isEditing = editingCommentId === comment.id;
+            // Only the comment's author may edit or delete their own comment.
             const canEditComment = comment.authorId === currentUserId;
-            const canDeleteComment = canEdit || canEditComment; // owner/editor or author
+            const canDeleteComment = canEditComment;
             return (
               <li key={`${item.id}-${idx}`} className="comment-item">
                 <div className="comment-item__meta">
@@ -188,9 +319,11 @@ export function WorkspaceDetail({
                           className="btn btn--ghost btn--sm"
                           style={{ padding: "0 4px", minWidth: "auto", height: "auto", color: "var(--danger)" }}
                           onClick={() => {
-                            if (window.confirm("Bạn có chắc chắn muốn xóa bình luận này?")) {
-                              onDeleteComment(comment.id);
-                            }
+                            showConfirm(
+                              "Xóa bình luận",
+                              "Bạn có chắc chắn muốn xóa bình luận này?",
+                              () => onDeleteComment(comment.id)
+                            );
                           }}
                         >
                           Xóa
@@ -247,6 +380,8 @@ export function WorkspaceDetail({
         <span className="workspace-detail__label">Hoạt động của item</span>
         <ItemActivityTimeline item={item} activities={activities} />
       </div>
+
+      <ConfirmModal config={confirmConfig} />
     </div>
   );
 }

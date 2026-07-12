@@ -20,8 +20,45 @@ export function WorkItemRow({
           <IconLibrary width={13} height={13} /> {item.paper.title}
         </span>
         <span className="workitem__meta">
-          <span>{item.assignee?.initials ?? "—"}</span>
-          <span className="num">{item.due || "Chưa đặt"}</span>
+          <span style={{ display: "flex", alignItems: "center" }}>
+            {(item.assignees?.length ?? 0) > 0
+              ? item.assignees!.slice(0, 3).map((a, i) => (
+                  <span
+                    key={a.id}
+                    className="member-avatar"
+                    title={a.name}
+                    aria-label={a.name}
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      fontSize: "9px",
+                      marginLeft: i > 0 ? "-6px" : "0",
+                      border: "2px solid var(--bg)",
+                      zIndex: 3 - i,
+                      position: "relative",
+                    }}
+                  >
+                    {a.initials}
+                  </span>
+                ))
+              : <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>—</span>
+            }
+            {(item.assignees?.length ?? 0) > 3 && (
+              <span style={{ fontSize: "10px", color: "var(--text-muted)", marginLeft: "4px" }}>
+                +{item.assignees!.length - 3}
+              </span>
+            )}
+          </span>
+          <span className="num">
+            {(() => {
+              if (!item.due || item.due === "Chưa đặt") return "Chưa đặt";
+              if (/^\d{4}-\d{2}-\d{2}$/.test(item.due)) {
+                const [, month, day] = item.due.split("-");
+                return `${day}/${month}`;
+              }
+              return item.due;
+            })()}
+          </span>
           <span>{item.comments.length} bình luận</span>
         </span>
       </button>

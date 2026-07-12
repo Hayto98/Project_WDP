@@ -195,10 +195,11 @@ async function changePassword(userId, currentPassword, newPassword) {
  * Get current user profile (including embedded data).
  */
 async function getProfile(userId) {
-  const user = await User.findById(userId).select('-password_hash');
+  const user = await User.findById(userId).select('-password_hash').lean();
   if (!user) {
     throw Object.assign(new Error('User not found'), { statusCode: 404 });
   }
+  user.id = user._id;
   return user;
 }
 

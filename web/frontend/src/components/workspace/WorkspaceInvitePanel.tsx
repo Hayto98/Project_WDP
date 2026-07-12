@@ -1,10 +1,8 @@
 import { IconPlus } from "../icons";
-import type { CollaborationInvite, InviteStatus, ResearcherProfile } from "../../data/workspaceSample";
-import { getInvitePerson, INVITE_STATUS_LABEL } from "./utils";
+import type { ResearcherProfile } from "../../data/workspaceSample";
 
 export function WorkspaceInvitePanel({
   researchers,
-  invites,
   inviteEmail,
   inviteTopic,
   inviteMessage,
@@ -13,12 +11,9 @@ export function WorkspaceInvitePanel({
   onInviteTopic,
   onInviteMessage,
   onSendInvite,
-  onConfirmInvite,
-  onDeclineInvite,
   onClose,
 }: {
   researchers: ResearcherProfile[];
-  invites: CollaborationInvite[];
   inviteEmail: string;
   inviteTopic: string;
   inviteMessage: string;
@@ -27,16 +22,8 @@ export function WorkspaceInvitePanel({
   onInviteTopic: (topic: string) => void;
   onInviteMessage: (message: string) => void;
   onSendInvite: () => void;
-  onConfirmInvite: (inviteId: string) => void;
-  onDeclineInvite: (inviteId: string) => void;
   onClose: () => void;
 }) {
-  const outgoingInvites = invites.filter((invite) => invite.direction === "outgoing");
-  const inviteGroups: Array<{ status: InviteStatus; label: string; empty: string }> = [
-    { status: "pending", label: "Chờ xác nhận", empty: "Chưa có email nào đang chờ xác nhận." },
-    { status: "accepted", label: "Đã chấp nhận", empty: "Chưa có lời mời nào được chấp nhận." },
-    { status: "declined", label: "Đã từ chối", empty: "Chưa có lời mời nào bị từ chối." },
-  ];
 
   return (
     <form
@@ -84,7 +71,14 @@ export function WorkspaceInvitePanel({
         />
       </label>
       <div className="researcher-suggestions" aria-label="Gợi ý nhà nghiên cứu">
-        {researchers.slice(0, 3).map((researcher) => (
+        {researchers
+          .filter(
+            (r) =>
+              r.email.toLowerCase().includes(inviteEmail.toLowerCase()) ||
+              r.name.toLowerCase().includes(inviteEmail.toLowerCase())
+          )
+          .slice(0, 3)
+          .map((researcher) => (
           <button
             key={researcher.id}
             type="button"
@@ -108,60 +102,7 @@ export function WorkspaceInvitePanel({
         <IconPlus width={15} height={15} /> Gửi email mời
       </button>
       {inviteNotice && <p className="invite-notice" role="status">{inviteNotice}</p>}
-      {outgoingInvites.length > 0 && (
-        <div className="invite-status-groups" aria-label="Danh sách lời mời theo trạng thái">
-          {inviteGroups.map((group) => {
-            const groupInvites = outgoingInvites.filter((invite) => invite.status === group.status);
-            return (
-              <section className="invite-status-group" key={group.status}>
-                <div className="invite-status-group__head">
-                  <span>{group.label}</span>
-                  <span className="num">{groupInvites.length}</span>
-                </div>
-                {groupInvites.length === 0 ? (
-                  <p>{group.empty}</p>
-                ) : (
-                  <ul className="sent-invites">
-                    {groupInvites.map((invite) => {
-                      const person = getInvitePerson(invite, researchers);
-                      return (
-                        <li key={invite.id}>
-                          <span>
-                            <strong>{person.name}</strong>
-                            <small>{person.email}</small>
-                          </span>
-                          <span className={`sent-invites__status sent-invites__status--${invite.status}`}>
-                            {INVITE_STATUS_LABEL[invite.status]}
-                          </span>
-                          <p className="sent-invites__message">{invite.message}</p>
-                          {invite.status === "pending" && (
-                            <span className="sent-invites__actions">
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--sm"
-                                onClick={() => onConfirmInvite(invite.id)}
-                              >
-                                Chấp nhận
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--sm"
-                                onClick={() => onDeclineInvite(invite.id)}
-                              >
-                                Từ chối
-                              </button>
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            );
-          })}
-        </div>
-      )}
+
     </form>
   );
 }

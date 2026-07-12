@@ -59,19 +59,25 @@ async function listResearchers(userId, query = {}) {
   })).sort((a, b) => b.match - a.match || a.name.localeCompare(b.name));
 }
 
-function buildInviteFilter(userId, query = {}) {
+async function listInvites(userId, query = {}) {
+  const user = await User.findById(userId).select('email').lean();
+  
   const filter = {};
   if (query.direction) filter.direction = query.direction;
   if (query.status) filter.status = query.status;
-  filter.$or = [
+  
+  const orConditions = [
     { sender_id: userId },
     { invitee_user_id: userId },
   ];
-  return filter;
-}
+  
+  if (user && user.email) {
+    orConditions.push({ invitee_email: user.email.toLowerCase() });
+  }
+  
+  filter.$or = orConditions;
 
-async function listInvites(userId, query = {}) {
-  const invites = await CollaborationInvite.find(buildInviteFilter(userId, query))
+  const invites = await CollaborationInvite.find(filter)
     .sort({ sent_at: -1 })
     .lean();
     
@@ -144,9 +150,18 @@ async function createInvite(userId, payload) {
 }
 
 async function respondToInvite(userId, inviteId, status) {
+  const user = await User.findById(userId).select('full_name email').lean();
+  if (!user) throw new Error('User not found');
+
+  const filter = { _id: inviteId };
+  filter.$or = [
+    { invitee_user_id: userId },
+    { invitee_email: user.email.toLowerCase() }
+  ];
+
   const invite = await CollaborationInvite.findOneAndUpdate(
-    { _id: inviteId, invitee_user_id: userId },
-    { status, responded_at: new Date() },
+    filter,
+    { status, responded_at: new Date(), invitee_user_id: userId },
     { new: true }
   ).lean();
 

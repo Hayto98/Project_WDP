@@ -9,13 +9,13 @@ export type InviteStatus = "pending" | "accepted" | "declined";
 export { PAPERS };
 
 export const STATUS_LABEL: Record<WorkStatus, string> = {
-  backlog: "Backlog",
+  backlog: "Cần làm",
   doing: "Đang làm",
   done: "Đã xong",
 };
 
 export const KIND_LABEL: Record<WorkKind, string> = {
-  task: "Task",
+  task: "Công việc",
   note: "Ghi chú",
   discussion: "Thảo luận",
 };
@@ -79,6 +79,9 @@ export interface WorkspaceItem {
   kind: WorkKind;
   title: string;
   status: WorkStatus;
+  /** Multiple assignees (array of member IDs) */
+  assigneeIds: string[];
+  /** @deprecated use assigneeIds */
   assigneeId: string;
   paperId: string;
   due: string;
@@ -96,6 +99,9 @@ export interface WorkspaceActivity {
 
 export interface WorkspaceItemEntry extends WorkspaceItem {
   paper: PaperResult;
+  /** All assigned members (populated from assigneeIds) */
+  assignees: WorkspaceMember[];
+  /** @deprecated use assignees[0] */
   assignee?: WorkspaceMember;
 }
 
@@ -228,6 +234,7 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     kind: "task",
     title: "Tóm tắt scaling laws cho MoE multilingual reasoning",
     status: "doing",
+    assigneeIds: ["m-lan"],
     assigneeId: "m-lan",
     paperId: "s1",
     due: "08/07",
@@ -243,6 +250,7 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     kind: "discussion",
     title: "Có nên đưa RAG y sinh vào hướng demo?",
     status: "backlog",
+    assigneeIds: ["m-minh"],
     assigneeId: "m-minh",
     paperId: "s6",
     due: "10/07",
@@ -258,6 +266,7 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     kind: "note",
     title: "Ghi chú benchmark GNN cho chương related work",
     status: "done",
+    assigneeIds: ["m-thao"],
     assigneeId: "m-thao",
     paperId: "s3",
     due: "05/07",
@@ -273,6 +282,7 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     kind: "task",
     title: "Viết đoạn Research Gap: FL + Y sinh",
     status: "doing",
+    assigneeIds: ["m-minh-t", "u-huy"],
     assigneeId: "m-minh-t",
     paperId: "s12",
     due: "12/07",
@@ -288,6 +298,7 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     kind: "task",
     title: "So sánh secure aggregation và differential privacy",
     status: "doing",
+    assigneeIds: ["m-chi", "m-quang"],
     assigneeId: "m-chi",
     paperId: "s7",
     due: "09/07",
@@ -303,6 +314,7 @@ export const WORK_ITEMS: WorkspaceItem[] = [
     kind: "note",
     title: "Communication-efficient FL trên edge devices",
     status: "backlog",
+    assigneeIds: ["m-quang"],
     assigneeId: "m-quang",
     paperId: "s2",
     due: "14/07",
@@ -327,10 +339,6 @@ export function makeWorkspaceEntries(
 ): WorkspaceItemEntry[] {
   return items.map((item) => {
     const anyItem = item as any;
-    // Priority 1: populated paper from backend (available to ALL members, not library-dependent)
-    // Priority 2: library papers of the current user
-    // Priority 3: sample data fallback
-    // Priority 4: unknown stub
     const libraryEntry = libraryPapers.find((e) => e.paperId === item.paperId);
     const paper: PaperResult = anyItem._populatedPaper
       ? anyItem._populatedPaper
@@ -350,10 +358,18 @@ export function makeWorkspaceEntries(
             doi: "",
             url: "#",
           };
+    // Support both assigneeIds (new) and assigneeId (legacy)
+    const ids: string[] = item.assigneeIds?.length
+      ? item.assigneeIds
+      : item.assigneeId ? [item.assigneeId] : [];
+    const assignees = ids
+      .map((id) => members.find((m) => m.id === id))
+      .filter(Boolean) as WorkspaceMember[];
     return {
       ...item,
       paper,
-      assignee: members.find((m) => m.id === item.assigneeId),
+      assignees,
+      assignee: assignees[0],
     };
   });
 }

@@ -300,13 +300,18 @@ function mapWorkspace(workspace: any): Workspace {
 function mapWorkspaceItem(item: any, workspaceId: string): WorkspaceItem {
   // paper_id may be populated by backend (object) or just an ID string
   const rawPaper = item.paper_id && typeof item.paper_id === "object" ? item.paper_id : null;
+  // Support both new assignee_ids[] and legacy assignee_id
+  const assigneeIds: string[] = item.assignee_ids?.length
+    ? (item.assignee_ids as any[]).map(asId)
+    : item.assignee_id ? [asId(item.assignee_id)] : [];
   return {
     id: asId(item._id),
     workspaceId,
     kind: item.kind,
     title: item.title,
     status: item.status,
-    assigneeId: asId(item.assignee_id),
+    assigneeIds,
+    assigneeId: assigneeIds[0] ?? "",
     paperId: rawPaper ? asId(rawPaper._id) : asId(item.paper_id),
     due: item.due || "Chưa đặt",
     comments: (item.comments ?? []).map((comment: any) => ({
@@ -373,7 +378,8 @@ export const authApi = {
     }
   },
   async me() {
-    return request<AuthUser>("/auth/me");
+    const raw = await request<any>("/auth/me");
+    return { ...raw, id: asId(raw._id ?? raw.id) } as AuthUser;
   },
   async changePassword(currentPassword: string, newPassword: string) {
     return request<{ message?: string }>("/auth/change-password", {
@@ -385,10 +391,11 @@ export const authApi = {
 
 export const userApi = {
   async updateProfile(data: { full_name: string; email: string }) {
-    const nextUser = await request<AuthUser>("/users/me", {
+    const raw = await request<any>("/users/me", {
       method: "PUT",
       body: JSON.stringify(data),
     });
+    const nextUser = { ...raw, id: asId(raw._id ?? raw.id) } as AuthUser;
     storeCurrentUser(nextUser);
     return nextUser;
   },
@@ -1014,7 +1021,7 @@ export const workspaceApi = {
         kind: payload.kind,
         title: payload.title,
         status: payload.status,
-        assignee_id: asObjectId(payload.assigneeId),
+        assignee_ids: (payload.assigneeIds ?? (payload.assigneeId ? [payload.assigneeId] : [])).map(asObjectId).filter(Boolean),
         paper_id: asObjectId(payload.paperId),
         due: payload.due,
         note: payload.note,
@@ -1029,7 +1036,11 @@ export const workspaceApi = {
         kind: patch.kind,
         title: patch.title,
         status: patch.status,
-        assignee_id: asObjectId(patch.assigneeId),
+        assignee_ids: patch.assigneeIds !== undefined
+          ? patch.assigneeIds.map(asObjectId).filter(Boolean)
+          : patch.assigneeId !== undefined
+            ? [asObjectId(patch.assigneeId)].filter(Boolean)
+            : undefined,
         paper_id: asObjectId(patch.paperId),
         due: patch.due,
         note: patch.note,

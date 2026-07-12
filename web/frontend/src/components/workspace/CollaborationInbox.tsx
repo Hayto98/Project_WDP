@@ -1,15 +1,31 @@
+import { useState } from "react";
 import type { CollaborationInvite, InviteStatus, ResearcherProfile, Workspace } from "../../data/workspaceSample";
 import { getInvitePerson } from "./utils";
+import { ConfirmModal, type ConfirmConfig } from "../ConfirmModal";
 
 export function CollaborationInbox({
   invites,
   researchers,
   workspaces,
+  onRevoke,
 }: {
   invites: CollaborationInvite[];
   researchers: ResearcherProfile[];
   workspaces: Workspace[];
+  onRevoke?: (id: string) => void;
 }) {
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({ isOpen: false, title: "", message: "", onConfirm: () => {}, onCancel: () => {} });
+  const showConfirm = (title: string, message: string, onConfirm: () => void, danger = true, confirmText = "Xác nhận") => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      danger,
+      confirmText,
+      onConfirm,
+      onCancel: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
+    });
+  };
   const groups: Array<{ status: InviteStatus; label: string }> = [
     { status: "pending", label: "Chờ xác nhận" },
     { status: "accepted", label: "Đã chấp nhận" },
@@ -38,9 +54,32 @@ export function CollaborationInbox({
                   const workspace = workspaces.find((item) => item.id === invite.workspaceId);
                   const person = getInvitePerson(invite, researchers);
                   return (
-                    <div className="invite-watch__item" key={invite.id}>
-                      <strong>{person.name}</strong>
-                      <small>{person.email} · {workspace?.name ?? "Workspace"}</small>
+                    <div className="invite-watch__item" key={invite.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{person.name}</strong>
+                        <small style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{person.email} · {workspace?.name ?? "Workspace"}</small>
+                        <small style={{ display: "block", color: "var(--ink-muted)", fontSize: "11px", marginTop: "4px" }}>
+                          {group.status === "pending" ? "Đã gửi: " : group.status === "accepted" ? "Đã chấp nhận: " : "Đã từ chối: "}
+                          {invite.sentAt}
+                        </small>
+                      </div>
+                      {group.status === "pending" && onRevoke && (
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          style={{ color: "var(--danger)", padding: "4px 8px", fontSize: "11px", height: "auto", minHeight: "auto", flexShrink: 0, whiteSpace: "nowrap" }}
+                          onClick={() => {
+                            showConfirm(
+                              "Thu hồi lời mời",
+                              `Bạn có chắc muốn thu hồi lời mời gửi đến ${person.name}?`,
+                              () => onRevoke(invite.id),
+                              true,
+                              "Thu hồi"
+                            );
+                          }}
+                        >
+                          Thu hồi
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -49,6 +88,7 @@ export function CollaborationInbox({
           })}
         </div>
       )}
+      <ConfirmModal config={confirmConfig} />
     </section>
   );
 }
