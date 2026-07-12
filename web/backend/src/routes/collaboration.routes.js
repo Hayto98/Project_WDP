@@ -76,4 +76,24 @@ router.post('/invites', validate(createInviteSchema), ctrl.createInvite);
  */
 router.put('/invites/:id', validate(respondInviteSchema), ctrl.respondToInvite);
 
+/**
+ * @swagger
+ * /api/v1/collaboration/invites/{id}:
+ *   delete:
+ *     summary: Delete/cancel a sent invite
+ *     tags: [Collaboration]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Invite deleted
+ */
+router.delete('/invites/:id', ctrl.deleteInvite);
+
 module.exports = router;

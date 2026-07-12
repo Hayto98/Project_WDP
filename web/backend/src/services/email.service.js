@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const { email } = require('../config/env');
+const { email, frontendUrl } = require('../config/env');
 
 let transporter = null;
 
@@ -102,9 +102,35 @@ async function sendFollowDigestEmail(user, frequency, items) {
   });
 }
 
+async function sendInviteEmail({ to, inviteeName, workspaceName, senderName, topic, message }) {
+  if (!to) return { sent: false, skipped: true, reason: 'NO_RECIPIENT' };
+
+  const title = `${senderName} mời bạn tham gia workspace "${workspaceName}"`;
+  const text = [
+    `Chào ${inviteeName},`,
+    '',
+    `${senderName} vừa gửi lời mời bạn tham gia nghiên cứu chung trong workspace "${workspaceName}".`,
+    topic ? `Chủ đề: ${topic}` : '',
+    '',
+    message ? `Lời nhắn từ ${senderName}:\n"${message}"\n` : '',
+    'Vui lòng đăng nhập vào hệ thống để xem và phản hồi lời mời này:',
+    `${frontendUrl}/workspaces`,
+    '',
+    'Trân trọng,',
+    'ResearchTrends Team'
+  ].filter(line => line !== undefined).join('\n');
+
+  return sendMail({
+    to,
+    subject: `[ResearchTrends] ${title}`,
+    text,
+  });
+}
+
 module.exports = {
   isConfigured,
   sendMail,
   sendFollowPaperEmail,
   sendFollowDigestEmail,
+  sendInviteEmail,
 };

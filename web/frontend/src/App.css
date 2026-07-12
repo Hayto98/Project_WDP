@@ -5148,7 +5148,17 @@ mark.hl {
 .invite-watch {
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: var(--s-3);
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.invite-watch::-webkit-scrollbar {
+  width: 4px;
+}
+.invite-watch::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
 }
 .invite-watch__group {
   display: flex;
@@ -5280,9 +5290,9 @@ mark.hl {
   flex-wrap: wrap;
   gap: var(--s-2);
 }
-.workspace-add input,
-.workspace-add select,
-.workspace-add textarea {
+.workspace-pageform input,
+.workspace-pageform select,
+.workspace-pageform textarea {
   min-width: 0;
   padding: 0 11px;
   border: 1px solid var(--border);
@@ -5291,23 +5301,23 @@ mark.hl {
   color: var(--ink);
   font-size: 13px;
 }
-.workspace-add input,
-.workspace-add select {
+.workspace-pageform input,
+.workspace-pageform select {
   height: 38px;
 }
-.workspace-add textarea {
+.workspace-pageform textarea {
   min-height: 78px;
   padding-block: 9px;
   line-height: 1.45;
   resize: vertical;
 }
-.workspace-add input::placeholder,
-.workspace-add textarea::placeholder {
+.workspace-pageform input::placeholder,
+.workspace-pageform textarea::placeholder {
   color: var(--ink-faint);
 }
-.workspace-add input:focus,
-.workspace-add select:focus,
-.workspace-add textarea:focus {
+.workspace-pageform input:focus,
+.workspace-pageform select:focus,
+.workspace-pageform textarea:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-weak);
@@ -5378,6 +5388,8 @@ mark.hl {
   flex-direction: column;
   gap: var(--s-3);
   list-style: none;
+  padding: 0;
+  margin: 0;
 }
 .workitem {
   background: var(--surface);
@@ -5606,6 +5618,35 @@ mark.hl {
   flex-direction: column;
   gap: 6px;
 }
+.comment-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.comment-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.comment-item__author {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--primary-ink);
+}
+.comment-item__time {
+  font-size: 10.5px;
+  color: var(--ink-faint);
+}
+.comment-item__body {
+  font-size: 12.5px;
+  color: var(--ink);
+  line-height: 1.45;
+  margin: 0;
+}
 .member-list li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) 96px;
@@ -5670,10 +5711,7 @@ mark.hl {
   font-size: 11.5px;
   font-weight: 700;
 }
-.research-invite input,
-.research-invite select {
-  background: var(--surface);
-}
+
 .researcher-suggestions {
   display: flex;
   flex-direction: column;

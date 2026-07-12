@@ -1,64 +1,50 @@
 import { useEffect, useMemo, useState } from "react";
+import "../components/Modal.css";
 import {
-  IconExternal,
+  IconEdit,
   IconGrid,
-  IconLibrary,
+  IconLogOut,
   IconPlus,
   IconSparkle,
-  IconX,
+  IconTrash,
 } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import {
   ACTIVITIES,
   COLLAB_INVITES,
+  KIND_LABEL,
   MEMBERS,
   RESEARCHERS,
+  STATUS_LABEL,
   WORK_ITEMS,
   WORKSPACES,
   makeWorkspaceEntries,
   type CollaborationInvite,
-  type InviteStatus,
-  type MemberRole,
   type ResearcherProfile,
   type WorkKind,
   type WorkStatus,
   type Workspace,
   type WorkspaceItem,
-  type WorkspaceItemEntry,
   type WorkspaceMember,
 } from "../data/workspaceSample";
-import { PAPERS } from "../data/searchSample";
+import type { LibraryEntry } from "../data/librarySample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { getCurrentUser, workspaceApi } from "../lib/api";
-import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
+import { getCurrentUser, workspaceApi, libraryApi } from "../lib/api";
+import { USE_SAMPLE_FALLBACK } from "../lib/flags";
+
+import { WorkspaceSkeleton } from "../components/workspace/WorkspaceSkeleton";
+import { WorkspaceEmpty } from "../components/workspace/WorkspaceEmpty";
+import { WorkItemRow } from "../components/workspace/WorkItemRow";
+import { CollaborationInbox } from "../components/workspace/CollaborationInbox";
+import { WorkspaceInvitePanel } from "../components/workspace/WorkspaceInvitePanel";
+import { WorkspaceMembersPanel } from "../components/workspace/WorkspaceMembersPanel";
+import { WorkspaceDetail } from "../components/workspace/WorkspaceDetail";
+import { ConfirmModal, type ConfirmConfig } from "../components/ConfirmModal";
+import { initialsFromName, nameFromEmail } from "../components/workspace/utils";
 
 type Demo = "auto" | "loading" | "empty" | "error";
-type WorkspaceMode = "board" | "createTask" | "invites";
-
-const STATUS_LABEL: Record<WorkStatus, string> = {
-  backlog: "Backlog",
-  doing: "Đang làm",
-  done: "Đã xong",
-};
-
-const KIND_LABEL: Record<WorkKind, string> = {
-  task: "Task",
-  note: "Ghi chú",
-  discussion: "Thảo luận",
-};
-
-const ROLE_LABEL: Record<MemberRole, string> = {
-  owner: "Owner",
-  editor: "Editor",
-  viewer: "Viewer",
-};
-
-const INVITE_STATUS_LABEL: Record<InviteStatus, string> = {
-  pending: "Đang chờ",
-  accepted: "Đã chấp nhận",
-  declined: "Đã từ chối",
-};
+type WorkspaceMode = "board" | "createTask" | "invites" | "members";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -80,17 +66,34 @@ export function WorkspacePage({ theme, toggle }: Props) {
   const [newItemTitle, setNewItemTitle] = useState("");
   const [newItemKind, setNewItemKind] = useState<WorkKind>("task");
   const [newItemStatus, setNewItemStatus] = useState<WorkStatus>("backlog");
-  const [newItemAssigneeId, setNewItemAssigneeId] = useState(USE_SAMPLE_FALLBACK ? MEMBERS[0]?.id ?? "" : "");
+  const [newItemAssigneeIds, setNewItemAssigneeIds] = useState<string[]>([]);
   const [newItemDue, setNewItemDue] = useState("");
-  const [newItemPaperId, setNewItemPaperId] = useState(USE_SAMPLE_FALLBACK ? PAPERS[0]?.id ?? "" : "");
+  const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
+  const [newItemPaperId, setNewItemPaperId] = useState("");
   const [newItemNote, setNewItemNote] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState("");
+  const [editingCommentContent, setEditingCommentContent] = useState("");
   const [inviteEmail, setInviteEmail] = useState(USE_SAMPLE_FALLBACK ? RESEARCHERS[0]?.email ?? "" : "");
   const [inviteTopic, setInviteTopic] = useState("");
   const [inviteMessage, setInviteMessage] = useState("");
   const [inviteNotice, setInviteNotice] = useState("");
   const [workspaceNotice, setWorkspaceNotice] = useState("");
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({ isOpen: false, title: "", message: "", onConfirm: () => {}, onCancel: () => {} });
+  const showConfirm = (title: string, message: string, onConfirm: () => void, danger = true, confirmText = "Xóa") => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      danger,
+      confirmText,
+      onConfirm,
+      onCancel: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
+    });
+  };
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("board");
+  const [isRenamingWorkspace, setIsRenamingWorkspace] = useState(false);
+  const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
   const [loading, setLoading] = useState(true);
   const [demo, setDemo] = useState<Demo>("auto");
 
@@ -100,23 +103,29 @@ export function WorkspacePage({ theme, toggle }: Props) {
     workspaceApi
       .workspaces()
       .then(async (nextWorkspaces) => {
+        // Fetch invites and researchers even if the user has no workspaces
+        const [nextInvites, nextResearchers] = await Promise.all([
+          workspaceApi.invites().catch(() => []),
+          workspaceApi.researchers().catch(() => []),
+        ]);
+
         if (!nextWorkspaces.length) {
           if (!alive) return;
           setWorkspaces([]);
           setMembers([]);
           setItems([]);
-          setInvites([]);
+          setInvites(nextInvites);
+          setResearchers(nextResearchers);
           setRemoteActivities([]);
           setActiveWorkspaceId("");
           setSelectedId("");
           return;
         }
-        const [memberGroups, itemGroups, activityGroups, nextInvites, nextResearchers] = await Promise.all([
+        
+        const [memberGroups, itemGroups, activityGroups] = await Promise.all([
           Promise.all(nextWorkspaces.map((workspace) => workspaceApi.workspaceMembers(workspace.id).catch(() => []))),
           Promise.all(nextWorkspaces.map((workspace) => workspaceApi.items(workspace.id).catch(() => []))),
           Promise.all(nextWorkspaces.map((workspace) => workspaceApi.activities(workspace.id).catch(() => []))),
-          workspaceApi.invites().catch(() => []),
-          workspaceApi.researchers().catch(() => []),
         ]);
         if (!alive) return;
         const nextMembers = memberGroups.flat();
@@ -151,7 +160,34 @@ export function WorkspacePage({ theme, toggle }: Props) {
     };
   }, []);
 
-  const entries = useMemo(() => makeWorkspaceEntries(items, members), [items, members]);
+  useEffect(() => {
+    let alive = true;
+    libraryApi
+      .papers()
+      .then((entries) => {
+        if (alive) setLibraryEntries(entries);
+      })
+      .catch(() => {
+        if (alive) setLibraryEntries([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const libraryPapers = useMemo(
+    () => libraryEntries.map((entry) => ({ id: entry.paperId, title: entry.paper.title })),
+    [libraryEntries],
+  );
+  // Papers in the active workspace that are already linked to a task (1 paper = 1 task / workspace).
+  const usedPaperIds = useMemo(
+    () => new Set(items.filter((item) => item.workspaceId === activeWorkspaceId).map((item) => item.paperId)),
+    [items, activeWorkspaceId],
+  );
+  const availablePapers = useMemo(
+    () => libraryPapers.filter((paper) => !usedPaperIds.has(paper.id)),
+    [libraryPapers, usedPaperIds],
+  );
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
   const workspaceMembers = members.filter((m) => m.workspaceId === activeWorkspaceId);
   const currentUser = getCurrentUser();
@@ -159,6 +195,18 @@ export function WorkspacePage({ theme, toggle }: Props) {
   const currentRole = currentMember?.role ?? "viewer";
   const canEditWorkspace = currentRole === "owner" || currentRole === "editor";
   const canManageMembers = currentRole === "owner";
+
+  const entries = useMemo(
+    () => makeWorkspaceEntries(items.filter(i => i.workspaceId === activeWorkspaceId), workspaceMembers, libraryEntries),
+    [items, activeWorkspaceId, workspaceMembers, libraryEntries],
+  );
+
+  // Keep the "new task" paper selection pointing at a paper that is still free.
+  useEffect(() => {
+    setNewItemPaperId((current) =>
+      availablePapers.some((paper) => paper.id === current) ? current : (availablePapers[0]?.id ?? ""),
+    );
+  }, [availablePapers]);
   const workspaceEntries = entries.filter((item) => item.workspaceId === activeWorkspaceId);
   const selected = entries.find((item) => item.id === selectedId) ?? workspaceEntries[0] ?? null;
   const activities = (remoteActivities.length ? remoteActivities : USE_SAMPLE_FALLBACK ? ACTIVITIES : []).filter((a) => a.workspaceId === activeWorkspaceId);
@@ -204,14 +252,13 @@ export function WorkspacePage({ theme, toggle }: Props) {
 
   const addWorkspace = async () => {
     const name = newWorkspace.trim();
-    if (!name) return;
     setWorkspaceNotice("");
     try {
       const workspace = await workspaceApi.createWorkspace({
         name,
         description: "Workspace nhóm do bạn tạo",
-        owner_name: "Minh Thành",
-        owner_initials: "MT",
+        owner_name: currentUser?.full_name ?? "Người dùng",
+        owner_initials: initialsFromName(currentUser?.full_name ?? "Người dùng"),
       });
       setWorkspaces((current) => [workspace, ...current]);
       setActiveWorkspaceId(workspace.id);
@@ -224,33 +271,103 @@ export function WorkspacePage({ theme, toggle }: Props) {
     }
   };
 
+  const saveWorkspaceName = async () => {
+    if (!activeWorkspace) return;
+    const name = editingWorkspaceName.trim();
+    setIsRenamingWorkspace(false);
+    if (name === activeWorkspace.name) return;
+    setWorkspaceNotice("");
+    const previous = workspaces;
+    setWorkspaces((current) => current.map((w) => (w.id === activeWorkspace.id ? { ...w, name } : w)));
+    try {
+      const updated = await workspaceApi.updateWorkspace(activeWorkspace.id, { name });
+      setWorkspaces((current) => current.map((w) => (w.id === activeWorkspace.id ? updated : w)));
+      setWorkspaceNotice("Đã đổi tên workspace.");
+    } catch (err) {
+      setWorkspaces(previous);
+      setWorkspaceNotice(err instanceof Error ? err.message : "Không đổi được tên workspace.");
+    }
+  };
+
+  const removeWorkspace = async (id: string) => {
+    const workspace = workspaces.find((w) => w.id === id);
+    if (!workspace) return;
+    
+    showConfirm(
+      "Xóa workspace",
+      `Xóa workspace "${workspace.name}"? Toàn bộ task và bình luận bên trong sẽ bị xóa.`,
+      async () => {
+        setWorkspaceNotice("");
+        const previous = workspaces;
+        const remaining = workspaces.filter((w) => w.id !== id);
+        setWorkspaces(remaining);
+        if (activeWorkspaceId === id) {
+          const nextActive = remaining[0]?.id ?? "";
+          setActiveWorkspaceId(nextActive);
+          setSelectedId(items.find((item) => item.workspaceId === nextActive)?.id ?? "");
+        }
+        try {
+          await workspaceApi.deleteWorkspace(id);
+          setWorkspaceNotice("Đã xóa workspace.");
+        } catch (err) {
+          setWorkspaces(previous);
+          setWorkspaceNotice(err instanceof Error ? err.message : "Không xóa được workspace.");
+        }
+      }
+    );
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!activeWorkspaceId) return;
+    setWorkspaceNotice("");
+    const previous = members;
+    setMembers((current) => current.filter((m) => m.id !== memberId));
+    try {
+      await workspaceApi.removeMember(activeWorkspaceId, memberId);
+      setWorkspaceNotice("Đã xóa thành viên khỏi workspace.");
+    } catch (err) {
+      setMembers(previous);
+      setWorkspaceNotice(err instanceof Error ? err.message : "Không xóa được thành viên.");
+    }
+  };
+
   const addItem = async () => {
     if (!activeWorkspace || !canEditWorkspace) {
       setWorkspaceNotice("Bạn cần quyền editor hoặc owner để tạo item.");
       return;
     }
     const title = newItemTitle.trim();
-    if (!title) return;
+    // Validate deadline - không cho phép ngày quá khứ
+    if (newItemDue) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const picked = new Date(newItemDue); // input type=date trả về yyyy-mm-dd
+      if (picked < today) {
+        setWorkspaceNotice("Deadline không được là ngày trong quá khứ.");
+        return;
+      }
+    }
     setWorkspaceNotice("");
-    const assigneeId =
-      workspaceMembers.some((member) => member.id === newItemAssigneeId)
-        ? newItemAssigneeId
-        : (workspaceMembers[0]?.id ?? "");
-    const paperId = PAPERS.some((paper) => paper.id === newItemPaperId) ? newItemPaperId : (PAPERS[0]?.id ?? "");
+    const paperId = availablePapers.some((paper) => paper.id === newItemPaperId) ? newItemPaperId : (availablePapers[0]?.id ?? "");
+    if (paperId && usedPaperIds.has(paperId)) {
+      setWorkspaceNotice("Bài báo này đã được gắn cho một task trong workspace.");
+      return;
+    }
     try {
       const item = await workspaceApi.createItem(activeWorkspace.id, {
         kind: newItemKind,
         title,
         status: newItemStatus,
-        assigneeId,
+        assigneeIds: newItemAssigneeIds.filter(id => workspaceMembers.some(m => m.id === id)),
         paperId,
-        due: newItemDue.trim() || "Chưa đặt",
+        due: newItemDue || "Chưa đặt",
         note: newItemNote.trim() || "Chưa có mô tả. Bổ sung mục tiêu, câu hỏi hoặc kết luận đọc paper tại đây.",
       });
       setItems((current) => [item, ...current]);
       setSelectedId(item.id);
       setNewItemTitle("");
       setNewItemStatus("backlog");
+      setNewItemAssigneeIds([]);
       setNewItemDue("");
       setNewItemNote("");
       setWorkspaceMode("board");
@@ -281,15 +398,55 @@ export function WorkspacePage({ theme, toggle }: Props) {
     if (!activeWorkspace) return;
     const comment = newComment.trim();
     if (!comment) return;
+    const authorName = currentUser?.full_name ?? "Người dùng";
     const previous = items;
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, comments: [...item.comments, comment] } : item)));
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, comments: [...item.comments, { id: Date.now().toString(), content: comment, authorId: currentUser?.id ?? "", authorName, createdAt: "vừa xong" }] } : item)));
     try {
-      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: "Minh Thành" });
+      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: authorName });
       setNewComment("");
       await refreshWorkspaceDetails(activeWorkspace.id);
-    } catch (err) {
+    } catch {
       setItems(previous);
-      setWorkspaceNotice(err instanceof Error ? err.message : "Không thêm được bình luận.");
+      setWorkspaceNotice("Không thêm được bình luận.");
+    }
+  };
+
+  const handleEditComment = async (itemId: string, commentId: string) => {
+    if (!activeWorkspace) return;
+    const content = editingCommentContent.trim();
+    if (!content) return;
+    const previous = items;
+    setItems((current) => current.map((item) => {
+      if (item.id === itemId) {
+        return { ...item, comments: item.comments.map(c => c.id === commentId ? { ...c, content } : c) };
+      }
+      return item;
+    }));
+    try {
+      await workspaceApi.editComment(activeWorkspace.id, itemId, commentId, content);
+      setEditingCommentId("");
+      await refreshWorkspaceDetails(activeWorkspace.id);
+    } catch {
+      setItems(previous);
+      setWorkspaceNotice("Không sửa được bình luận.");
+    }
+  };
+
+  const handleDeleteComment = async (itemId: string, commentId: string) => {
+    if (!activeWorkspace) return;
+    const previous = items;
+    setItems((current) => current.map((item) => {
+      if (item.id === itemId) {
+        return { ...item, comments: item.comments.filter(c => c.id !== commentId) };
+      }
+      return item;
+    }));
+    try {
+      await workspaceApi.deleteComment(activeWorkspace.id, itemId, commentId);
+      await refreshWorkspaceDetails(activeWorkspace.id);
+    } catch {
+      setItems(previous);
+      setWorkspaceNotice("Không xóa được bình luận.");
     }
   };
 
@@ -326,6 +483,23 @@ export function WorkspacePage({ theme, toggle }: Props) {
     }
   };
 
+  const handleRespondInvite = async (inviteId: string, status: "accepted" | "declined") => {
+    try {
+      await workspaceApi.respondInvite(inviteId, status);
+      setWorkspaceNotice(`Đã ${status === "accepted" ? "chấp nhận" : "từ chối"} lời mời.`);
+      
+      // Refresh workspaces and invites
+      const [w, inv] = await Promise.all([
+        workspaceApi.workspaces(),
+        workspaceApi.invites()
+      ]);
+      setWorkspaces(w);
+      setInvites(inv);
+    } catch (err) {
+      setWorkspaceNotice(err instanceof Error ? err.message : "Không thể phản hồi lời mời.");
+    }
+  };
+
   const sendInvite = async () => {
     if (!activeWorkspace || !canEditWorkspace) {
       setInviteNotice("Bạn cần quyền editor hoặc owner để gửi lời mời.");
@@ -336,6 +510,22 @@ export function WorkspacePage({ theme, toggle }: Props) {
       setInviteNotice("Vui lòng nhập email hợp lệ để gửi lời mời.");
       return;
     }
+
+    const existingInvite = invites.find(
+      (invite) =>
+        invite.workspaceId === activeWorkspace.id &&
+        invite.inviteeEmail.toLowerCase() === email &&
+        invite.status !== "declined"
+    );
+    if (existingInvite) {
+      if (existingInvite.status === "pending") {
+        setInviteNotice("Email này đã được mời và đang chờ xác nhận.");
+      } else {
+        setInviteNotice("Người này đã đồng ý tham gia workspace từ trước.");
+      }
+      return;
+    }
+
     const researcher = researchers.find((r) => r.email.toLowerCase() === email);
     const topic = inviteTopic.trim() || `Cùng nghiên cứu trong ${activeWorkspace.name}`;
     const message =
@@ -360,45 +550,6 @@ export function WorkspacePage({ theme, toggle }: Props) {
     }
   };
 
-  const updateInviteStatus = async (inviteId: string, status: InviteStatus) => {
-    const invite = invites.find((item) => item.id === inviteId);
-    if (!invite) return;
-    const researcher = researchers.find((item) => item.id === invite.researcherId);
-    try {
-      const updated = await workspaceApi.respondInvite(inviteId, status === "accepted" ? "accepted" : "declined");
-      setInvites((current) => current.map((item) => (item.id === inviteId ? updated : item)));
-    } catch (err) {
-      setInviteNotice(err instanceof Error ? err.message : "Không cập nhật được lời mời.");
-      return;
-    }
-    const displayName = invite.inviteeName ?? researcher?.name ?? nameFromEmail(invite.inviteeEmail);
-    const initials = researcher?.initials ?? initialsFromName(displayName);
-    if (status === "declined") {
-      setInviteNotice(`${displayName} đã từ chối lời mời tham gia workspace.`);
-      return;
-    }
-    if (status !== "accepted") return;
-    setActiveWorkspaceId(invite.workspaceId);
-    setSelectedId(items.find((item) => item.workspaceId === invite.workspaceId)?.id ?? "");
-    setMembers((current) => {
-      const exists = current.some(
-        (member) => member.workspaceId === invite.workspaceId && member.name.toLowerCase() === displayName.toLowerCase(),
-      );
-      if (exists) return current;
-      return [
-        ...current,
-        {
-          id: `m-accepted-${invite.id}-${Date.now()}`,
-          workspaceId: invite.workspaceId,
-          name: displayName,
-          initials,
-          role: "editor",
-        },
-      ];
-    });
-    setInviteNotice(`${displayName} đã xác nhận tham gia workspace qua link email.`);
-  };
-
   return (
     <main className="main workspace">
       <header className="topbar">
@@ -419,10 +570,91 @@ export function WorkspacePage({ theme, toggle }: Props) {
         <Summary label="Đang làm" value={formatInt(workspaceEntries.filter((i) => i.status === "doing").length)} />
         <Summary label="Lời mời chờ" value={formatInt(pendingWorkspaceInviteCount)} />
       </div>
-      {workspaceNotice && <p className="notice">{workspaceNotice}</p>}
+      
+      {workspaceNotice && (() => {
+        const isSuccess = workspaceNotice.startsWith("Đã ");
+        return (
+          <div className="modal-overlay" onClick={() => setWorkspaceNotice("")}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <div className={`modal-icon ${isSuccess ? "success" : "error"}`}>
+                  {isSuccess ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                  )}
+                </div>
+                <h3 className="modal-title">Thông báo</h3>
+              </div>
+              <div className="modal-body">
+                {workspaceNotice}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn--primary" onClick={() => setWorkspaceNotice("")}>Đóng</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="workspace-layout">
         <aside className="workspace-side" aria-label="Danh sách workspace">
+          {(() => {
+            const incomingInvites = invites.filter(
+              (inv) =>
+                inv.status === "pending" &&
+                (inv.researcherId === currentUser?.id ||
+                  inv.inviteeEmail.toLowerCase() === currentUser?.email?.toLowerCase())
+            );
+
+            if (incomingInvites.length === 0) return null;
+
+            return (
+              <div className="incoming-invites" style={{ marginBottom: "24px" }}>
+                <div className="workspace-side__head" style={{ borderBottom: "none", paddingBottom: 0 }}>
+                  <span className="workspace-side__title" style={{ color: "var(--primary)" }}>
+                    Lời mời đến tôi ({incomingInvites.length})
+                  </span>
+                </div>
+                <ul style={{ margin: "12px 0 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {incomingInvites.map((invite) => {
+                    return (
+                      <li key={invite.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)", padding: "12px" }}>
+                        <p style={{ margin: "0 0 12px 0", fontSize: "13px", lineHeight: 1.4 }}>
+                          Bạn nhận được lời mời tham gia workspace: <br />
+                          <strong>"{invite.topic || "Nghiên cứu chung"}"</strong>
+                        </p>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            className="btn btn--primary btn--sm"
+                            style={{ flex: 1, justifyContent: "center" }}
+                            onClick={() => handleRespondInvite(invite.id, "accepted")}
+                          >
+                            Chấp nhận
+                          </button>
+                          <button
+                            className="btn btn--ghost btn--sm"
+                            style={{ flex: 1, justifyContent: "center" }}
+                            onClick={() => handleRespondInvite(invite.id, "declined")}
+                          >
+                            Từ chối
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })()}
+
           <div className="workspace-side__head">
             <span className="workspace-side__title">
               <IconGrid width={17} height={17} /> Workspace nhóm
@@ -437,7 +669,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
                   onClick={() => {
                     setActiveWorkspaceId(workspace.id);
                     setSelectedId(items.find((item) => item.workspaceId === workspace.id)?.id ?? "");
-                    setNewItemAssigneeId(members.find((member) => member.workspaceId === workspace.id)?.id ?? "");
+                    setNewItemAssigneeIds([]);
                     setWorkspaceMode("board");
                   }}
                   aria-current={activeWorkspaceId === workspace.id ? "page" : undefined}
@@ -477,19 +709,114 @@ export function WorkspacePage({ theme, toggle }: Props) {
             invites={workspaceInvites}
             researchers={researchers}
             workspaces={workspaces}
+            onRevoke={canManageMembers ? async (inviteId) => {
+              if (!activeWorkspace) return;
+              const previous = invites;
+              setInvites((current) => current.filter((inv) => inv.id !== inviteId));
+              try {
+                await workspaceApi.deleteInvite(inviteId);
+                setWorkspaceNotice("Đã thu hồi lời mời.");
+              } catch (err) {
+                setInvites(previous);
+                setWorkspaceNotice(err instanceof Error ? err.message : "Không thu hồi được lời mời.");
+              }
+            } : undefined}
           />
         </aside>
 
         <section className="workspace-main" aria-live="polite">
           <div className="workspace-toolbar">
             <div>
-              <h2>{activeWorkspace?.name ?? "Workspace"}</h2>
+              {isRenamingWorkspace ? (
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
+                  <input
+                    autoFocus
+                    value={editingWorkspaceName}
+                    onChange={(e) => setEditingWorkspaceName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveWorkspaceName();
+                      if (e.key === "Escape") setIsRenamingWorkspace(false);
+                    }}
+                    onBlur={saveWorkspaceName}
+                    style={{
+                      fontSize: "clamp(20px, 4vw, 24px)",
+                      fontWeight: 700,
+                      fontFamily: "inherit",
+                      padding: "2px 0",
+                      margin: "0",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      border: "none",
+                      borderBottom: "2px solid var(--primary)",
+                      borderRadius: "0",
+                      outline: "none",
+                      boxShadow: "none",
+                      width: "300px",
+                      maxWidth: "100%",
+                    }}
+                  />
+                </div>
+              ) : (
+                <h2 style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {activeWorkspace?.name ?? "Workspace"}
+                  {activeWorkspace && canEditWorkspace && (
+                    <button
+                      className="btn btn--ghost btn--icon"
+                      style={{ padding: "4px", minWidth: "auto", height: "auto" }}
+                      type="button"
+                      title="Đổi tên workspace"
+                      onClick={() => {
+                        setEditingWorkspaceName(activeWorkspace.name);
+                        setIsRenamingWorkspace(true);
+                      }}
+                    >
+                      <IconEdit width={15} height={15} />
+                    </button>
+                  )}
+                  {activeWorkspace && canManageMembers ? (
+                    <button
+                      className="btn btn--ghost btn--icon"
+                      style={{ padding: "4px", minWidth: "auto", height: "auto", color: "var(--danger)" }}
+                      type="button"
+                      title="Xóa workspace"
+                      onClick={() => removeWorkspace(activeWorkspace.id)}
+                    >
+                      <IconTrash width={15} height={15} />
+                    </button>
+                  ) : activeWorkspace && currentMember ? (
+                    <button
+                      className="btn btn--ghost btn--icon"
+                      style={{ padding: "4px", minWidth: "auto", height: "auto", color: "var(--danger)" }}
+                      type="button"
+                      title="Rời khỏi workspace"
+                      onClick={() => {
+                        showConfirm(
+                          "Rời khỏi workspace",
+                          "Bạn có chắc chắn muốn rời khỏi workspace này không?",
+                          () => handleRemoveMember(currentMember.id),
+                          true,
+                          "Rời khỏi"
+                        );
+                      }}
+                    >
+                      <IconLogOut width={15} height={15} />
+                    </button>
+                  ) : null}
+                </h2>
+              )}
               <p>
-                <span className="num">{formatInt(workspaceEntries.length)}</span> item ·{" "}
-                <span className="num">{formatInt(workspaceMembers.length)}</span> thành viên
+                <span className="num">{formatInt(workspaceEntries.length)}</span> item
               </p>
             </div>
-            <div className="workspace-toolbar__actions">
+            <div className="workspace-toolbar__actions" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <button
+                className="btn btn--ghost"
+                style={{ padding: "8px 12px", display: "flex", alignItems: "center" }}
+                onClick={() => setWorkspaceMode("members")}
+                title="Xem thành viên"
+              >
+                {workspaceMembers.length} thành viên
+              </button>
               <button
                 className="btn btn--primary"
                 type="button"
@@ -547,19 +874,6 @@ export function WorkspacePage({ theme, toggle }: Props) {
                     </button>
                   ))}
                 </div>
-                <div className="seg" role="group" aria-label="Trạng thái ban đầu">
-                  {(["backlog", "doing", "done"] as WorkStatus[]).map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      className={`seg__btn ${newItemStatus === status ? "is-active" : ""}`}
-                      onClick={() => setNewItemStatus(status)}
-                      aria-pressed={newItemStatus === status}
-                    >
-                      {STATUS_LABEL[status]}
-                    </button>
-                  ))}
-                </div>
               </div>
               <input
                 value={newItemTitle}
@@ -568,33 +882,110 @@ export function WorkspacePage({ theme, toggle }: Props) {
                 aria-label="Tên item workspace mới"
               />
               <div className="workspace-add__grid">
-                <label>
+                <div>
                   <span>Phụ trách</span>
-                  <select value={newItemAssigneeId} onChange={(e) => setNewItemAssigneeId(e.target.value)}>
-                    {workspaceMembers.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px", alignItems: "center" }}>
+                    {workspaceMembers
+                      .filter(m => newItemAssigneeIds.includes(m.id))
+                      .map((member) => (
+                        <button
+                          key={member.id}
+                          type="button"
+                          title={`Bỏ ${member.name}`}
+                          onClick={() =>
+                            setNewItemAssigneeIds((prev) => prev.filter((id) => id !== member.id))
+                          }
+                          style={{
+                            background: "var(--primary)",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: "16px",
+                            height: "28px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "0 10px 0 4px",
+                            transition: "opacity 0.15s",
+                          }}
+                        >
+                          <span style={{ 
+                            background: "rgba(255,255,255,0.2)", 
+                            borderRadius: "50%", 
+                            width: "20px", height: "20px", 
+                            display: "flex", alignItems: "center", justifyContent: "center", 
+                            fontSize: "10px" 
+                          }}>
+                            {member.initials}
+                          </span>
+                          {member.name}
+                          <span style={{ opacity: 0.7, marginLeft: "2px", fontSize: "10px" }}>✕</span>
+                        </button>
+                      ))}
+                    
+                    {workspaceMembers.length > newItemAssigneeIds.length && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setNewItemAssigneeIds(prev => [...prev, e.target.value]);
+                          }
+                        }}
+                        style={{
+                          height: "28px",
+                          borderRadius: "14px",
+                          padding: "0 24px 0 10px",
+                          fontSize: "12px",
+                          background: "var(--surface)",
+                          border: "1px dashed var(--border)",
+                          color: "var(--text-muted)",
+                          cursor: "pointer",
+                          width: "auto"
+                        }}
+                      >
+                        <option value="" disabled>+ Thêm</option>
+                        {workspaceMembers
+                          .filter(m => !newItemAssigneeIds.includes(m.id))
+                          .map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                      </select>
+                    )}
+                    {workspaceMembers.length === 0 && <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Chưa có thành viên</span>}
+                  </div>
+                </div>
                 <label>
                   <span>Deadline</span>
                   <input
+                    type="date"
                     value={newItemDue}
                     onChange={(e) => setNewItemDue(e.target.value)}
-                    placeholder="Ví dụ: 18/07"
+                    min={new Date().toISOString().split('T')[0]}
                     aria-label="Deadline task mới"
                   />
                 </label>
                 <label className="workspace-add__paper">
                   <span>Bài báo liên kết</span>
-                  <select value={newItemPaperId} onChange={(e) => setNewItemPaperId(e.target.value)}>
-                    {PAPERS.slice(0, 8).map((paper) => (
-                      <option key={paper.id} value={paper.id}>
-                        {paper.title}
+                  <select
+                    value={newItemPaperId}
+                    onChange={(e) => setNewItemPaperId(e.target.value)}
+                    disabled={availablePapers.length === 0}
+                  >
+                    {availablePapers.length === 0 ? (
+                      <option value="">
+                        {libraryPapers.length === 0
+                          ? "Thư viện của bạn chưa có bài báo"
+                          : "Mọi bài trong thư viện đã được gắn task"}
                       </option>
-                    ))}
+                    ) : (
+                      availablePapers.map((paper) => (
+                        <option key={paper.id} value={paper.id}>
+                          {paper.title}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </label>
               </div>
@@ -621,7 +1012,6 @@ export function WorkspacePage({ theme, toggle }: Props) {
           {workspaceMode === "invites" && (
             <WorkspaceInvitePanel
               researchers={researchers}
-              invites={workspaceInvites}
               inviteEmail={inviteEmail}
               inviteTopic={inviteTopic}
               inviteMessage={inviteMessage}
@@ -630,8 +1020,26 @@ export function WorkspacePage({ theme, toggle }: Props) {
               onInviteTopic={setInviteTopic}
               onInviteMessage={setInviteMessage}
               onSendInvite={sendInvite}
-              onConfirmInvite={(inviteId) => updateInviteStatus(inviteId, "accepted")}
-              onDeclineInvite={(inviteId) => updateInviteStatus(inviteId, "declined")}
+              onClose={() => setWorkspaceMode("board")}
+            />
+          )}
+
+          {workspaceMode === "members" && (
+            <WorkspaceMembersPanel
+              members={workspaceMembers}
+              canManageMembers={canManageMembers}
+              currentUserId={currentUser?.id ?? ""}
+              onRemoveMember={handleRemoveMember}
+              onUpdateRole={async (memberId, role) => {
+                if (!activeWorkspaceId) return;
+                try {
+                  const nextMembers = await workspaceApi.updateMember(activeWorkspaceId, memberId, role);
+                  setMembers((current) => [...current.filter((m) => m.workspaceId !== activeWorkspaceId), ...nextMembers]);
+                  setWorkspaceNotice("Cập nhật vai trò thành công.");
+                } catch (err) {
+                  setWorkspaceNotice(err instanceof Error ? err.message : "Không cập nhật được vai trò.");
+                }
+              }}
               onClose={() => setWorkspaceMode("board")}
             />
           )}
@@ -646,7 +1054,10 @@ export function WorkspacePage({ theme, toggle }: Props) {
               </button>
             </div>
           )}
-          {view === "empty" && <WorkspaceEmpty onReset={() => setDemo("auto")} />}
+          {view === "empty" && <WorkspaceEmpty onReset={() => {
+            const input = document.getElementById("workspace-new");
+            if (input) input.focus();
+          }} />}
           {workspaceMode === "board" && view === "ready" && workspaceEntries.length === 0 && (
             <div className="state state--empty">
               <p className="state__title">Workspace này chưa có item</p>
@@ -680,16 +1091,24 @@ export function WorkspacePage({ theme, toggle }: Props) {
         </section>
 
         <aside className="workspace-detail" aria-label="Chi tiết workspace">
-          {view === "ready" && selected ? (
+          {view === "ready" && workspaceMode === "board" && selected ? (
             <WorkspaceDetail
               item={selected}
               members={workspaceMembers}
+              papers={libraryPapers}
               onUpdate={(patch) => updateItem(selected.id, patch)}
               onMember={updateMember}
               onRemove={() => removeItem(selected.id)}
               newComment={newComment}
               onNewComment={setNewComment}
               onAddComment={() => addComment(selected.id)}
+              editingCommentId={editingCommentId}
+              editingCommentContent={editingCommentContent}
+              onEditingCommentId={setEditingCommentId}
+              onEditingCommentContent={setEditingCommentContent}
+              onEditComment={(commentId) => handleEditComment(selected.id, commentId)}
+              onDeleteComment={(commentId) => handleDeleteComment(selected.id, commentId)}
+              currentUserId={currentUser?.id || ""}
               activities={activities}
               canEdit={canEditWorkspace}
               canManageMembers={canManageMembers}
@@ -703,18 +1122,9 @@ export function WorkspacePage({ theme, toggle }: Props) {
         </aside>
       </div>
 
-      {SHOW_DEMO_CONTROLS && <div className="statepick statepick--search" role="group" aria-label="Xem trước trạng thái (demo)">
-        <span className="statepick__label">Xem trạng thái</span>
-        {(["auto", "loading", "empty", "error"] as Demo[]).map((d) => (
-          <button
-            key={d}
-            className={`statepick__btn ${demo === d ? "is-active" : ""}`}
-            onClick={() => setDemo(d)}
-          >
-            {d === "auto" ? "Thực tế" : d === "loading" ? "Đang tải" : d === "empty" ? "Trống" : "Lỗi"}
-          </button>
-        ))}
-      </div>}
+
+      
+      <ConfirmModal config={confirmConfig} />
     </main>
   );
 }
@@ -724,517 +1134,6 @@ function Summary({ label, value }: { label: string; value: string }) {
     <div className="sumstat">
       <span className="sumstat__label">{label}</span>
       <span className="sumstat__value num">{value}</span>
-    </div>
-  );
-}
-
-function nameFromEmail(email: string) {
-  const local = email.split("@")[0] ?? "collaborator";
-  return local
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function initialsFromName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const initials = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
-  return initials || "NC";
-}
-
-function getInvitePerson(invite: CollaborationInvite, researchers: ResearcherProfile[]) {
-  const researcher = researchers.find((item) => item.id === invite.researcherId);
-  const name = invite.inviteeName ?? researcher?.name ?? nameFromEmail(invite.inviteeEmail);
-  return {
-    name,
-    initials: researcher?.initials ?? initialsFromName(name),
-    email: invite.inviteeEmail,
-  };
-}
-
-function WorkItemRow({
-  item,
-  selected,
-  onSelect,
-}: {
-  item: WorkspaceItemEntry;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <li className={`workitem ${selected ? "is-selected" : ""}`}>
-      <button onClick={onSelect} aria-pressed={selected}>
-        <span className={`workitem__kind workitem__kind--${item.kind}`}>{KIND_LABEL[item.kind]}</span>
-        <strong>{item.title}</strong>
-        <span className="workitem__paper">
-          <IconLibrary width={13} height={13} /> {item.paper.title}
-        </span>
-        <span className="workitem__meta">
-          <span>{item.assignee?.initials ?? "—"}</span>
-          <span className="num">{item.due}</span>
-          <span>{item.comments.length} bình luận</span>
-        </span>
-      </button>
-    </li>
-  );
-}
-
-function CollaborationInbox({
-  invites,
-  researchers,
-  workspaces,
-}: {
-  invites: CollaborationInvite[];
-  researchers: ResearcherProfile[];
-  workspaces: Workspace[];
-}) {
-  const groups: Array<{ status: InviteStatus; label: string }> = [
-    { status: "pending", label: "Chờ xác nhận" },
-    { status: "accepted", label: "Đã chấp nhận" },
-    { status: "declined", label: "Đã từ chối" },
-  ];
-
-  return (
-    <section className="collab-inbox" aria-label="Lời mời nghiên cứu chung">
-      <div className="collab-inbox__head">
-        <span>Lời mời nghiên cứu chung</span>
-        <span className="num">{invites.length}</span>
-      </div>
-      {invites.length === 0 ? (
-        <p className="collab-inbox__empty">Không có lời mời đang chờ. Khi có nhóm mời bạn nghiên cứu chung, lời mời sẽ hiện ở đây.</p>
-      ) : (
-        <div className="invite-watch">
-          {groups.map((group) => {
-            const groupInvites = invites.filter((invite) => invite.status === group.status);
-            return (
-              <section className="invite-watch__group" key={group.status}>
-                <div className="invite-watch__head">
-                  <span>{group.label}</span>
-                  <span className="num">{groupInvites.length}</span>
-                </div>
-                {groupInvites.slice(0, 2).map((invite) => {
-                  const workspace = workspaces.find((item) => item.id === invite.workspaceId);
-                  const person = getInvitePerson(invite, researchers);
-                  return (
-                    <div className="invite-watch__item" key={invite.id}>
-                      <strong>{person.name}</strong>
-                      <small>{person.email} · {workspace?.name ?? "Workspace"}</small>
-                    </div>
-                  );
-                })}
-              </section>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function WorkspaceInvitePanel({
-  researchers,
-  invites,
-  inviteEmail,
-  inviteTopic,
-  inviteMessage,
-  inviteNotice,
-  onInviteEmail,
-  onInviteTopic,
-  onInviteMessage,
-  onSendInvite,
-  onConfirmInvite,
-  onDeclineInvite,
-  onClose,
-}: {
-  researchers: ResearcherProfile[];
-  invites: CollaborationInvite[];
-  inviteEmail: string;
-  inviteTopic: string;
-  inviteMessage: string;
-  inviteNotice: string;
-  onInviteEmail: (email: string) => void;
-  onInviteTopic: (topic: string) => void;
-  onInviteMessage: (message: string) => void;
-  onSendInvite: () => void;
-  onConfirmInvite: (inviteId: string) => void;
-  onDeclineInvite: (inviteId: string) => void;
-  onClose: () => void;
-}) {
-  const outgoingInvites = invites.filter((invite) => invite.direction === "outgoing");
-  const inviteGroups: Array<{ status: InviteStatus; label: string; empty: string }> = [
-    { status: "pending", label: "Chờ xác nhận", empty: "Chưa có email nào đang chờ xác nhận." },
-    { status: "accepted", label: "Đã chấp nhận", empty: "Chưa có lời mời nào được chấp nhận." },
-    { status: "declined", label: "Đã từ chối", empty: "Chưa có lời mời nào bị từ chối." },
-  ];
-
-  return (
-    <form
-      className="research-invite workspace-panel workspace-pageform"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSendInvite();
-      }}
-    >
-      <div className="workspace-pageform__hero">
-        <div>
-          <span className="workspace-detail__label">Lời mời nghiên cứu chung</span>
-          <h3>Gửi email mời cộng tác</h3>
-          <p>Theo dõi email đang chờ xác nhận, đã chấp nhận và đã từ chối trong cùng một màn quản lý workspace.</p>
-        </div>
-        <button className="btn btn--ghost btn--sm" type="button" onClick={onClose}>
-          Quay lại board
-        </button>
-      </div>
-      <label>
-        <span>Email người muốn hợp tác</span>
-        <input
-          type="email"
-          value={inviteEmail}
-          onChange={(e) => onInviteEmail(e.target.value)}
-          placeholder="ten.nguoi.nhan@truong.edu.vn"
-          autoComplete="email"
-        />
-      </label>
-      <label>
-        <span>Chủ đề muốn nghiên cứu chung</span>
-        <input
-          value={inviteTopic}
-          onChange={(e) => onInviteTopic(e.target.value)}
-          placeholder="Ví dụ: Đồng viết survey về biomedical RAG"
-        />
-      </label>
-      <label>
-        <span>Nội dung gửi trong email</span>
-        <textarea
-          value={inviteMessage}
-          onChange={(e) => onInviteMessage(e.target.value)}
-          placeholder="Ví dụ: Mình đang tổng hợp paper nền và muốn mời bạn cùng đọc, ghi chú và phân tích hướng nghiên cứu."
-          rows={4}
-        />
-      </label>
-      <div className="researcher-suggestions" aria-label="Gợi ý nhà nghiên cứu">
-        {researchers.slice(0, 3).map((researcher) => (
-          <button
-            key={researcher.id}
-            type="button"
-            className={`researcher-chip ${inviteEmail.toLowerCase() === researcher.email.toLowerCase() ? "is-active" : ""}`}
-            onClick={() => onInviteEmail(researcher.email)}
-          >
-            <span className="member-avatar" aria-hidden>
-              {researcher.initials}
-            </span>
-            <span>
-              <strong>{researcher.name}</strong>
-              <small>{researcher.email} · {researcher.match}% phù hợp</small>
-            </span>
-          </button>
-        ))}
-      </div>
-      <p className="email-preview">
-        Đây là chức năng cấp workspace: email chứa chủ đề, nội dung lời mời và link xác nhận tham gia workspace.
-      </p>
-      <button className="btn btn--primary" type="submit">
-        <IconPlus width={15} height={15} /> Gửi email mời
-      </button>
-      {inviteNotice && <p className="invite-notice" role="status">{inviteNotice}</p>}
-      {outgoingInvites.length > 0 && (
-        <div className="invite-status-groups" aria-label="Danh sách lời mời theo trạng thái">
-          {inviteGroups.map((group) => {
-            const groupInvites = outgoingInvites.filter((invite) => invite.status === group.status);
-            return (
-              <section className="invite-status-group" key={group.status}>
-                <div className="invite-status-group__head">
-                  <span>{group.label}</span>
-                  <span className="num">{groupInvites.length}</span>
-                </div>
-                {groupInvites.length === 0 ? (
-                  <p>{group.empty}</p>
-                ) : (
-                  <ul className="sent-invites">
-                    {groupInvites.map((invite) => {
-                      const person = getInvitePerson(invite, researchers);
-                      return (
-                        <li key={invite.id}>
-                          <span>
-                            <strong>{person.name}</strong>
-                            <small>{person.email}</small>
-                          </span>
-                          <span className={`sent-invites__status sent-invites__status--${invite.status}`}>
-                            {INVITE_STATUS_LABEL[invite.status]}
-                          </span>
-                          <p className="sent-invites__message">{invite.message}</p>
-                          {invite.status === "pending" && (
-                            <span className="sent-invites__actions">
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--sm"
-                                onClick={() => onConfirmInvite(invite.id)}
-                              >
-                                Chấp nhận
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--sm"
-                                onClick={() => onDeclineInvite(invite.id)}
-                              >
-                                Từ chối
-                              </button>
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            );
-          })}
-        </div>
-      )}
-    </form>
-  );
-}
-
-function WorkspaceDetail({
-  item,
-  members,
-  onUpdate,
-  onMember,
-  onRemove,
-  newComment,
-  onNewComment,
-  onAddComment,
-  activities,
-  canEdit,
-  canManageMembers,
-}: {
-  item: WorkspaceItemEntry;
-  members: WorkspaceMember[];
-  onUpdate: (patch: Partial<WorkspaceItem>) => void;
-  onMember: (id: string, patch: Partial<WorkspaceMember>) => void;
-  onRemove: () => void;
-  newComment: string;
-  onNewComment: (comment: string) => void;
-  onAddComment: () => void;
-  activities: { id: string; actor: string; action: string; when: string }[];
-  canEdit: boolean;
-  canManageMembers: boolean;
-}) {
-  return (
-    <div className="workspace-detail__body">
-      <div className="workspace-detail__head">
-        <span className={`workitem__kind workitem__kind--${item.kind}`}>{KIND_LABEL[item.kind]}</span>
-        {canEdit && (
-          <button className="btn btn--ghost btn--sm" onClick={onRemove}>
-            <IconX width={15} height={15} /> Xóa
-          </button>
-        )}
-      </div>
-
-      <h2>{item.title}</h2>
-      <div className="item-meta-strip" aria-label="Tóm tắt item">
-        <span>{KIND_LABEL[item.kind]}</span>
-        <span>{item.assignee?.name ?? "Chưa phân công"}</span>
-        <span className="num">{item.due}</span>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Trạng thái</span>
-        <div className="seg" role="group" aria-label="Cập nhật trạng thái item">
-          {(["backlog", "doing", "done"] as WorkStatus[]).map((status) => (
-            <button
-              key={status}
-              className={`seg__btn ${item.status === status ? "is-active" : ""}`}
-              onClick={() => onUpdate({ status })}
-              aria-pressed={item.status === status}
-              disabled={!canEdit}
-            >
-              {STATUS_LABEL[status]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="workspace-detail__grid">
-        <label>
-          <span className="workspace-detail__label">Phụ trách</span>
-          <select value={item.assigneeId} onChange={(e) => onUpdate({ assigneeId: e.target.value })} disabled={!canEdit}>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="workspace-detail__label">Deadline</span>
-          <input
-            value={item.due}
-            onChange={(e) => onUpdate({ due: e.target.value })}
-            placeholder="Ví dụ: 18/07"
-            disabled={!canEdit}
-          />
-        </label>
-        <label>
-          <span className="workspace-detail__label">Bài liên kết</span>
-          <select value={item.paperId} onChange={(e) => onUpdate({ paperId: e.target.value })} disabled={!canEdit}>
-            {PAPERS.slice(0, 8).map((paper) => (
-              <option key={paper.id} value={paper.id}>
-                {paper.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <label className="workspace-detail__section">
-        <span className="workspace-detail__label">Nội dung ghi chú</span>
-        <textarea
-          value={item.note}
-          onChange={(e) => onUpdate({ note: e.target.value })}
-          rows={4}
-          placeholder="Ghi lại mục tiêu, kết luận đọc paper, hoặc câu hỏi cần nhóm phản hồi."
-          readOnly={!canEdit}
-        />
-      </label>
-
-      <div className="workspace-paper">
-        <span className="workspace-detail__label">Bài báo</span>
-        <a href={item.paper.url} target="_blank" rel="noreferrer noopener">
-          <IconExternal width={15} height={15} /> {item.paper.title}
-        </a>
-        <p>
-          {item.paper.authors.slice(0, 3).join(", ")} · <span className="num">{item.paper.year}</span> ·{" "}
-          {item.paper.source}
-        </p>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Thành viên & quyền</span>
-        <ul className="member-list">
-          {members.map((member) => (
-            <li key={member.id}>
-              <span className="member-avatar" aria-hidden>
-                {member.initials}
-              </span>
-              <span className="member-name">{member.name}</span>
-              <select
-                value={member.role}
-                onChange={(e) => onMember(member.id, { role: e.target.value as MemberRole })}
-                aria-label={`Quyền của ${member.name}`}
-                disabled={!canManageMembers || member.role === "owner"}
-              >
-                {(["editor", "viewer", ...(member.role === "owner" ? ["owner" as const] : [])] as MemberRole[]).map((role) => (
-                  <option key={role} value={role}>
-                    {ROLE_LABEL[role]}
-                  </option>
-                ))}
-              </select>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Discussion</span>
-        <ul className="comment-list">
-          {item.comments.map((comment, idx) => (
-            <li key={`${item.id}-${idx}`}>{comment}</li>
-          ))}
-        </ul>
-        <form
-          className="comment-compose"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onAddComment();
-          }}
-        >
-          <textarea
-            value={newComment}
-            onChange={(e) => onNewComment(e.target.value)}
-            rows={3}
-            placeholder="Thêm bình luận cho nhóm…"
-            aria-label="Thêm bình luận cho item"
-          />
-          <button className="btn btn--primary btn--sm" type="submit">
-            Gửi bình luận
-          </button>
-        </form>
-      </div>
-
-      <div className="workspace-detail__section">
-        <span className="workspace-detail__label">Hoạt động của item</span>
-        <ItemActivityTimeline item={item} activities={activities} />
-      </div>
-    </div>
-  );
-}
-
-function ItemActivityTimeline({
-  item,
-  activities,
-}: {
-  item: WorkspaceItemEntry;
-  activities: { id: string; actor: string; action: string; when: string }[];
-}) {
-  const timeline = [
-    {
-      id: `${item.id}-status`,
-      actor: item.assignee?.name ?? "Nhóm",
-      action: `đang giữ trạng thái "${STATUS_LABEL[item.status]}"`,
-      when: "hiện tại",
-    },
-    {
-      id: `${item.id}-paper`,
-      actor: "Workspace",
-      action: `liên kết với paper "${item.paper.title}"`,
-      when: item.due,
-    },
-    ...activities.slice(0, 2),
-  ];
-
-  return (
-    <ul className="activity-list activity-list--item">
-      {timeline.map((activity) => (
-        <li key={activity.id}>
-          <strong>{activity.actor}</strong> {activity.action}
-          <span>{activity.when}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function WorkspaceSkeleton() {
-  return (
-    <div className="workboard" aria-hidden>
-      {Array.from({ length: 3 }, (_, c) => (
-        <section className="workcol" key={c}>
-          <div className="skel" style={{ height: 18, width: "52%", marginBottom: 14 }} />
-          {Array.from({ length: 2 }, (_, i) => (
-            <div className="workitem workitem--skel" key={i}>
-              <div className="skel" style={{ height: 16, width: "70%" }} />
-              <div className="skel" style={{ height: 12, width: "92%", marginTop: 10 }} />
-              <div className="skel" style={{ height: 12, width: "46%", marginTop: 10 }} />
-            </div>
-          ))}
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function WorkspaceEmpty({ onReset }: { onReset: () => void }) {
-  return (
-    <div className="state state--empty">
-      <p className="state__title">Chưa có workspace nhóm</p>
-      <p className="state__body">
-        Tạo workspace đầu tiên để chia sẻ thư viện, gắn paper vào task và phân công người phụ trách.
-      </p>
-      <button className="btn btn--primary" onClick={onReset}>
-        Bắt đầu tạo workspace
-      </button>
     </div>
   );
 }

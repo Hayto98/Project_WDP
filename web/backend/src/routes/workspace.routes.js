@@ -10,6 +10,7 @@ const {
   addMemberSchema,
   updateMemberSchema,
   addCommentSchema,
+  editCommentSchema,
 } = require('../validators/workspace.validator');
 
 const router = Router();
@@ -123,6 +124,8 @@ router.post('/:id/items', validate(createItemSchema), ctrl.createItem);
 router.put('/:id/items/:itemId', validate(updateItemSchema), ctrl.updateItem);
 router.delete('/:id/items/:itemId', ctrl.deleteItem);
 router.post('/:id/items/:itemId/comments', validate(addCommentSchema), ctrl.addComment);
+router.put('/:id/items/:itemId/comments/:commentId', validate(editCommentSchema), ctrl.editComment);
+router.delete('/:id/items/:itemId/comments/:commentId', ctrl.deleteComment);
 
 // Activities
 router.get('/:id/activities', ctrl.getActivities);

@@ -27,4 +27,9 @@ const respondToInvite = asyncHandler(async (req, res) => {
   return ApiResponse.success(res, invite);
 });
 
-module.exports = { getResearchers, getInvites, createInvite, respondToInvite };
+const deleteInvite = asyncHandler(async (req, res) => {
+  await collaborationService.deleteInvite(req.user.id, req.params.id);
+  return ApiResponse.success(res, { success: true });
+});
+
+module.exports = { getResearchers, getInvites, createInvite, respondToInvite, deleteInvite };
