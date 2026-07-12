@@ -31,7 +31,7 @@ import type { LibraryEntry } from "../data/librarySample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
 import { getCurrentUser, workspaceApi, libraryApi } from "../lib/api";
-import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
+import { USE_SAMPLE_FALLBACK } from "../lib/flags";
 
 import { WorkspaceSkeleton } from "../components/workspace/WorkspaceSkeleton";
 import { WorkspaceEmpty } from "../components/workspace/WorkspaceEmpty";
