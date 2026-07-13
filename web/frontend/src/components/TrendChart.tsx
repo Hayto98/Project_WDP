@@ -146,10 +146,10 @@ function TrendTooltip({
     <div className="chart-tip">
       <p className="chart-tip__head num">{label}</p>
       <ul>
-        {rows.map((p) => {
+        {rows.map((p, i) => {
           const s = series.find((x) => x.key === p.dataKey);
           return (
-            <li key={String(p.dataKey)}>
+            <li key={`${p.dataKey}-${i}`}>
               <span className="chart-tip__dot" style={{ background: `var(${s?.token})` }} />
               <span className="chart-tip__name">{s?.label}</span>
               <span className="chart-tip__val num">{formatInt(Number(p.value))}</span>

@@ -55,4 +55,31 @@ async function saveLiveGaps(req, res) {
   }
 }
 
-module.exports = { getTrends, getGrowth, getCooccurrence, getGaps, getLiveGaps, saveLiveGaps };
+async function getLiveTrends(req, res) {
+  try {
+    const data = await analyticsService.getLiveTrends(req.body);
+    return ApiResponse.success(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function saveLiveTrends(req, res) {
+  try {
+    const data = await analyticsService.saveLiveTrends(req.body.result, req.user);
+    return ApiResponse.created(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+module.exports = { 
+  getTrends, 
+  getGrowth, 
+  getCooccurrence, 
+  getGaps, 
+  getLiveGaps, 
+  saveLiveGaps,
+  getLiveTrends,
+  saveLiveTrends 
+};
