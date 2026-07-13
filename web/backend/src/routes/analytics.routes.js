@@ -1,6 +1,8 @@
 const { Router } = require('express');
 const ctrl = require('../controllers/analytics.controller');
 const { authenticate } = require('../middleware/auth.middleware');
+const { validate } = require('../middleware/validate.middleware');
+const { gapsQuerySchema, liveGapSchema, saveLiveGapSchema } = require('../validators/analytics.validator');
 
 const router = Router();
 router.use(authenticate);
@@ -66,6 +68,21 @@ router.get('/trends/cooccurrence', ctrl.getCooccurrence);
  *       200:
  *         description: Research gaps data
  */
-router.get('/gaps', ctrl.getGaps);
+router.get('/gaps', validate(gapsQuerySchema, 'query'), ctrl.getGaps);
+
+/**
+ * @swagger
+ * /api/v1/analytics/gaps/live:
+ *   post:
+ *     summary: Analyze research gaps from live external sources
+ *     tags: [Analytics]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Live research gaps
+ */
+router.post('/gaps/live', validate(liveGapSchema), ctrl.getLiveGaps);
+router.post('/gaps/live/save', validate(saveLiveGapSchema), ctrl.saveLiveGaps);
 
 module.exports = router;

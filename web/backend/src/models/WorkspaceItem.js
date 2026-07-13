@@ -30,7 +30,8 @@ const workspaceItemSchema = new Schema(
       enum: ['backlog', 'doing', 'done'],
       default: 'backlog',
     },
-    assignee_id: { type: Schema.Types.ObjectId, ref: 'User' },
+    assignee_id: { type: Schema.Types.ObjectId, ref: 'User' }, // legacy single – kept for backward compat
+    assignee_ids: [{ type: Schema.Types.ObjectId, ref: 'User' }], // multi-assignee (new)
     paper_id: { type: Schema.Types.ObjectId, ref: 'Paper' },
     due: { type: String, default: '' }, // e.g. "08/07"
     comments: [commentSchema],
@@ -44,7 +45,7 @@ const workspaceItemSchema = new Schema(
 
 /* ── Indexes ── */
 workspaceItemSchema.index({ workspace_id: 1, status: 1 });
-workspaceItemSchema.index({ assignee_id: 1 });
+workspaceItemSchema.index({ assignee_ids: 1 });
 workspaceItemSchema.index({ paper_id: 1 });
 
 module.exports = mongoose.model('WorkspaceItem', workspaceItemSchema);

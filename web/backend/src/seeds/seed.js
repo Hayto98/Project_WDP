@@ -304,11 +304,11 @@ async function seed() {
     },
     {
       user_id: minh._id, notification_type: 'system',
-      title: 'Batch cập nhật corpus đã hoàn tất',
-      content: 'Hệ thống đã đồng bộ metadata mới từ OpenAlex và Crossref.',
-      source: 'Hệ thống', actor: 'Crawler Service', priority: 'low',
-      target_label: 'Xem tổng quan', target_href: '#overview',
-      meta: ['1.248 bản ghi mới'], is_read: true,
+      title: 'Bảo trì hệ thống tối nay 22:00–23:00',
+      content: 'Một số tính năng tìm kiếm có thể gián đoạn trong khung giờ bảo trì.',
+      source: 'Tín hiệu hệ thống', actor: 'Admin', priority: 'high',
+      target_label: 'Đã hiểu', target_href: '#notifications',
+      meta: ['broadcast', 'Bảo trì'], is_read: true,
     },
   ]);
 
@@ -341,6 +341,12 @@ async function seed() {
   ]);
 
   console.log(`✅ System Logs: ${systemLogs.length}`);
+
+  /* ── 10. Analytics reports from seeded corpus ── */
+  const { generateAllReports } = require('../services/report.service');
+  const reports = await generateAllReports();
+  const gapReport = reports.reports.find((report) => report.type === 'ResearchGap');
+  console.log(`✅ Analysis reports: ${reports.reports.length}${gapReport ? ` (ResearchGap @ ${gapReport.generated_at})` : ''}`);
 
   /* ── Done ── */
   console.log('\n✅ Seed complete!');

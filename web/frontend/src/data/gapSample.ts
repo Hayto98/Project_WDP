@@ -72,6 +72,7 @@ export interface GapItem {
   keywords: string[];
   direction: string;
   trend: number[];
+  evidence?: { id: string; title: string; year?: number | null; citations?: number }[];
 }
 
 function jitter(seed: string): number {

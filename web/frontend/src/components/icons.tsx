@@ -81,10 +81,34 @@ export const IconExternal = (p: IconProps) => (
   </svg>
 );
 
+export const IconMap = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+    <line x1="9" y1="3" x2="9" y2="18" />
+    <line x1="15" y1="6" x2="15" y2="21" />
+  </svg>
+);
+
 export const IconAlert = (p: IconProps) => (
   <svg {...base} {...p}>
     <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
     <path d="M12 9v4M12 17h.01" />
+  </svg>
+);
+
+export const IconEdit = (p: IconProps) => (
+  <svg {...base} viewBox="0 0 512 512" strokeWidth={32} {...p}>
+    <path d="M384 224v184a40 40 0 01-40 40H104a40 40 0 01-40-40V168a40 40 0 0140-40h167.48" />
+    <path d="M459.94 53.25a16.06 16.06 0 00-23.22-.56L424.35 65a8 8 0 000 11.31l11.34 11.32a8 8 0 0011.34 0l12.06-12c6.1-6.09 6.67-16.01.85-22.38zM399.34 90L218.82 270.2a9 9 0 00-2.31 3.93L208.16 299a3.91 3.91 0 004.86 4.86l24.85-8.35a9 9 0 003.93-2.31L422 112.66a9 9 0 000-12.66l-9.95-10a9 9 0 00-12.71 0z" />
+  </svg>
+);
+
+export const IconTrash = (p: IconProps) => (
+  <svg {...base} viewBox="0 0 512 512" strokeWidth={32} {...p}>
+    <path d="M112 112l20 320c.95 18.49 14.4 32 32 32h184c17.67 0 30.87-13.51 32-32l20-320" />
+    <path d="M80 112h352" />
+    <path d="M192 112V72h0a23.93 23.93 0 0124-24h80a23.93 23.93 0 0124 24h0v40" />
+    <path d="M256 176v224M184 176l8 224M328 176l-8 224" />
   </svg>
 );
 
@@ -173,5 +197,27 @@ export const IconUser = (p: IconProps) => (
   <svg {...base} {...p}>
     <circle cx="12" cy="8" r="4" />
     <path d="M4 21a8 8 0 0 1 16 0" />
+  </svg>
+);
+
+export const IconLogOut = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+);
+
+export const IconEye = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+export const IconEyeOff = (p: IconProps) => (
+  <svg {...base} {...p}>
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );

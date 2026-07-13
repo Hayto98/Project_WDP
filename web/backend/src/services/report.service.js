@@ -3,12 +3,14 @@ const AnalysisReport = require('../models/AnalysisReport');
 
 const TOKEN_POOL = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6'];
 const GAP_ASPECTS = ['Lý thuyết', 'Hiệu năng', 'An toàn & Riêng tư', 'Y sinh', 'Bền vững'];
+const GAP_DENSITY_THRESHOLD = 0.35;
+const GAP_INTEREST_THRESHOLD = 0.55;
 const ASPECT_KEYWORDS = {
-  'Lý thuyết': ['theory', 'theoretical', 'convergence', 'representation', 'bound'],
-  'Hiệu năng': ['efficiency', 'performance', 'optimization', 'latency', 'inference', 'cost'],
-  'An toàn & Riêng tư': ['privacy', 'security', 'adversarial', 'robustness', 'federated', 'safe'],
-  'Y sinh': ['biomedical', 'clinical', 'medical', 'healthcare', 'diagnosis', 'biology'],
-  'Bền vững': ['sustainable', 'carbon', 'energy', 'green', 'efficient', 'tinyml'],
+  'Lý thuyết': ['theory', 'theoretical', 'convergence', 'representation', 'bound', 'lý thuyết'],
+  'Hiệu năng': ['efficiency', 'performance', 'optimization', 'latency', 'inference', 'cost', 'hiệu năng'],
+  'An toàn & Riêng tư': ['privacy', 'security', 'adversarial', 'robustness', 'federated', 'safe', 'riêng tư', 'an toàn'],
+  'Y sinh': ['biomedical', 'clinical', 'medical', 'healthcare', 'diagnosis', 'biology', 'y sinh'],
+  'Bền vững': ['sustainable', 'carbon', 'energy', 'green', 'efficient', 'tinyml', 'bền vững'],
 };
 
 function slugify(value) {
@@ -218,8 +220,26 @@ async function generateCooccurrence() {
 }
 
 function aspectMatchScore(paper, keywords) {
-  const haystack = normalizeText(`${paper.title} ${paper.abstract} ${(paper.keywords || []).join(' ')}`);
-  return keywords.some((keyword) => haystack.includes(keyword)) ? 1 : 0;
+  const haystack = normalizeText([
+    paper.title,
+    paper.abstract,
+    ...(paper.keywords || []),
+    ...(paper.research_fields || []),
+  ].join(' '));
+  return keywords.some((keyword) => haystack.includes(String(keyword).toLowerCase())) ? 1 : 0;
+}
+
+function toEvidencePapers(papers, limit = 3) {
+  return papers
+    .slice()
+    .sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0))
+    .slice(0, limit)
+    .map((paper) => ({
+      id: String(paper._id),
+      title: paper.title || 'Untitled paper',
+      year: paper.publication_year || null,
+      citations: paper.citation_count || 0,
+    }));
 }
 
 async function generateResearchGap() {
@@ -272,7 +292,8 @@ async function generateResearchGap() {
           ? `Mảng "${aspect}" của ${field.label} còn ít công bố so với mức quan tâm gần đây.`
           : `"${aspect}" trong ${field.label} hiện chưa nổi bật như một khoảng trống lớn.`,
         trend,
-        gap: density <= 0.4 && interest >= 0.55,
+        evidence: toEvidencePapers(aspectPapers),
+        gap: density <= GAP_DENSITY_THRESHOLD && interest >= GAP_INTEREST_THRESHOLD,
       });
     });
   });
@@ -282,6 +303,10 @@ async function generateResearchGap() {
     aspects: GAP_ASPECTS,
     gaps,
     gapCount: gaps.filter((gap) => gap.gap).length,
+    thresholds: {
+      density: GAP_DENSITY_THRESHOLD,
+      interest: GAP_INTEREST_THRESHOLD,
+    },
     ai: {
       summary: gaps.length
         ? 'Các khoảng trống được sinh từ mật độ công bố, tín hiệu gần đây và trích dẫn trong corpus hiện tại.'
@@ -298,7 +323,12 @@ async function generateResearchGap() {
     },
   };
 
-  return saveReport('ResearchGap', snapshot, { aspects: GAP_ASPECTS.length, fields: fields.length });
+  return saveReport('ResearchGap', snapshot, {
+    aspects: GAP_ASPECTS.length,
+    fields: fields.length,
+    densityThreshold: GAP_DENSITY_THRESHOLD,
+    interestThreshold: GAP_INTEREST_THRESHOLD,
+  });
 }
 
 async function generateAllReports() {
@@ -325,4 +355,6 @@ module.exports = {
   generateGrowthTable,
   generateCooccurrence,
   generateResearchGap,
+  GAP_DENSITY_THRESHOLD,
+  GAP_INTEREST_THRESHOLD,
 };

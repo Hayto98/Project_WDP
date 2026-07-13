@@ -37,4 +37,22 @@ async function getGaps(req, res) {
   }
 }
 
-module.exports = { getTrends, getGrowth, getCooccurrence, getGaps };
+async function getLiveGaps(req, res) {
+  try {
+    const data = await analyticsService.getLiveGaps(req.body, req.user);
+    return ApiResponse.success(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function saveLiveGaps(req, res) {
+  try {
+    const data = await analyticsService.saveLiveGaps(req.body.result, req.user);
+    return ApiResponse.created(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+module.exports = { getTrends, getGrowth, getCooccurrence, getGaps, getLiveGaps, saveLiveGaps };

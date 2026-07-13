@@ -25,7 +25,7 @@ const FILTERS: { id: InboxFilter; label: string }[] = [
   { id: "task", label: "Task" },
   { id: "invite", label: "Lời mời" },
   { id: "comment", label: "Bình luận" },
-  { id: "paper", label: "Paper mới" },
+  { id: "system", label: "Tín hiệu hệ thống" },
 ];
 
 const KIND_LABEL: Record<NotificationKind, string> = {
@@ -34,7 +34,7 @@ const KIND_LABEL: Record<NotificationKind, string> = {
   comment: "Bình luận",
   paper: "Paper mới",
   trend: "Xu hướng",
-  system: "Hệ thống",
+  system: "Tín hiệu hệ thống",
 };
 
 const PRIORITY_LABEL: Record<NotificationPriority, string> = {
@@ -81,6 +81,7 @@ export function NotificationPage({ theme, toggle }: Props) {
   const highCount = notifications.filter((item) => item.priority === "high").length;
   const taskCount = notifications.filter((item) => item.kind === "task" || item.kind === "comment").length;
   const inviteCount = notifications.filter((item) => item.kind === "invite").length;
+  const systemCount = notifications.filter((item) => item.kind === "system").length;
 
   const markRead = (id: string, unread: boolean) => {
     setNotifications((current) => current.map((item) => (item.id === id ? { ...item, unread } : item)));
@@ -96,9 +97,9 @@ export function NotificationPage({ theme, toggle }: Props) {
     <main className="main notifications">
       <header className="topbar">
         <div className="topbar__lead">
-          <h1>Thông báo</h1>
+          <h1>Hộp thư</h1>
           <p className="topbar__sub">
-            Hộp thư cập nhật task, lời mời nghiên cứu chung, bình luận và tín hiệu mới trong hệ thống
+            Cập nhật task, lời mời nghiên cứu chung, bình luận và tín hiệu hệ thống (bảo trì, thông báo chung)
           </p>
         </div>
         <div className="topbar__controls">
@@ -109,11 +110,12 @@ export function NotificationPage({ theme, toggle }: Props) {
         </div>
       </header>
 
-      <div className="trendsum notification-sum" aria-label="Tổng quan thông báo">
+      <div className="trendsum notification-sum" aria-label="Tổng quan hộp thư">
         <Summary label="Chưa đọc" value={formatInt(unreadCount)} />
         <Summary label="Ưu tiên cao" value={formatInt(highCount)} />
         <Summary label="Task & bình luận" value={formatInt(taskCount)} />
         <Summary label="Lời mời" value={formatInt(inviteCount)} />
+        <Summary label="Tín hiệu hệ thống" value={formatInt(systemCount)} />
       </div>
 
       <section className="notification-toolbar" aria-label="Bộ lọc thông báo">
@@ -141,8 +143,10 @@ export function NotificationPage({ theme, toggle }: Props) {
         <section className="notification-list" aria-label="Danh sách thông báo">
           {filtered.length === 0 ? (
             <div className="state state--empty">
-              <p className="state__title">Không có thông báo phù hợp</p>
-              <p className="state__body">Thử đổi bộ lọc hoặc quay lại tất cả để xem toàn bộ cập nhật.</p>
+              <p className="state__title">Hộp thư trống</p>
+              <p className="state__body">
+                Bạn sẽ thấy task được giao, lời mời cộng tác, bình luận và tín hiệu bảo trì từ admin tại đây.
+              </p>
             </div>
           ) : (
             filtered.map((item) => (

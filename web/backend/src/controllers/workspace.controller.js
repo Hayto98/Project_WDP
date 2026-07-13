@@ -78,6 +78,18 @@ const addComment = asyncHandler(async (req, res) => {
   return ApiResponse.created(res, comment);
 });
 
+const editComment = asyncHandler(async (req, res) => {
+  const result = await workspaceService.editComment(req.user.id, req.params.id, req.params.itemId, req.params.commentId, req.body.content);
+  if (!result) return ApiResponse.forbidden(res, 'Cannot edit this comment');
+  return ApiResponse.success(res, result);
+});
+
+const deleteComment = asyncHandler(async (req, res) => {
+  const result = await workspaceService.deleteComment(req.user.id, req.params.id, req.params.itemId, req.params.commentId);
+  if (!result) return ApiResponse.forbidden(res, 'Cannot delete this comment');
+  return ApiResponse.success(res, result);
+});
+
 const getActivities = asyncHandler(async (req, res) => {
   const activities = await workspaceService.listActivities(req.user.id, req.params.id);
   if (!activities) return ApiResponse.forbidden(res, 'Workspace access denied');
@@ -87,6 +99,6 @@ const getActivities = asyncHandler(async (req, res) => {
 module.exports = {
   getWorkspaces, createWorkspace, getWorkspaceById, updateWorkspace, deleteWorkspace,
   addMember, updateMember, removeMember,
-  getItems, createItem, updateItem, deleteItem, addComment,
+  getItems, createItem, updateItem, deleteItem, addComment, editComment, deleteComment,
   getActivities,
 };

@@ -21,8 +21,15 @@ const updateDataSourceSchema = Joi.object({
   api_endpoint: Joi.string().uri().allow('').optional(),
 }).min(1);
 
+const broadcastNotificationSchema = Joi.object({
+  title: Joi.string().trim().min(1).max(200).required(),
+  content: Joi.string().trim().min(1).max(2000).required(),
+  priority: Joi.string().valid('high', 'normal', 'low').default('high'),
+});
+
 module.exports = {
   updateUserSchema,
   createJobSchema,
   updateDataSourceSchema,
+  broadcastNotificationSchema,
 };

@@ -1,7 +1,8 @@
 const Workspace = require('../models/Workspace');
 const WorkspaceItem = require('../models/WorkspaceItem');
 const WorkspaceActivity = require('../models/WorkspaceActivity');
-const { notifyCommentAdded } = require('./notification.service');
+const CollaborationInvite = require('../models/CollaborationInvite');
+const { notifyCommentAdded, notifyTaskAssigned } = require('./notification.service');
 
 function pickWorkspaceFields(payload = {}) {
   const fields = {};
@@ -25,7 +26,12 @@ function pickItemFields(payload = {}) {
   if (payload.kind !== undefined) fields.kind = payload.kind;
   if (payload.title !== undefined) fields.title = payload.title;
   if (payload.status !== undefined) fields.status = payload.status;
-  if (payload.assignee_id !== undefined) fields.assignee_id = payload.assignee_id;
+  // Support new multi-assignee (array) or legacy single ID
+  if (payload.assignee_ids !== undefined) {
+    fields.assignee_ids = Array.isArray(payload.assignee_ids) ? payload.assignee_ids : [payload.assignee_ids].filter(Boolean);
+  } else if (payload.assignee_id !== undefined) {
+    fields.assignee_id = payload.assignee_id;
+  }
   if (payload.paper_id !== undefined) fields.paper_id = payload.paper_id;
   if (payload.due !== undefined) fields.due = payload.due;
   if (payload.note !== undefined) fields.note = payload.note;
@@ -33,7 +39,32 @@ function pickItemFields(payload = {}) {
 }
 
 function actorName(user) {
-  return user?.name || user?.email || 'Workspace';
+  return user?.full_name || user?.name || user?.email || 'Workspace';
+}
+
+function collectAssigneeIds(itemOrFields = {}) {
+  const ids = [];
+  if (Array.isArray(itemOrFields.assignee_ids)) {
+    ids.push(...itemOrFields.assignee_ids);
+  }
+  if (itemOrFields.assignee_id) {
+    ids.push(itemOrFields.assignee_id);
+  }
+  return [...new Set(ids.map((id) => id?.toString()).filter(Boolean))];
+}
+
+async function notifyNewAssignees(item, previousIds, actor) {
+  if (!item || item.kind !== 'task') return;
+  const actorId = (actor?.id || actor?._id)?.toString();
+  const nextIds = collectAssigneeIds(item);
+  const previous = new Set(previousIds || []);
+  const assigner = actorName(actor);
+
+  for (const assigneeId of nextIds) {
+    if (previous.has(assigneeId)) continue;
+    if (actorId && assigneeId === actorId) continue;
+    notifyTaskAssigned(assigneeId, item, assigner);
+  }
 }
 
 async function getMemberRole(userId, workspaceId) {
@@ -147,15 +178,28 @@ async function updateMember(userId, workspaceId, memberId, payload, user = null)
 async function removeMember(userId, workspaceId, memberId, user = null) {
   const workspaceBefore = await Workspace.findOne({ _id: workspaceId, owner_id: userId }).select('members').lean();
   const removed = workspaceBefore?.members?.find((member) => member.user_id?.toString() === memberId);
+  const mongoose = require('mongoose');
   const workspace = await Workspace.findOneAndUpdate(
     { _id: workspaceId, owner_id: userId },
-    { $pull: { members: { user_id: memberId } } },
+    { $pull: { members: { user_id: new mongoose.Types.ObjectId(memberId) } } },
     { returnDocument: 'after' },
   );
-  if (workspace) await recordActivity(workspaceId, user || { id: userId }, 'member_removed', 'member', {
-    id: memberId,
-    name: removed?.name || '',
-  });
+  if (workspace) {
+    await WorkspaceItem.updateMany(
+      { workspace_id: workspaceId, assignee_id: memberId },
+      { $unset: { assignee_id: 1 } }
+    );
+    await WorkspaceItem.updateMany(
+      { workspace_id: workspaceId, assignee_ids: memberId },
+      { $pull: { assignee_ids: memberId } }
+    );
+    await recordActivity(workspaceId, user || { id: userId }, 'member_removed', 'member', {
+      id: memberId,
+      name: removed?.name || '',
+    });
+    // Delete any accepted/pending invites for this user to completely clear their invite state
+    await CollaborationInvite.deleteMany({ workspace_id: workspaceId, invitee_user_id: memberId });
+  }
   return workspace;
 }
 
@@ -166,32 +210,55 @@ async function listItems(userId, workspaceId, query = {}) {
   if (query.status) filter.status = query.status;
   if (query.kind) filter.kind = query.kind;
 
-  return WorkspaceItem.find(filter).sort({ updated_at: -1 }).lean();
+  return WorkspaceItem.find(filter)
+    .populate('paper_id', 'title abstract publication_year source_name authors citation_count doi original_url type research_fields keywords')
+    .sort({ updated_at: -1 })
+    .lean();
 }
 
 async function createItem(workspaceId, payload, user = null) {
   const role = await getMemberRole(user?.id || user?._id, workspaceId);
   if (!canWriteItems(role)) return null;
+  const fields = pickItemFields(payload);
+  // One paper can be linked to at most one task within the same workspace.
+  if (fields.paper_id) {
+    const existing = await WorkspaceItem.findOne({
+      workspace_id: workspaceId,
+      paper_id: fields.paper_id,
+    }).select('_id').lean();
+    if (existing) {
+      const err = new Error('Bài báo này đã được gắn cho một task trong workspace.');
+      err.statusCode = 409;
+      err.code = 'PAPER_ALREADY_LINKED';
+      throw err;
+    }
+  }
   const item = await WorkspaceItem.create({
-    ...pickItemFields(payload),
+    ...fields,
     workspace_id: workspaceId,
   });
   await recordActivity(workspaceId, user, 'item_created', 'item', item, { kind: item.kind, status: item.status });
+  await notifyNewAssignees(item, [], user);
   return item;
 }
 
 async function updateItem(workspaceId, itemId, payload, user = null) {
   const role = await getMemberRole(user?.id || user?._id, workspaceId);
   if (!canWriteItems(role)) return null;
+  const previous = await WorkspaceItem.findOne({ _id: itemId, workspace_id: workspaceId }).lean();
+  const previousIds = collectAssigneeIds(previous || {});
   const item = await WorkspaceItem.findOneAndUpdate(
     { _id: itemId, workspace_id: workspaceId },
     pickItemFields(payload),
     { returnDocument: 'after' },
   );
-  if (item) await recordActivity(workspaceId, user, 'item_updated', 'item', item, {
-    fields: Object.keys(pickItemFields(payload)),
-    status: item.status,
-  });
+  if (item) {
+    await recordActivity(workspaceId, user, 'item_updated', 'item', item, {
+      fields: Object.keys(pickItemFields(payload)),
+      status: item.status,
+    });
+    await notifyNewAssignees(item, previousIds, user);
+  }
   return item;
 }
 
@@ -238,6 +305,39 @@ async function addComment(user, workspaceId, itemId, payload) {
   }, { item_id: itemId });
 
   return comment;
+}
+
+async function editComment(userId, workspaceId, itemId, commentId, content) {
+  const role = await getMemberRole(userId, workspaceId);
+  if (!role) return null;
+  const item = await WorkspaceItem.findOneAndUpdate(
+    {
+      _id: itemId,
+      workspace_id: workspaceId,
+      comments: { $elemMatch: { comment_id: commentId, author_id: userId } },
+    },
+    { $set: { 'comments.$.content': content } },
+    { returnDocument: 'after' },
+  );
+  if (!item) return null;
+  return item.comments.find((c) => c.comment_id === commentId) || null;
+}
+
+async function deleteComment(userId, workspaceId, itemId, commentId) {
+  const role = await getMemberRole(userId, workspaceId);
+  if (!role) return null;
+  // Only the comment's author may delete it.
+  const filter = {
+    _id: itemId,
+    workspace_id: workspaceId,
+    comments: { $elemMatch: { comment_id: commentId, author_id: userId } },
+  };
+  const item = await WorkspaceItem.findOneAndUpdate(
+    filter,
+    { $pull: { comments: { comment_id: commentId } } },
+    { returnDocument: 'after' },
+  );
+  return item ? { message: 'Comment deleted' } : null;
 }
 
 async function listActivities(userId, workspaceId) {
@@ -292,5 +392,7 @@ module.exports = {
   updateItem,
   deleteItem,
   addComment,
+  editComment,
+  deleteComment,
   listActivities,
 };

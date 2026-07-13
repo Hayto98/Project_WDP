@@ -59,10 +59,12 @@ function mapSemanticPaperToPaper(paper) {
 }
 
 function buildSearchQuery(query, options = {}) {
+  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
+  const phrase = /\s/.test(cleaned) ? `"${cleaned}"` : cleaned;
   const yearFrom = parseInt(options.yearFrom, 10);
   const yearTo = parseInt(options.yearTo, 10);
-  if (!yearFrom && !yearTo) return query;
-  return `${query} ${yearFrom || 1900}-${yearTo || new Date().getFullYear()}`;
+  if (!yearFrom && !yearTo) return phrase;
+  return `${phrase} ${yearFrom || 1900}-${yearTo || new Date().getFullYear()}`;
 }
 
 async function fetchSemanticScholarPapers(query, maxRecords = 25, options = {}) {
