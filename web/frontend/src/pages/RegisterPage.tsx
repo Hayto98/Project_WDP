@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { authApi } from "../lib/api";
+import { IconEye, IconEyeOff } from "../components/icons";
 import "./Auth.css";
 
 export function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -83,14 +85,38 @@ export function RegisterPage() {
 
           <div className="auth-input-group">
             <label className="auth-label">Mật khẩu</label>
-            <input 
-              type="password"
-              placeholder="Tạo mật khẩu"
-              className="auth-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div style={{ position: "relative" }}>
+              <input 
+                type={showPassword ? "text" : "password"}
+                placeholder="Tạo mật khẩu"
+                className="auth-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{ paddingRight: "40px" }}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#64748b",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0
+                }}
+                aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+              >
+                {showPassword ? <IconEyeOff width={20} height={20} /> : <IconEye width={20} height={20} />}
+              </button>
+            </div>
           </div>
 
           {error && <p className="auth-subtitle" role="alert">{error}</p>}
