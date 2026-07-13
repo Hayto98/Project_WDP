@@ -157,4 +157,23 @@ async function saveLiveGaps(result, user) {
   return liveGapService.saveLiveGapReport(result, user?.id || null);
 }
 
-module.exports = { getTrends, getGrowth, getCooccurrence, getGaps, getLiveGaps, saveLiveGaps };
+async function getLiveTrends(payload) {
+  const liveTrendService = require('./liveTrend.service');
+  return liveTrendService.getLiveTrends(payload);
+}
+
+async function saveLiveTrends(result, user) {
+  const liveTrendService = require('./liveTrend.service');
+  return liveTrendService.saveLiveTrendReport(result, user?.id || null);
+}
+
+module.exports = { 
+  getTrends, 
+  getGrowth, 
+  getCooccurrence, 
+  getGaps, 
+  getLiveGaps, 
+  saveLiveGaps,
+  getLiveTrends,
+  saveLiveTrends 
+};

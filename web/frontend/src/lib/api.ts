@@ -808,6 +808,36 @@ export const analyticsApi = {
       body: JSON.stringify({ result }),
     });
   },
+  async liveTrends(payload: {
+    topic: string;
+    sources?: string[];
+    yearFrom?: number;
+    yearTo?: number;
+    maxRecordsPerSource?: number;
+  }) {
+    return request<{
+      topic: string;
+      mode: "live_trend";
+      sources: string[];
+      yearFrom: number;
+      yearTo: number;
+      totalFetched: number;
+      generatedAt: string;
+      trendPoints: TrendPoint[];
+      sourceErrors?: Array<{ source: string; message: string }>;
+      warnings?: string[];
+      cached?: boolean;
+    }>("/analytics/trends/live", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  saveLiveTrends(result: unknown) {
+    return request<{ id: string; reportType: string; generatedAt: string }>("/analytics/trends/live/save", {
+      method: "POST",
+      body: JSON.stringify({ result }),
+    });
+  },
   seriesFromPoints(points: TrendPoint[]) {
     const keys = Object.keys(points[0] ?? {}).filter((key) => key !== "period");
     return withTrendTokens(
