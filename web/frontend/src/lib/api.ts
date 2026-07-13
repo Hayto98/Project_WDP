@@ -920,6 +920,12 @@ export const adminApi = {
       };
     });
   },
+  broadcastNotification(payload: { title: string; content: string; priority?: "high" | "normal" | "low" }) {
+    return request<{ message: string; sent: number }>("/admin/notifications/broadcast", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export const libraryApi = {

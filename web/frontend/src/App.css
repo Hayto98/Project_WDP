@@ -5962,6 +5962,7 @@ mark.hl {
 }
 .account-form input,
 .account-form textarea,
+.account-form select,
 .admin-feedback-card select,
 .admin-feedback-card textarea {
   width: 100%;
@@ -5973,6 +5974,7 @@ mark.hl {
   outline: none;
 }
 .account-form input,
+.account-form select,
 .admin-feedback-card select {
   min-height: 40px;
   padding: 0 11px;
@@ -5986,10 +5988,25 @@ mark.hl {
 }
 .account-form input:focus,
 .account-form textarea:focus,
+.account-form select:focus,
 .admin-feedback-card select:focus,
 .admin-feedback-card textarea:focus {
   border-color: color-mix(in oklab, var(--primary) 62%, var(--border));
   box-shadow: 0 0 0 3px var(--primary-weak);
+}
+.admin-broadcast-form {
+  max-width: 42rem;
+}
+.admin-broadcast-form__actions {
+  display: grid;
+  gap: var(--s-2);
+  align-items: start;
+}
+.admin-broadcast-form__hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.45;
 }
 .account-form--feedback {
   grid-template-columns: minmax(0, 1fr) auto;

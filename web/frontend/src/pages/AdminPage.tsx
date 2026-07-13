@@ -17,7 +17,7 @@ import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
 import { adminApi, authApi, feedbackApi, getCurrentUser } from "../lib/api";
 
-type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "reading" | "logs";
+type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "broadcast" | "reading" | "logs";
 type AdminReadAction = "refresh" | "export" | "threshold" | "raw";
 type FeedbackStatus = "Pending" | "Reviewed" | "Resolved";
 
@@ -74,6 +74,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "sources", label: "Nguồn dữ liệu" },
   { id: "users", label: "Người dùng" },
   { id: "feedback", label: "Phản hồi" },
+  { id: "broadcast", label: "Tín hiệu hệ thống" },
   { id: "reading", label: "Thống kê lượt đọc" },
   { id: "logs", label: "Audit log" },
 ];
@@ -124,6 +125,11 @@ export function AdminPage({ theme, toggle }: Props) {
   const [jobNotice, setJobNotice] = useState("");
   const [sourceNotice, setSourceNotice] = useState("");
   const [feedbackNotice, setFeedbackNotice] = useState("");
+  const [broadcastNotice, setBroadcastNotice] = useState("");
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastContent, setBroadcastContent] = useState("");
+  const [broadcastPriority, setBroadcastPriority] = useState<"high" | "normal" | "low">("high");
+  const [broadcastSending, setBroadcastSending] = useState(false);
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
   const [checkingSources, setCheckingSources] = useState(false);
@@ -330,6 +336,32 @@ export function AdminPage({ theme, toggle }: Props) {
     } catch (err) {
       setFeedbackNotice(err instanceof Error ? err.message : "Không gửi được tin nhắn.");
       throw err;
+    }
+  };
+
+  const sendBroadcast = async () => {
+    const title = broadcastTitle.trim();
+    const content = broadcastContent.trim();
+    if (!title || !content) {
+      setBroadcastNotice("Nhập tiêu đề và nội dung tín hiệu trước khi gửi.");
+      return;
+    }
+    setBroadcastSending(true);
+    setBroadcastNotice("");
+    try {
+      const result = await adminApi.broadcastNotification({
+        title,
+        content,
+        priority: broadcastPriority,
+      });
+      setBroadcastNotice(result.message || `Đã gửi tới ${result.sent} người dùng.`);
+      setBroadcastTitle("");
+      setBroadcastContent("");
+      setBroadcastPriority("high");
+    } catch (err) {
+      setBroadcastNotice(err instanceof Error ? err.message : "Không gửi được tín hiệu hệ thống.");
+    } finally {
+      setBroadcastSending(false);
     }
   };
 
@@ -566,6 +598,65 @@ export function AdminPage({ theme, toggle }: Props) {
               onReply={replyFeedback}
               onUpdateStatus={updateFeedback}
             />
+          </section>
+        )}
+
+        {tab === "broadcast" && (
+          <section className="admin-panel admin-panel--wide">
+            <PanelHead
+              title="Gửi tín hiệu hệ thống"
+              meta="Thông báo bảo trì, sự cố hoặc chính sách tới toàn bộ người dùng đang hoạt động"
+            />
+            {broadcastNotice && <p className="invite-notice admin-read-notice" role="status">{broadcastNotice}</p>}
+            <form
+              className="account-form admin-broadcast-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendBroadcast();
+              }}
+            >
+              <label>
+                Tiêu đề
+                <input
+                  type="text"
+                  maxLength={200}
+                  placeholder="Ví dụ: Bảo trì hệ thống 22:00–23:00"
+                  value={broadcastTitle}
+                  onChange={(event) => setBroadcastTitle(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Nội dung
+                <textarea
+                  rows={5}
+                  maxLength={2000}
+                  placeholder="Mô tả ngắn cho người dùng: thời gian, ảnh hưởng, hành động cần làm..."
+                  value={broadcastContent}
+                  onChange={(event) => setBroadcastContent(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Mức ưu tiên
+                <select
+                  value={broadcastPriority}
+                  onChange={(event) => setBroadcastPriority(event.target.value as "high" | "normal" | "low")}
+                >
+                  <option value="high">Ưu tiên cao</option>
+                  <option value="normal">Bình thường</option>
+                  <option value="low">Thông tin</option>
+                </select>
+              </label>
+              <div className="admin-broadcast-form__actions">
+                <button className="btn btn--primary" type="submit" disabled={broadcastSending}>
+                  {broadcastSending ? "Đang gửi..." : "Gửi tới tất cả người dùng"}
+                </button>
+                <p className="admin-broadcast-form__hint">
+                  Tín hiệu xuất hiện trong Hộp thư của user. Log import bài báo không còn gửi vào hộp thư.
+                </p>
+              </div>
+            </form>
           </section>
         )}
 

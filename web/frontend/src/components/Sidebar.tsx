@@ -13,7 +13,7 @@ import { authApi, getAccessToken, getCurrentUser, notificationApi } from "../lib
 
 export const NAV = [
   { id: "overview", label: "Tổng quan", icon: IconGrid },
-  { id: "notifications", label: "Thông báo", icon: IconBell },
+  { id: "notifications", label: "Hộp thư", icon: IconBell },
   { id: "search", label: "Tìm kiếm", icon: IconSearch },
   { id: "trends", label: "Phân tích xu hướng", icon: IconTrend },
   { id: "workspace", label: "Workspace", icon: IconGrid },
