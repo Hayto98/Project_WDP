@@ -101,8 +101,10 @@ function buildFilters(options = {}) {
 async function fetchCrossrefWorks(query, maxRecords = 25, options = {}) {
   const rows = clampMaxRecords(maxRecords);
   const page = Math.max(1, parseInt(options.page, 10) || 1);
+  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
   const url = new URL('https://api.crossref.org/works');
-  url.searchParams.set('query', query);
+  // Prefer bibliographic phrase match so multi-word queries stay cohesive.
+  url.searchParams.set('query.bibliographic', cleaned);
   url.searchParams.set('rows', String(rows));
   url.searchParams.set('offset', String((page - 1) * rows));
   const filter = buildFilters(options);

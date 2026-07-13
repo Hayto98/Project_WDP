@@ -8,7 +8,7 @@ const syncRequestSchema = Joi.object({
   maxRecords: Joi.number().integer().min(1).max(50).default(25),
   yearFrom: Joi.number().integer().min(1900).max(2030).optional(),
   yearTo: Joi.number().integer().min(1900).max(2030).optional(),
-  types: Joi.string().max(200).optional(),
+  types: Joi.string().trim().max(200).allow('').empty('').optional(),
 });
 
 module.exports = { syncRequestSchema };
