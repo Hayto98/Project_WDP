@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   IconBell,
   IconGap,
@@ -8,7 +9,7 @@ import {
   IconTrend,
   IconUser,
 } from "./icons";
-import { authApi, getCurrentUser } from "../lib/api";
+import { authApi, getAccessToken, getCurrentUser, notificationApi } from "../lib/api";
 
 export const NAV = [
   { id: "overview", label: "Tổng quan", icon: IconGrid },
@@ -24,6 +25,44 @@ export const NAV = [
 
 export function Sidebar({ active }: { active: string }) {
   const user = getCurrentUser();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshUnread = async () => {
+    if (!getAccessToken()) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const count = await notificationApi.unreadCount();
+      setUnreadCount(count);
+    } catch {
+      // Keep last known count if the endpoint is temporarily unavailable.
+    }
+  };
+
+  useEffect(() => {
+    void refreshUnread();
+    const timer = window.setInterval(() => {
+      void refreshUnread();
+    }, 20000);
+    const onFocus = () => {
+      void refreshUnread();
+    };
+    const onHashChange = () => {
+      // After opening notifications, refresh so the badge clears once marked read.
+      window.setTimeout(() => {
+        void refreshUnread();
+      }, 400);
+    };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("hashchange", onHashChange);
+    };
+  }, [active]);
+
   const handleLogout = async () => {
     await authApi.logout();
     window.location.hash = "login";
@@ -54,15 +93,26 @@ export function Sidebar({ active }: { active: string }) {
         {NAV.map((n) => {
           const Icon = n.icon;
           const isActive = active === n.id;
+          const showBadge = n.id === "notifications" && unreadCount > 0;
           return (
             <li key={n.id}>
               <a
                 className={`navlink ${isActive ? "is-active" : ""}`}
                 href={`#${n.id}`}
                 aria-current={isActive ? "page" : undefined}
+                aria-label={
+                  showBadge
+                    ? `${n.label}, ${unreadCount} chưa đọc`
+                    : n.label
+                }
               >
                 <Icon width={19} height={19} />
                 <span>{n.label}</span>
+                {showBadge && (
+                  <span className="navlink__badge" aria-hidden>
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </a>
             </li>
           );

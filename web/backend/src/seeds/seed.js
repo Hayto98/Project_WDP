@@ -342,6 +342,12 @@ async function seed() {
 
   console.log(`✅ System Logs: ${systemLogs.length}`);
 
+  /* ── 10. Analytics reports from seeded corpus ── */
+  const { generateAllReports } = require('../services/report.service');
+  const reports = await generateAllReports();
+  const gapReport = reports.reports.find((report) => report.type === 'ResearchGap');
+  console.log(`✅ Analysis reports: ${reports.reports.length}${gapReport ? ` (ResearchGap @ ${gapReport.generated_at})` : ''}`);
+
   /* ── Done ── */
   console.log('\n✅ Seed complete!');
   console.log(`   Login: minh.thanh@uni.edu.vn / password123 (Admin)`);

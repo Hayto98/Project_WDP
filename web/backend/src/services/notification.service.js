@@ -105,6 +105,48 @@ function notifyJobComplete(userId, job) {
   );
 }
 
+async function notifyAdminsNewFeedback(feedback, submitterName = 'Người dùng') {
+  const User = require('../models/User');
+  const admins = await User.find({
+    roles: 'Admin',
+    status: 'Active',
+  }).select('_id').lean();
+
+  const excerpt = String(feedback.content || '').trim().slice(0, 160);
+  await Promise.all(admins.map((admin) => createNotification(
+    admin._id,
+    'system',
+    'Có phản hồi người dùng mới',
+    `${submitterName}: ${excerpt}`,
+    {
+      source: 'Phản hồi',
+      actor: submitterName,
+      priority: 'high',
+      targetLabel: 'Mở phản hồi',
+      targetHref: '#admin',
+      meta: ['Pending'],
+    },
+  )));
+}
+
+function notifyUserFeedbackReply(userId, feedback) {
+  const excerpt = String(feedback.admin_note || '').trim().slice(0, 180);
+  return createNotification(
+    userId,
+    'system',
+    'Bạn có tin nhắn phản hồi mới từ Admin',
+    excerpt || 'Admin vừa trả lời hội thoại phản hồi của bạn.',
+    {
+      source: 'Phản hồi',
+      actor: 'Admin',
+      priority: 'high',
+      targetLabel: 'Mở chat phản hồi',
+      targetHref: '#account',
+      meta: ['Tin nhắn mới', feedback.status || 'Reviewed'],
+    },
+  );
+}
+
 module.exports = {
   listNotifications,
   markNotificationRead,
@@ -114,4 +156,6 @@ module.exports = {
   notifyInviteReceived,
   notifyCommentAdded,
   notifyJobComplete,
+  notifyAdminsNewFeedback,
+  notifyUserFeedbackReply,
 };

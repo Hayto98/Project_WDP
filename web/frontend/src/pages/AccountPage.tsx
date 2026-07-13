@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { IconRefresh, IconUser } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -7,12 +7,23 @@ import { authApi, feedbackApi, getCurrentUser, userApi, type AuthUser } from "..
 
 type FeedbackStatus = "Pending" | "Reviewed" | "Resolved";
 
+interface FeedbackMessage {
+  _id?: string;
+  sender_role: "User" | "Admin";
+  sender_name?: string;
+  content: string;
+  created_at?: string;
+}
+
 interface FeedbackItem {
   _id?: string;
   id?: string;
   content: string;
   status: FeedbackStatus;
   admin_note?: string | null;
+  messages?: FeedbackMessage[];
+  last_message?: string;
+  last_message_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -28,6 +39,32 @@ const STATUS_LABEL: Record<FeedbackStatus, string> = {
   Resolved: "Đã xử lý",
 };
 
+function feedbackId(item: FeedbackItem) {
+  return item._id ?? item.id ?? "";
+}
+
+function threadMessages(item: FeedbackItem): FeedbackMessage[] {
+  if (item.messages?.length) return item.messages;
+  const rows: FeedbackMessage[] = [];
+  if (item.content) {
+    rows.push({
+      sender_role: "User",
+      sender_name: "Bạn",
+      content: item.content,
+      created_at: item.created_at,
+    });
+  }
+  if (item.admin_note) {
+    rows.push({
+      sender_role: "Admin",
+      sender_name: "Admin",
+      content: item.admin_note,
+      created_at: item.updated_at,
+    });
+  }
+  return rows;
+}
+
 export function AccountPage({ theme, toggle }: Props) {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getCurrentUser());
   const [profileName, setProfileName] = useState(() => getCurrentUser()?.full_name ?? "");
@@ -40,15 +77,25 @@ export function AccountPage({ theme, toggle }: Props) {
   const [passwordNotice, setPasswordNotice] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [feedbackContent, setFeedbackContent] = useState("");
+  const [replyContent, setReplyContent] = useState("");
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
   const [feedbackNotice, setFeedbackNotice] = useState("");
   const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+
+  const selectedFeedback = feedbacks.find((item) => feedbackId(item) === selectedFeedbackId) ?? feedbacks[0] ?? null;
 
   const loadFeedbacks = async () => {
     setFeedbackNotice("");
     try {
       const result = await feedbackApi.list({ page: 1, limit: 20 });
-      setFeedbacks(Array.isArray(result.data) ? result.data : []);
+      const rows = Array.isArray(result.data) ? result.data : [];
+      setFeedbacks(rows);
+      setSelectedFeedbackId((current) => {
+        if (current && rows.some((item) => feedbackId(item) === current)) return current;
+        return rows[0] ? feedbackId(rows[0]) : null;
+      });
     } catch (err) {
       setFeedbackNotice(err instanceof Error ? err.message : "Không tải được phản hồi.");
     }
@@ -57,6 +104,11 @@ export function AccountPage({ theme, toggle }: Props) {
   useEffect(() => {
     void loadFeedbacks();
   }, []);
+
+  useEffect(() => {
+    if (!threadRef.current) return;
+    threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [selectedFeedback?.messages, selectedFeedbackId]);
 
   const submitProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -108,10 +160,34 @@ export function AccountPage({ theme, toggle }: Props) {
     try {
       const created = (await feedbackApi.create(content)) as FeedbackItem;
       setFeedbackContent("");
-      setFeedbacks((current) => [created, ...current]);
-      setFeedbackNotice("Đã gửi phản hồi cho admin.");
+      setFeedbacks((current) => {
+        const id = feedbackId(created);
+        const without = current.filter((item) => feedbackId(item) !== id);
+        return [created, ...without];
+      });
+      setSelectedFeedbackId(feedbackId(created));
+      setFeedbackNotice("Đã gửi tin nhắn cho admin.");
     } catch (err) {
       setFeedbackNotice(err instanceof Error ? err.message : "Không gửi được phản hồi.");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  };
+
+  const replyInThread = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedFeedback) return;
+    const content = replyContent.trim();
+    if (!content) return;
+    setFeedbackBusy(true);
+    setFeedbackNotice("");
+    try {
+      const updated = (await feedbackApi.reply(feedbackId(selectedFeedback), content)) as FeedbackItem;
+      setReplyContent("");
+      setFeedbacks((current) => current.map((item) => (feedbackId(item) === feedbackId(updated) ? updated : item)));
+      setFeedbackNotice("Đã gửi tin nhắn tiếp theo.");
+    } catch (err) {
+      setFeedbackNotice(err instanceof Error ? err.message : "Không gửi được tin nhắn.");
     } finally {
       setFeedbackBusy(false);
     }
@@ -231,57 +307,110 @@ export function AccountPage({ theme, toggle }: Props) {
         <article className="account-panel account-panel--wide">
           <header className="account-panel__head">
             <span>
-              <h2>Phản hồi hệ thống</h2>
-              <small>Gửi lỗi, góp ý hoặc nhu cầu chức năng cho admin</small>
+              <h2>Chat phản hồi với Admin</h2>
+              <small>Gửi góp ý và xem lại toàn bộ lịch sử hội thoại</small>
             </span>
             <button className="btn btn--ghost btn--sm" type="button" onClick={loadFeedbacks}>
               <IconRefresh width={14} height={14} /> Làm mới
             </button>
           </header>
+
           <form className="account-form account-form--feedback" onSubmit={submitFeedback}>
             <label>
-              <span>Nội dung phản hồi</span>
+              <span>Bắt đầu / tiếp tục hội thoại</span>
               <textarea
                 value={feedbackContent}
                 onChange={(event) => setFeedbackContent(event.target.value)}
-                rows={5}
-                minLength={5}
+                rows={3}
+                minLength={1}
                 maxLength={2000}
+                placeholder="Nhập tin nhắn gửi admin…"
                 required
               />
             </label>
             <button className="btn btn--primary" type="submit" disabled={feedbackBusy}>
-              {feedbackBusy ? "Đang gửi..." : "Gửi phản hồi"}
+              {feedbackBusy ? "Đang gửi..." : "Gửi tin nhắn"}
             </button>
           </form>
           {feedbackNotice && <p className="invite-notice account-notice" role="status">{feedbackNotice}</p>}
-          <div className="feedback-list" aria-label="Phản hồi đã gửi">
-            {feedbacks.length === 0 ? (
-              <div className="state state--empty">
-                <p className="state__title">Chưa có phản hồi</p>
-                <p className="state__body">Các phản hồi đã gửi sẽ xuất hiện tại đây.</p>
-              </div>
-            ) : (
-              feedbacks.map((item) => (
-                <article className="feedback-card" key={item._id ?? item.id ?? item.content}>
-                  <div className="feedback-card__head">
-                    <StatusPill status={item.status} />
-                    <time>{formatWhen(item.created_at)}</time>
+
+          <div className="feedback-chat feedback-chat--account" aria-label="Lịch sử chat phản hồi">
+            <aside className="feedback-chat__list">
+              {feedbacks.length === 0 ? (
+                <div className="state state--empty">
+                  <p className="state__title">Chưa có hội thoại</p>
+                </div>
+              ) : (
+                feedbacks.map((item) => {
+                  const id = feedbackId(item);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`feedback-chat__item ${selectedFeedback && feedbackId(selectedFeedback) === id ? "is-active" : ""}`}
+                      onClick={() => setSelectedFeedbackId(id)}
+                    >
+                      <span className="feedback-chat__meta">
+                        <strong>{STATUS_LABEL[item.status]}</strong>
+                        <small>{item.last_message || item.content}</small>
+                      </span>
+                      <time>{formatWhen(item.last_message_at || item.created_at)}</time>
+                    </button>
+                  );
+                })
+              )}
+            </aside>
+
+            <section className="feedback-chat__panel">
+              {selectedFeedback ? (
+                <>
+                  <header className="feedback-chat__head">
+                    <div>
+                      <strong>Hội thoại với Admin</strong>
+                      <small>{STATUS_LABEL[selectedFeedback.status]}</small>
+                    </div>
+                  </header>
+                  <div className="feedback-chat__thread" ref={threadRef}>
+                    {threadMessages(selectedFeedback).map((message, index) => {
+                      const mine = message.sender_role === "User";
+                      return (
+                        <div
+                          key={message._id || `${message.sender_role}-${index}`}
+                          className={`feedback-bubble ${mine ? "is-user" : "is-admin"}`}
+                        >
+                          <div className="feedback-bubble__meta">
+                            <strong>{mine ? "Bạn" : "Admin"}</strong>
+                            <time>{formatWhen(message.created_at)}</time>
+                          </div>
+                          <p>{message.content}</p>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p>{item.content}</p>
-                  {item.admin_note && <small>Admin: {item.admin_note}</small>}
-                </article>
-              ))
-            )}
+                  <form className="feedback-chat__composer" onSubmit={replyInThread}>
+                    <textarea
+                      value={replyContent}
+                      onChange={(event) => setReplyContent(event.target.value)}
+                      rows={2}
+                      placeholder="Nhắn tiếp cho admin…"
+                      aria-label="Tin nhắn tiếp theo"
+                    />
+                    <button className="btn btn--primary" type="submit" disabled={feedbackBusy || !replyContent.trim()}>
+                      Gửi
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div className="state state--empty">
+                  <p className="state__title">Chưa chọn hội thoại</p>
+                </div>
+              )}
+            </section>
           </div>
         </article>
       </section>
     </main>
   );
-}
-
-function StatusPill({ status }: { status: FeedbackStatus }) {
-  return <span className={`admin-status admin-status--${status.toLowerCase()}`}>{STATUS_LABEL[status]}</span>;
 }
 
 function formatWhen(value?: string) {
