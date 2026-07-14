@@ -1,12 +1,15 @@
 import { useLayoutEffect, useMemo, useState } from "react";
 import type { CoocEdge, CoocNode } from "../data/trendsSample";
 import { TREND_TOPICS } from "../data/trendsSample";
+import type { TrendSeries } from "../data/types";
 
 interface Props {
   nodes: CoocNode[];
   edges: CoocEdge[];
   /** topic keys currently selected in the control bar */
   selected: Set<string>;
+  /** optional series for color tokens (corpus API keys) */
+  topics?: TrendSeries[];
   themeKey: string;
 }
 
@@ -27,15 +30,16 @@ function useResolved(tokens: string[], dep: string) {
   return map;
 }
 
-export function CoocNetwork({ nodes, edges, selected, themeKey }: Props) {
+export function CoocNetwork({ nodes, edges, selected, topics, themeKey }: Props) {
+  const palette = topics?.length ? topics : TREND_TOPICS;
   const [active, setActive] = useState<string | null>(null);
   const colors = useResolved(
-    [...TREND_TOPICS.map((t) => t.token), "--border", "--ink", "--ink-muted", "--surface"],
+    [...palette.map((t) => t.token), "--border", "--ink", "--ink-muted", "--surface"],
     themeKey,
   );
   const c = (t: string) => colors[t] || "currentColor";
   const topicToken = (topic: string) =>
-    TREND_TOPICS.find((t) => t.key === topic)?.token ?? "--ink-muted";
+    palette.find((t) => t.key === topic)?.token ?? "--ink-muted";
 
   const shown = useMemo(() => nodes.filter((n) => selected.has(n.topic)), [nodes, selected]);
   const ids = useMemo(() => new Set(shown.map((n) => n.id)), [shown]);

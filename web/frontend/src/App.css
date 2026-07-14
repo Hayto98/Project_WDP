@@ -3383,6 +3383,10 @@ mark.hl {
   flex-wrap: wrap;
   gap: 7px;
 }
+.topicbar__empty {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
 .topicchip {
   display: inline-flex;
   align-items: center;

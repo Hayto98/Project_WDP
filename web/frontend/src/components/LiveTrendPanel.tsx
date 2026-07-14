@@ -12,6 +12,21 @@ interface Props {
   theme: string;
 }
 
+function friendlyLiveError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err || "");
+  const lower = message.toLowerCase();
+  if (lower.includes("429") || lower.includes("rate limit") || lower.includes("too many")) {
+    return "Nguồn học thuật đang giới hạn tốc độ (rate limit). Đợi khoảng 1 phút rồi thử lại, hoặc giảm số bài / bỏ bớt nguồn.";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("abort")) {
+    return "Yêu cầu Live Trends bị timeout. Thử giảm max bài mỗi nguồn xuống 20 hoặc chọn ít nguồn hơn.";
+  }
+  if (lower.includes("network") || lower.includes("failed to fetch")) {
+    return "Không kết nối được backend. Kiểm tra server đang chạy rồi thử lại.";
+  }
+  return message || "Không phân tích được Live Trends.";
+}
+
 export function LiveTrendPanel({ theme }: Props) {
   const [topic, setTopic] = useState("federated learning medical imaging");
   const [sources, setSources] = useState<Set<string>>(new Set(["OpenAlex", "Crossref", "arXiv"]));
@@ -52,11 +67,11 @@ export function LiveTrendPanel({ theme }: Props) {
       });
       setResult(data);
       if (!data.trendPoints?.length) {
-        setNotice("Không tìm thấy dữ liệu xu hướng cho từ khóa này.");
+        setNotice("Không tìm thấy dữ liệu xu hướng cho từ khóa này. Thử topic rộng hơn hoặc thêm nguồn.");
       }
     } catch (err) {
       setResult(null);
-      setError(err instanceof Error ? err.message : "Không phân tích được Live Trends.");
+      setError(friendlyLiveError(err));
     } finally {
       setLoading(false);
     }
@@ -81,6 +96,8 @@ export function LiveTrendPanel({ theme }: Props) {
     return analyticsApi.seriesFromPoints(result.trendPoints);
   }, [result]);
 
+  const chartStatus = loading ? "loading" : error ? "error" : result?.trendPoints?.length ? "ready" : "empty";
+
   return (
     <div className="livegap">
       <div className="livegap__form">
@@ -101,7 +118,7 @@ export function LiveTrendPanel({ theme }: Props) {
               onChange={(e) => setTopic(e.target.value)}
               placeholder="Ví dụ: federated learning"
               onKeyDown={(e) => {
-                if (e.key === "Enter") runLive();
+                if (e.key === "Enter") void runLive();
               }}
             />
             <span className="livegap__hint">Từ khóa nghiên cứu cần phân tích xu hướng</span>
@@ -150,7 +167,7 @@ export function LiveTrendPanel({ theme }: Props) {
 
           <button
             className="btn btn--primary"
-            onClick={runLive}
+            onClick={() => void runLive()}
             disabled={loading || !topic.trim()}
           >
             {loading ? "Đang phân tích..." : "Phân tích Live"}
@@ -162,43 +179,50 @@ export function LiveTrendPanel({ theme }: Props) {
       </div>
 
       <div className="livegap__results">
-        {result && result.trendPoints?.length > 0 && (
+        {(loading || error || (result && result.trendPoints?.length > 0) || (result && !result.trendPoints?.length)) && (
           <div className="livegap__main">
-            <div className="livegap__header">
-              <div className="livegap__meta">
-                Đã quét <strong>{result.totalFetched}</strong> bài báo từ {result.sources.length} nguồn.
-                {result.cached && <span className="livegap__cached">(Cached)</span>}
+            {result && result.trendPoints?.length > 0 && !loading && (
+              <div className="livegap__header">
+                <div className="livegap__meta">
+                  Đã quét <strong>{result.totalFetched}</strong> bài báo từ {result.sources.length} nguồn.
+                  {result.cached && <span className="livegap__cached">(Cached)</span>}
+                </div>
+                <button
+                  className="btn btn--outline btn--sm"
+                  onClick={() => void saveAnalysis()}
+                  disabled={saving}
+                >
+                  {saving ? "Đang lưu..." : "Lưu kết quả"}
+                </button>
               </div>
-              <button
-                className="btn btn--outline btn--sm"
-                onClick={saveAnalysis}
-                disabled={saving}
-              >
-                {saving ? "Đang lưu..." : "Lưu kết quả"}
-              </button>
-            </div>
+            )}
 
-            {result.warnings && result.warnings.length > 0 && (
+            {result?.warnings && result.warnings.length > 0 && !loading && (
               <div className="livegap__warnings">
                 {result.warnings.map((w, i) => (
                   <div key={i} className="livegap__warning">
-                    ⚠️ {w}
+                    {w}
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="trends-grid" style={{ gridTemplateColumns: "1fr", marginTop: 24 }}>
+            <div className="trends-grid" style={{ gridTemplateColumns: "1fr", marginTop: result ? 24 : 0 }}>
               <Widget
                 className="tw-compare"
                 title="So sánh xu hướng theo thời gian"
                 subtitle="Số bài báo nhắc đến các chủ đề liên quan"
                 icon={<IconTrend />}
-                status="ready"
+                status={chartStatus}
+                onRetry={() => void runLive()}
+                emptyMessage="Chưa có chuỗi thời gian. Chạy Phân tích Live với topic và nguồn phù hợp."
+                skeleton={<div className="skel skel--chart" aria-hidden />}
               >
-                <div style={{ padding: "0 24px", minHeight: 300, display: "flex", flexDirection: "column" }}>
-                  <TrendChart data={result.trendPoints} series={series} themeKey={theme} />
-                </div>
+                {result?.trendPoints?.length ? (
+                  <div style={{ padding: "0 24px", minHeight: 300, display: "flex", flexDirection: "column" }}>
+                    <TrendChart data={result.trendPoints} series={series} themeKey={theme} />
+                  </div>
+                ) : null}
               </Widget>
             </div>
           </div>
