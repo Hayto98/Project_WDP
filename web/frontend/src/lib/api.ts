@@ -984,18 +984,43 @@ export const libraryApi = {
   },
   async papers(): Promise<LibraryEntry[]> {
     const { data } = await requestWithMeta<any[]>("/library/papers?limit=100");
-    return data.map((item) => {
+    // A paper can live in several collections (backend stores one saved_paper
+    // entry per collection). Merge those rows into a single library entry that
+    // carries every collectionId, so the UI shows one row per paper with
+    // multiple collection tags. Status/note are treated as paper-level and taken
+    // from the most recently saved copy.
+    const byPaper = new Map<string, LibraryEntry>();
+    for (const item of data) {
       const paper = mapPaper(item.paper ?? item);
-      return {
-        id: `${asId(item.collection_id)}-${asId(item.paper_id)}`,
-        paperId: paper.id,
-        savedAt: String(item.saved_at ?? ""),
-        status: item.status ?? "unread",
-        collectionIds: [asId(item.collection_id)],
-        note: item.note ?? "",
-        paper,
-      };
-    });
+      const collectionId = asId(item.collection_id);
+      const savedAt = String(item.saved_at ?? "");
+      const key = paper.id || asId(item.paper_id) || `${collectionId}-${byPaper.size}`;
+      const existing = byPaper.get(key);
+      if (existing) {
+        if (collectionId && !existing.collectionIds.includes(collectionId)) {
+          existing.collectionIds.push(collectionId);
+        }
+        // Prefer the most recently saved copy for paper-level fields.
+        if (savedAt > existing.savedAt) {
+          existing.savedAt = savedAt;
+          existing.status = item.status ?? existing.status;
+          if (item.note) existing.note = item.note;
+        } else if (!existing.note && item.note) {
+          existing.note = item.note;
+        }
+      } else {
+        byPaper.set(key, {
+          id: key,
+          paperId: paper.id,
+          savedAt,
+          status: item.status ?? "unread",
+          collectionIds: collectionId ? [collectionId] : [],
+          note: item.note ?? "",
+          paper,
+        });
+      }
+    }
+    return [...byPaper.values()];
   },
   savePaper(paperId: string, collectionIds: string[], note = "") {
     return request("/library/papers", {

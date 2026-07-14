@@ -407,7 +407,17 @@ export function WorkspacePage({ theme, toggle }: Props) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
     try {
       const updated = await workspaceApi.updateItem(activeWorkspace.id, id, patch);
-      setItems((current) => current.map((item) => (item.id === id ? updated : item)));
+      setItems((current) => current.map((item) => {
+        if (item.id === id) {
+          // The backend PUT response doesn't populate the linked paper.
+          // If the paperId hasn't changed, preserve the existing paper object from local state.
+          const anyItem = item as any;
+          const anyUpdated = updated as any;
+          const preservedPaper = updated.paperId === item.paperId ? anyItem._populatedPaper : anyUpdated._populatedPaper;
+          return { ...updated, _populatedPaper: preservedPaper } as WorkspaceItem;
+        }
+        return item;
+      }));
       // The PUT response doesn't populate the linked paper, so a paper picked
       // from global search (not in the personal library) would show as "Chưa
       // liên kết" until reload. Re-fetch to get the backend-populated paper.

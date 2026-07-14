@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { IconBookmark, IconExternal, IconLibrary, IconPlus, IconSearch, IconX } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { ConfirmModal, type ConfirmConfig } from "../components/ConfirmModal";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
 import { aiApi, libraryApi } from "../lib/api";
@@ -56,6 +57,20 @@ export function LibraryPage({ theme, toggle }: Props) {
   const [libraryNotice, setLibraryNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [demo, setDemo] = useState<Demo>("auto");
+  const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({ isOpen: false, title: "", message: "", onConfirm: () => {}, onCancel: () => {} });
+
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+      },
+      onCancel: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
+    });
+  };
 
   useEffect(() => {
     let alive = true;
@@ -360,8 +375,8 @@ export function LibraryPage({ theme, toggle }: Props) {
                   Lưu
                 </button>
               </div>
-              <button type="button" className="btn btn--ghost libedit__delete" onClick={deleteActiveCollection}>
-                Xóa bộ sưu tập
+              <button type="button" className="btn btn--ghost libedit__delete" onClick={() => confirmAction("Xóa bộ sưu tập", "Bạn có chắc chắn muốn xóa bộ sưu tập này không? Các bài báo bên trong vẫn sẽ nằm trong thư viện chung.", deleteActiveCollection)}>
+                <IconX width={16} height={16} /> Xóa
               </button>
             </form>
           )}
@@ -417,7 +432,30 @@ export function LibraryPage({ theme, toggle }: Props) {
           </div>
 
           {view === "loading" && <LibrarySkeleton />}
-          {libraryNotice && <p className="state__body" role="status">{libraryNotice}</p>}
+          {libraryNotice && (() => {
+            const isSuccess = libraryNotice.startsWith("Đã ");
+            return (
+              <div className="modal-overlay" onClick={() => setLibraryNotice("")}>
+                <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "400px", padding: "24px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "16px" }}>
+                    <div style={{ 
+                      width: "48px", height: "48px", borderRadius: "50%", 
+                      background: isSuccess ? "var(--success-weak)" : "var(--danger-weak)", 
+                      color: isSuccess ? "var(--success)" : "var(--danger)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "24px"
+                    }}>
+                      {isSuccess ? "✓" : "!"}
+                    </div>
+                    <p style={{ margin: 0, fontSize: "15px", fontWeight: 500, color: "var(--ink)" }}>
+                      {libraryNotice}
+                    </p>
+                    <button className="btn btn--primary" onClick={() => setLibraryNotice("")}>Đóng</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {view === "error" && (
             <div className="state state--error">
@@ -471,7 +509,7 @@ export function LibraryPage({ theme, toggle }: Props) {
               entry={selected}
               collections={collections}
               onUpdate={(patch) => updateItem(selected.id, patch)}
-              onRemove={() => removeItem(selected.id)}
+              onRemove={() => confirmAction("Bỏ lưu bài báo", "Bạn có chắc chắn muốn bỏ lưu bài báo này khỏi thư viện không? Bài báo sẽ bị xóa khỏi tất cả bộ sưu tập.", () => removeItem(selected.id))}
             />
           ) : (
             <div className="libdetail__empty">
@@ -494,6 +532,8 @@ export function LibraryPage({ theme, toggle }: Props) {
           </button>
         ))}
       </div>}
+
+      <ConfirmModal config={confirmConfig} />
     </main>
   );
 }
