@@ -42,8 +42,8 @@ export function GapPage({ theme, toggle }: Props) {
   const [loadError, setLoadError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const allItems = useMemo(
-    () => remoteItems ?? (USE_SAMPLE_FALLBACK ? buildGaps() : []),
-    [remoteItems],
+    () => remoteItems ?? (USE_SAMPLE_FALLBACK && !loadError ? buildGaps() : []),
+    [remoteItems, loadError],
   );
   const fieldOptions = useMemo(() => {
     const seen = new Map<string, { key: string; label: string; token: string }>();
@@ -52,12 +52,12 @@ export function GapPage({ theme, toggle }: Props) {
         seen.set(item.fieldKey, { key: item.fieldKey, label: item.fieldLabel, token: item.token });
       }
     }
-    return seen.size ? [...seen.values()] : USE_SAMPLE_FALLBACK ? GAP_FIELDS : [];
-  }, [allItems]);
+    return seen.size ? [...seen.values()] : USE_SAMPLE_FALLBACK && !loadError ? GAP_FIELDS : [];
+  }, [allItems, loadError]);
   const aspectOptions = useMemo(() => {
     const values = [...new Set(allItems.map((item) => item.aspect))];
-    return values.length ? values : USE_SAMPLE_FALLBACK ? GAP_ASPECTS : [];
-  }, [allItems]);
+    return values.length ? values : USE_SAMPLE_FALLBACK && !loadError ? GAP_ASPECTS : [];
+  }, [allItems, loadError]);
   const [threshold, setThreshold] = useState(0.35);
   const [fields, setFields] = useState<Set<string>>(
     () => new Set(USE_SAMPLE_FALLBACK ? GAP_FIELDS.map((f) => f.key) : []),
@@ -124,14 +124,16 @@ export function GapPage({ theme, toggle }: Props) {
     ? gapItems.reduce((a, g) => a + g.score, 0) / gapItems.length
     : 0;
 
-  const emptyMessage = !hasReport && !USE_SAMPLE_FALLBACK
-    ? "Chưa có báo cáo Research Gap từ corpus. Báo cáo tự chạy sau khi đồng bộ dữ liệu, hoặc nhờ admin bấm Refresh reports."
-    : "Không có ô nào khớp bộ lọc hiện tại.";
+  const emptyMessage = loadError
+    ? errorMessage || "Không tải được báo cáo Research Gap."
+    : !hasReport && !USE_SAMPLE_FALLBACK
+      ? "Chưa có báo cáo Research Gap từ corpus. Báo cáo tự chạy sau khi đồng bộ dữ liệu, hoặc nhờ admin bấm Refresh reports."
+      : "Không có ô nào khớp bộ lọc hiện tại.";
 
   const status: WidgetStatus =
     demo === "error"
       ? "error"
-      : !USE_SAMPLE_FALLBACK && loadError
+      : loadError
         ? "error"
       : demo === "empty"
         ? "empty"
