@@ -29,3 +29,16 @@
 **Chi tiết test:**
 * **[✅ PASS]** Owner (Người tạo Workspace): Được phân quyền Owner chính xác, có toàn quyền quản trị, bao gồm cả quyền xóa Workspace/Task.
 * **[✅ PASS]** Member (Người được mời): Bị giới hạn quyền chính xác theo vai trò Editor/Member. Không thể xóa, chỉ có quyền thao tác trên task (thoát task, giao lại task...).
+
+---
+
+# 📊 BÁO CÁO KIỂM THỬ — THƯ VIỆN & BỘ SƯU TẬP (Library) — 14/7/2026
+
+### 5. Quản lý Bộ sưu tập & Bài báo đã lưu (Library Collections)
+**Trạng thái:** ✅ Đã sửa xong các lỗi chính
+**Chi tiết test:**
+* **[✅ FIXED] Đổi bộ sưu tập của bài báo không lưu:** Trước đây đổi bộ sưu tập không lưu xuống backend (chỉ đổi trên giao diện). Đã sửa `updateItem` để gọi `savePaper`/`removePaper` + tải lại danh sách → lưu đúng.
+* **[✅ DONE] Một bài thuộc nhiều bộ sưu tập cùng lúc:** `papers()` gộp các bản ghi cùng `paperId` thành 1 dòng mang đủ `collectionIds`; picker trở lại kiểu "chọn nhiều" (toggle thêm/bỏ từng bộ). Trạng thái đọc & ghi chú là cấp bài báo → đổi sẽ áp cho tất cả bộ chứa bài.
+* **[✅ FIXED] Không xóa được bài trong bộ sưu tập:** Trước là hệ quả của state `collectionIds` lệch. Nay nút "Bỏ lưu" gỡ bài khỏi **tất cả** bộ sưu tập chứa nó.
+* **[✅ PASS] Giữ trạng thái đọc khi thêm vào bộ mới:** Trạng thái `reading`/`done` được khôi phục sau khi thêm bài vào bộ sưu tập mới (vì `savePaper` mặc định tạo "chưa đọc").
+* **[ℹ️ GHI CHÚ] Mô hình dữ liệu:** Backend/DB vốn đã hỗ trợ một bài ở nhiều bộ sưu tập (`savePaper` nhận mảng `collection_ids`; model `UserCollection.saved_papers[]` không có ràng buộc duy nhất). Việc "1 bài nhiều bộ" nay đã bật ở cả frontend.
