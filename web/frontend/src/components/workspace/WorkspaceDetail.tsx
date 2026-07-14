@@ -4,6 +4,7 @@ import { KIND_LABEL, STATUS_LABEL, ROLE_LABEL } from "../../data/workspaceSample
 import type { WorkStatus, MemberRole, WorkspaceMember, WorkspaceItem, WorkspaceItemEntry } from "../../data/workspaceSample";
 import { ItemActivityTimeline } from "./ItemActivityTimeline";
 import { ConfirmModal, type ConfirmConfig } from "../ConfirmModal";
+import { PaperPicker } from "./PaperPicker";
 
 export function WorkspaceDetail({
   item,
@@ -224,18 +225,14 @@ export function WorkspaceDetail({
             min={new Date().toISOString().split('T')[0]}
           />
         </label>
-        <label>
+        <label style={{ gridColumn: "1 / -1" }}>
           <span className="workspace-detail__label">Bài liên kết</span>
-          <select value={item.paperId} onChange={(e) => onUpdate({ paperId: e.target.value })} disabled={!canEdit || papers.length === 0}>
-            {papers.every((paper) => paper.id !== item.paperId) && (
-              <option value={item.paperId}>{item.paper.title}</option>
-            )}
-            {papers.map((paper) => (
-              <option key={paper.id} value={paper.id}>
-                {paper.title}
-              </option>
-            ))}
-          </select>
+          <PaperPicker
+            value={item.paperId}
+            onChange={(paperId) => onUpdate({ paperId })}
+            libraryPapers={papers}
+            disabled={!canEdit}
+          />
         </label>
       </div>
 
