@@ -843,7 +843,7 @@
   gap: var(--s-5);
 }
 .notification-sum {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 .notification-toolbar {
   padding: var(--s-4);
@@ -1147,7 +1147,7 @@
   gap: var(--s-5);
 }
 .admin-sum {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 .admin-shell {
   display: flex;
@@ -1465,7 +1465,7 @@
   gap: var(--s-2);
 }
 .admin-read-kpis--wide {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   margin-bottom: var(--s-3);
 }
 .admin-read-kpis .sumstat {
@@ -1790,7 +1790,7 @@
 /* ---------------------------------------------------------- kpi strip */
 .kpi-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--s-4);
 }
 .kpi {
@@ -1836,7 +1836,7 @@
 }
 .col-main {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--s-5);
   min-width: 0;
 }
@@ -5454,9 +5454,13 @@ mark.hl {
 
 .workboard {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
   gap: var(--s-4);
   align-items: start;
+  overflow-x: auto;
+  padding-bottom: var(--s-2);
+  min-width: 0;
+  width: 100%;
 }
 .workcol {
   min-width: 0;
@@ -6466,6 +6470,31 @@ mark.hl {
 }
 
 /* -------------------------------------------------------- responsive */
+/* Three-column shells (library / follow / workspace) need a lot of width:
+   sidebar + a middle column that holds a 3-track board/toolbar + a detail
+   panel. Below wide-desktop, drop the detail column to a full-width row so
+   the middle column never gets crushed and clipped. */
+@media (max-width: 1600px) {
+  .library-layout,
+  .follow-layout,
+  .workspace-layout {
+    grid-template-columns: 248px minmax(0, 1fr);
+  }
+  .libdetail,
+  .follow-detail,
+  .workspace-detail {
+    grid-column: 1 / -1;
+    position: static;
+  }
+  /* The detail panel now spans full width in row 2, under the sidebar column.
+     Keeping the sidebar sticky makes it overlap that panel while scrolling. */
+  .libside,
+  .follow-side,
+  .workspace-side {
+    position: static;
+  }
+}
+
 @media (max-width: 1180px) {
   .grid {
     grid-template-columns: minmax(0, 1fr);
@@ -6616,15 +6645,6 @@ mark.hl {
   .userchip__meta {
     display: none;
   }
-  .kpi-strip {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .notification-sum {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .admin-sum {
-    grid-template-columns: repeat(2, 1fr);
-  }
   .admin-overview {
     grid-template-columns: 1fr;
   }
@@ -6645,9 +6665,6 @@ mark.hl {
   }
   .admin-log-search {
     width: 100%;
-  }
-  .admin-read-kpis--wide {
-    grid-template-columns: repeat(2, 1fr);
   }
   .admin-read-charts {
     grid-template-columns: 1fr;
@@ -6983,9 +7000,6 @@ mark.hl {
 }
 
 @media (max-width: 560px) {
-  .kpi-strip {
-    grid-template-columns: 1fr;
-  }
   .topbar__controls {
     width: 100%;
     justify-content: space-between;

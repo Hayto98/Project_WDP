@@ -140,8 +140,46 @@ export function LibraryPage({ theme, toggle }: Props) {
 
   const updateItem = async (id: string, patch: Partial<LibraryEntry>) => {
     const current = items.find((item) => item.id === id);
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
     if (!current) return;
+
+    // Collection membership change (move / add / remove a paper between collections).
+    // The backend stores a saved paper per collection, so we translate the new
+    // collectionIds set into savePaper (added) and removePaper (removed) calls,
+    // then re-fetch so the entry ids (collectionId-paperId) stay in sync.
+    if (patch.collectionIds !== undefined) {
+      const before = new Set(current.collectionIds);
+      const after = new Set(patch.collectionIds);
+      const added = [...after].filter((cid) => !before.has(cid));
+      const removed = [...before].filter((cid) => !after.has(cid));
+      if (added.length === 0 && removed.length === 0) return;
+      try {
+        for (const cid of added) {
+          await libraryApi.savePaper(current.paperId, [cid], current.note);
+          // savePaper always creates the entry as "unread"; preserve reading progress.
+          if (current.status && current.status !== "unread") {
+            await libraryApi.updateSavedPaper(cid, current.paperId, { status: current.status });
+          }
+        }
+        for (const cid of removed) {
+          await libraryApi.removePaper(cid, current.paperId);
+        }
+        const fresh = await libraryApi.papers();
+        setItems(fresh);
+        setSelectedId((sel) =>
+          fresh.some((item) => item.id === sel)
+            ? sel
+            : fresh.find((item) => item.paperId === current.paperId)?.id ?? null,
+        );
+        setLibraryNotice("Đã cập nhật bộ sưu tập cho bài.");
+      } catch (err) {
+        setLibraryNotice(err instanceof Error ? err.message : "Không cập nhật được bộ sưu tập.");
+        const rollback = await libraryApi.papers().catch(() => null);
+        if (rollback) setItems(rollback);
+      }
+      return;
+    }
+
+    setItems((rows) => rows.map((item) => (item.id === id ? { ...item, ...patch } : item)));
     if (patch.status === undefined && patch.note === undefined) return;
     try {
       await libraryApi.updateSavedPaper(current.collectionIds[0], current.paperId, {
@@ -552,10 +590,12 @@ function LibraryDetail({
     }
   };
 
-  const toggleCollection = (id: string) => {
-    const next = new Set(entry.collectionIds);
-    next.has(id) ? next.delete(id) : next.add(id);
-    onUpdate({ collectionIds: [...next] });
+  const moveToCollection = (id: string) => {
+    // A saved paper lives in exactly one collection, so picking a collection
+    // *moves* the paper there (removes it from the previous one) instead of
+    // adding a duplicate. Clicking the current collection is a no-op.
+    if (entry.collectionIds.length === 1 && entry.collectionIds[0] === id) return;
+    onUpdate({ collectionIds: [id] });
   };
 
   return (
@@ -601,7 +641,7 @@ function LibraryDetail({
                 key={c.id}
                 className={`libpick ${on ? "is-on" : ""}`}
                 aria-pressed={on}
-                onClick={() => toggleCollection(c.id)}
+                onClick={() => moveToCollection(c.id)}
               >
                 {c.name}
               </button>

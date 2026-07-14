@@ -41,6 +41,7 @@ import { CollaborationInbox } from "../components/workspace/CollaborationInbox";
 import { WorkspaceInvitePanel } from "../components/workspace/WorkspaceInvitePanel";
 import { WorkspaceMembersPanel } from "../components/workspace/WorkspaceMembersPanel";
 import { WorkspaceDetail } from "../components/workspace/WorkspaceDetail";
+import { PaperPicker } from "../components/workspace/PaperPicker";
 import { ConfirmModal, type ConfirmConfig } from "../components/ConfirmModal";
 import { initialsFromName, nameFromEmail } from "../components/workspace/utils";
 
@@ -367,7 +368,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
       }
     }
     setWorkspaceNotice("");
-    const paperId = availablePapers.some((paper) => paper.id === newItemPaperId) ? newItemPaperId : (availablePapers[0]?.id ?? "");
+    const paperId = newItemPaperId;
     if (paperId && usedPaperIds.has(paperId)) {
       setWorkspaceNotice("Bài báo này đã được gắn cho một task trong workspace.");
       return;
@@ -407,6 +408,13 @@ export function WorkspacePage({ theme, toggle }: Props) {
     try {
       const updated = await workspaceApi.updateItem(activeWorkspace.id, id, patch);
       setItems((current) => current.map((item) => (item.id === id ? updated : item)));
+      // The PUT response doesn't populate the linked paper, so a paper picked
+      // from global search (not in the personal library) would show as "Chưa
+      // liên kết" until reload. Re-fetch to get the backend-populated paper.
+      // Only when the link actually changed — avoid refetching on every note keystroke.
+      if (patch.paperId !== undefined) {
+        await refreshWorkspaceDetails(activeWorkspace.id);
+      }
     } catch (err) {
       setItems(previous);
       setWorkspaceNotice(err instanceof Error ? err.message : "Không cập nhật được item.");
@@ -993,27 +1001,13 @@ export function WorkspacePage({ theme, toggle }: Props) {
                     aria-label="Deadline task mới"
                   />
                 </label>
-                <label className="workspace-add__paper">
+                <label className="workspace-add__paper" style={{ gridColumn: "1 / -1" }}>
                   <span>Bài báo liên kết</span>
-                  <select
+                  <PaperPicker
                     value={newItemPaperId}
-                    onChange={(e) => setNewItemPaperId(e.target.value)}
-                    disabled={availablePapers.length === 0}
-                  >
-                    {availablePapers.length === 0 ? (
-                      <option value="">
-                        {libraryPapers.length === 0
-                          ? "Thư viện của bạn chưa có bài báo"
-                          : "Mọi bài trong thư viện đã được gắn task"}
-                      </option>
-                    ) : (
-                      availablePapers.map((paper) => (
-                        <option key={paper.id} value={paper.id}>
-                          {paper.title}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                    onChange={(paperId) => setNewItemPaperId(paperId)}
+                    libraryPapers={availablePapers}
+                  />
                 </label>
               </div>
               <label className="workspace-add__note">
