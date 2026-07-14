@@ -30,7 +30,7 @@ router.get('/', ctrl.getNotifications);
  * @swagger
  * /api/v1/notifications/unread-count:
  *   get:
- *     summary: Get unread notification count
+ *     summary: Get unread mailbox count (task, invite, comment, system broadcast)
  *     tags: [Notifications]
  *     security:
  *       - BearerAuth: []

@@ -9,6 +9,7 @@ const { parsePagination } = require('../utils/pagination');
 const { checkSourceApis } = require('../services/sourceHealth.service');
 const { generateAllReports } = require('../services/report.service');
 const { runCrawlerJob } = require('../services/scheduler.service');
+const { broadcastSystemSignal } = require('../services/notification.service');
 
 // ── Users ──
 
@@ -202,6 +203,23 @@ async function getStats(req, res) {
   }
 }
 
+async function broadcastNotification(req, res) {
+  try {
+    const result = await broadcastSystemSignal({
+      title: req.body.title,
+      content: req.body.content,
+      priority: req.body.priority,
+      actorName: req.user?.full_name || req.user?.email || 'Admin',
+    });
+    return ApiResponse.created(res, {
+      message: `Đã gửi tín hiệu tới ${result.sent} người dùng`,
+      sent: result.sent,
+    });
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
 module.exports = {
   getUsers, updateUser,
   getDataSources, updateDataSource, checkDataSourceApis,
@@ -210,4 +228,5 @@ module.exports = {
   getAuditLogs,
   getPaperReads,
   getStats,
+  broadcastNotification,
 };

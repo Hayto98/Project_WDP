@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import "../components/Modal.css";
 import {
   IconEdit,
+  IconExternal,
   IconGrid,
   IconLogOut,
   IconPlus,
@@ -44,7 +45,7 @@ import { ConfirmModal, type ConfirmConfig } from "../components/ConfirmModal";
 import { initialsFromName, nameFromEmail } from "../components/workspace/utils";
 
 type Demo = "auto" | "loading" | "empty" | "error";
-type WorkspaceMode = "board" | "createTask" | "invites" | "members";
+type WorkspaceMode = "board" | "createTask" | "invites" | "members" | "papers";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -208,6 +209,24 @@ export function WorkspacePage({ theme, toggle }: Props) {
     );
   }, [availablePapers]);
   const workspaceEntries = entries.filter((item) => item.workspaceId === activeWorkspaceId);
+  
+  const workspacePapers = useMemo(() => {
+    const map = new Map<string, { id: string, title: string }>();
+    workspaceEntries.forEach(item => {
+      if (item.paper && item.paper.id !== "unknown") {
+        map.set(item.paper.id, { id: item.paper.id, title: item.paper.title });
+      }
+    });
+    return Array.from(map.values());
+  }, [workspaceEntries]);
+
+  const allAvailablePapers = useMemo(() => {
+    const map = new Map<string, { id: string, title: string }>();
+    workspacePapers.forEach(p => map.set(p.id, p));
+    libraryPapers.forEach(p => map.set(p.id, p));
+    return Array.from(map.values());
+  }, [libraryPapers, workspacePapers]);
+
   const selected = entries.find((item) => item.id === selectedId) ?? workspaceEntries[0] ?? null;
   const activities = (remoteActivities.length ? remoteActivities : USE_SAMPLE_FALLBACK ? ACTIVITIES : []).filter((a) => a.workspaceId === activeWorkspaceId);
   const workspaceInvites = invites.filter((invite) => invite.workspaceId === activeWorkspaceId);
@@ -839,6 +858,14 @@ export function WorkspacePage({ theme, toggle }: Props) {
               >
                 Lời mời nghiên cứu chung
               </button>
+              <button
+                className="btn btn--ghost"
+                type="button"
+                onClick={() => setWorkspaceMode("papers")}
+                aria-current={workspaceMode === "papers" ? "page" : undefined}
+              >
+                Bài báo đã lưu
+              </button>
             </div>
           </div>
 
@@ -1044,6 +1071,54 @@ export function WorkspacePage({ theme, toggle }: Props) {
             />
           )}
 
+          {workspaceMode === "papers" && (
+            <div className="workspace-panel workspace-pageform">
+              <div className="workspace-pageform__hero">
+                <div>
+                  <span className="workspace-detail__label">Tài nguyên</span>
+                  <h3>Bài báo trong {activeWorkspace?.name ?? "workspace"}</h3>
+                  <p>Danh sách các bài báo đã được liên kết với các task trong workspace này. Các thành viên có thể đọc trực tiếp tóm tắt tại đây.</p>
+                </div>
+                <button className="btn btn--ghost btn--sm" type="button" onClick={() => setWorkspaceMode("board")}>
+                  Đóng
+                </button>
+              </div>
+              
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "16px" }}>
+                {Array.from(new Map(workspaceEntries.filter(i => i.paper && i.paper.id !== "unknown").map(i => [i.paper.id, i.paper])).values()).map((paper) => (
+                  <li key={paper.id} style={{ padding: "16px", border: "1px solid var(--border)", borderRadius: "var(--r-md)", background: "var(--surface)" }}>
+                    <a href={paper.url || "#"} target="_blank" rel="noreferrer noopener" style={{ display: "block", fontSize: "16px", fontWeight: 600, color: "var(--primary)", textDecoration: "none", marginBottom: "8px" }}>
+                      {paper.title} <IconExternal width={14} height={14} />
+                    </a>
+                    <div style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "12px", display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                      <span>{paper.authors?.join(", ")}</span>
+                      <span>·</span>
+                      <span className="num">{paper.year}</span>
+                      <span>·</span>
+                      <span style={{ padding: "2px 6px", background: "var(--bg-sub)", borderRadius: "4px" }}>{paper.source}</span>
+                    </div>
+                    {paper.abstract ? (
+                      <p style={{ fontSize: "14px", lineHeight: 1.6, color: "var(--text)", margin: 0 }}>
+                        {paper.abstract}
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: "13px", color: "var(--text-muted)", fontStyle: "italic", margin: 0 }}>
+                        Chưa có phần tóm tắt cho bài báo này.
+                      </p>
+                    )}
+                  </li>
+                ))}
+                
+                {workspaceEntries.filter(i => i.paper && i.paper.id !== "unknown").length === 0 && (
+                  <div className="state state--empty" style={{ margin: "40px 0" }}>
+                    <p className="state__title">Chưa có bài báo nào</p>
+                    <p className="state__body">Chưa có bài báo nào được liên kết trong workspace này. Hãy thêm bài báo khi tạo task mới.</p>
+                  </div>
+                )}
+              </ul>
+            </div>
+          )}
+
           {view === "loading" && <WorkspaceSkeleton />}
           {view === "error" && (
             <div className="state state--error">
@@ -1095,7 +1170,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
             <WorkspaceDetail
               item={selected}
               members={workspaceMembers}
-              papers={libraryPapers}
+              papers={allAvailablePapers}
               onUpdate={(patch) => updateItem(selected.id, patch)}
               onMember={updateMember}
               onRemove={() => removeItem(selected.id)}

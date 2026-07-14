@@ -641,11 +641,48 @@ export const analyticsApi = {
       edges: data.edges ?? [],
     };
   },
-  async gaps(threshold: number): Promise<GapItem[]> {
-    const data = await request<{ fields?: unknown[]; aspects?: unknown[]; gaps?: any[] }>(
-      `/analytics/gaps?densityThreshold=${threshold}`,
-    );
-    if (!data.gaps?.length) return [];
+  async gaps(threshold = 0.35): Promise<{
+    items: GapItem[];
+    hasReport: boolean;
+    generatedAt: string | null;
+    gapCount: number;
+    ai: { summary: string; directions: { topic: string; rationale: string }[]; evidence: { label: string; papers: number }[] };
+  }> {
+    const data = await request<{
+      fields?: unknown[];
+      aspects?: unknown[];
+      gaps?: any[];
+      hasReport?: boolean;
+      generatedAt?: string | null;
+      gapCount?: number;
+      ai?: {
+        summary?: string;
+        directions?: { topic?: string; rationale?: string }[];
+        evidence?: { label?: string; papers?: number }[];
+      };
+    }>(`/analytics/gaps?densityThreshold=${threshold}`);
+
+    const hasReport = Boolean(data.hasReport ?? (data.gaps?.length || data.fields?.length));
+    if (!data.gaps?.length) {
+      return {
+        items: [],
+        hasReport,
+        generatedAt: data.generatedAt ? String(data.generatedAt) : null,
+        gapCount: Number(data.gapCount ?? 0),
+        ai: {
+          summary: data.ai?.summary ?? "",
+          directions: (data.ai?.directions ?? []).map((row) => ({
+            topic: row.topic ?? "",
+            rationale: row.rationale ?? "",
+          })),
+          evidence: (data.ai?.evidence ?? []).map((row) => ({
+            label: row.label ?? "",
+            papers: Number(row.papers ?? 0),
+          })),
+        },
+      };
+    }
+
     const fieldDefs = normalizeAxisOptions(data.fields);
     const normalizedFields = fieldDefs.length
       ? fieldDefs.map((field, index) => ({
@@ -654,7 +691,7 @@ export const analyticsApi = {
         }))
       : GAP_FIELDS;
     const normalizedAspects = normalizeAxisOptions(data.aspects);
-    return data.gaps.map((gap, index) => {
+    const items = data.gaps.map((gap, index) => {
       const fallbackField = normalizedFields[index % Math.max(normalizedFields.length, 1)]?.label ?? "Other";
       const fieldLabel = axisLabel(gap.field ?? gap.fieldLabel) || fallbackField;
       const fieldDef = normalizedFields.find((item) => item.label === fieldLabel || item.key === fieldLabel)
@@ -680,7 +717,125 @@ export const analyticsApi = {
         keywords: gap.keywords ?? [],
         direction: gap.direction ?? "Khoảng trống này cần thêm dữ liệu phân tích từ corpus.",
         trend: gap.trend ?? [],
+        evidence: Array.isArray(gap.evidence)
+          ? gap.evidence.map((row: any) => ({
+              id: String(row.id ?? ""),
+              title: row.title ?? "Untitled paper",
+              year: row.year ?? null,
+              citations: Number(row.citations ?? 0),
+            }))
+          : [],
       };
+    });
+
+    return {
+      items,
+      hasReport,
+      generatedAt: data.generatedAt ? String(data.generatedAt) : null,
+      gapCount: Number(data.gapCount ?? items.length),
+      ai: {
+        summary: data.ai?.summary ?? "",
+        directions: (data.ai?.directions ?? []).map((row) => ({
+          topic: row.topic ?? "",
+          rationale: row.rationale ?? "",
+        })),
+        evidence: (data.ai?.evidence ?? []).map((row) => ({
+          label: row.label ?? "",
+          papers: Number(row.papers ?? 0),
+        })),
+      },
+    };
+  },
+  async liveGaps(payload: {
+    topic: string;
+    sources?: string[];
+    yearFrom?: number;
+    yearTo?: number;
+    maxRecordsPerSource?: number;
+    topK?: number;
+  }) {
+    return request<{
+      topic: string;
+      mode: "live";
+      sources: string[];
+      yearFrom: number;
+      yearTo: number;
+      totalFetched: number;
+      generatedAt: string;
+      summary: { strongGaps: number; potentialGaps: number; lowConfidence: number };
+      gaps: Array<{
+        id: string;
+        field: string;
+        aspect: string;
+        gapScore: number;
+        level: "strong" | "potential" | "needs_data" | "unclear";
+        confidence: "low" | "medium" | "high";
+        metrics: {
+          directCount: number;
+          countA: number;
+          countB: number;
+          expectedCount: number;
+          recentDirectCount: number;
+          oldDirectCount: number;
+          growthRate: number;
+          scarcityScore: number;
+          growthScore: number;
+          adjacencyScore: number;
+          noveltyScore: number;
+          evidenceScore: number;
+        };
+        reasons: string[];
+        evidence: Array<{
+          title: string;
+          year?: number | null;
+          source?: string;
+          doi?: string;
+          url?: string;
+          citationCount?: number;
+        }>;
+      }>;
+      sourceErrors?: Array<{ source: string; message: string }>;
+      warnings?: string[];
+      cached?: boolean;
+    }>("/analytics/gaps/live", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  saveLiveGaps(result: unknown) {
+    return request<{ id: string; reportType: string; generatedAt: string }>("/analytics/gaps/live/save", {
+      method: "POST",
+      body: JSON.stringify({ result }),
+    });
+  },
+  async liveTrends(payload: {
+    topic: string;
+    sources?: string[];
+    yearFrom?: number;
+    yearTo?: number;
+    maxRecordsPerSource?: number;
+  }) {
+    return request<{
+      topic: string;
+      mode: "live_trend";
+      sources: string[];
+      yearFrom: number;
+      yearTo: number;
+      totalFetched: number;
+      generatedAt: string;
+      trendPoints: TrendPoint[];
+      sourceErrors?: Array<{ source: string; message: string }>;
+      warnings?: string[];
+      cached?: boolean;
+    }>("/analytics/trends/live", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  saveLiveTrends(result: unknown) {
+    return request<{ id: string; reportType: string; generatedAt: string }>("/analytics/trends/live/save", {
+      method: "POST",
+      body: JSON.stringify({ result }),
     });
   },
   seriesFromPoints(points: TrendPoint[]) {
@@ -793,6 +948,12 @@ export const adminApi = {
         persistStatus: view.persist_status ?? "stored",
         reason: view.reason ?? "",
       };
+    });
+  },
+  broadcastNotification(payload: { title: string; content: string; priority?: "high" | "normal" | "low" }) {
+    return request<{ message: string; sent: number }>("/admin/notifications/broadcast", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 };
@@ -1139,10 +1300,23 @@ export const feedbackApi = {
   async list(query: { status?: string; page?: number; limit?: number } = {}) {
     return requestWithMeta<any[]>(`/feedbacks${toSearchParams(query)}`);
   },
+  async pendingCount() {
+    const data = await request<{ count?: number }>("/feedbacks/pending-count");
+    return Number(data.count ?? 0);
+  },
+  getById(id: string) {
+    return request(`/feedbacks/${id}`);
+  },
   update(id: string, patch: { status?: "Pending" | "Reviewed" | "Resolved"; admin_note?: string | null }) {
     return request(`/feedbacks/${id}`, {
       method: "PUT",
       body: JSON.stringify(patch),
+    });
+  },
+  reply(id: string, content: string, status?: "Pending" | "Reviewed" | "Resolved") {
+    return request(`/feedbacks/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content, ...(status ? { status } : {}) }),
     });
   },
 };

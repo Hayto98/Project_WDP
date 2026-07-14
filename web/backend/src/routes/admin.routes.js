@@ -3,7 +3,7 @@ const ctrl = require('../controllers/admin.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { rbac } = require('../middleware/rbac.middleware');
 const { validate } = require('../middleware/validate.middleware');
-const { updateUserSchema, createJobSchema, updateDataSourceSchema } = require('../validators/admin.validator');
+const { updateUserSchema, createJobSchema, updateDataSourceSchema, broadcastNotificationSchema } = require('../validators/admin.validator');
 
 const router = Router();
 router.use(authenticate);
@@ -215,5 +215,19 @@ router.get('/paper-reads', ctrl.getPaperReads);
  *         description: System stats
  */
 router.get('/stats', ctrl.getStats);
+
+/**
+ * @swagger
+ * /api/v1/admin/notifications/broadcast:
+ *   post:
+ *     summary: Broadcast a system signal to all active users
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Broadcast sent
+ */
+router.post('/notifications/broadcast', validate(broadcastNotificationSchema), ctrl.broadcastNotification);
 
 module.exports = router;

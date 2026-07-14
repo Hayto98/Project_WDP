@@ -6,6 +6,7 @@ import { TrendChart } from "../components/TrendChart";
 import { CoocNetwork } from "../components/CoocNetwork";
 import { Sparkline } from "../components/Sparkline";
 import { Widget } from "../components/Widget";
+import { LiveTrendPanel } from "../components/LiveTrendPanel";
 import { IconGap, IconSparkle, IconTrend } from "../components/icons";
 import { formatCompact, formatInt, formatPercent } from "../lib/format";
 import { analyticsApi } from "../lib/api";
@@ -36,6 +37,7 @@ const GRANS: { id: Granularity; label: string }[] = [
 ];
 
 type Demo = "auto" | "loading" | "empty" | "error";
+type TrendMode = "corpus" | "live";
 
 const STATUS_LABEL: Record<GrowthRow["status"], string> = {
   emerging: "Nổi lên",
@@ -49,6 +51,7 @@ interface Props {
 }
 
 export function TrendsPage({ theme, toggle }: Props) {
+  const [mode, setMode] = useState<TrendMode>("corpus");
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(TREND_TOPICS.map((t) => t.key)),
   );
@@ -151,11 +154,33 @@ export function TrendsPage({ theme, toggle }: Props) {
         <div className="topbar__lead">
           <h1>Phân tích xu hướng</h1>
           <p className="topbar__sub">
-            So sánh diễn biến công bố, tốc độ tăng trưởng và mối liên hệ giữa các chủ đề nghiên cứu
+            {mode === "corpus"
+              ? "So sánh diễn biến công bố, tốc độ tăng trưởng và mối liên hệ giữa các chủ đề nghiên cứu (trong DB)"
+              : "Phân tích xu hướng từ nguồn trực tuyến (OpenAlex / Crossref / arXiv / ...)"}
           </p>
         </div>
         <div className="topbar__controls">
-          <div className="seg" role="group" aria-label="Khoảng thời gian">
+          <div className="seg" role="tablist" aria-label="Chế độ Phân tích xu hướng">
+            <button
+              type="button"
+              className={`seg__btn ${mode === "corpus" ? "is-active" : ""}`}
+              aria-selected={mode === "corpus"}
+              onClick={() => setMode("corpus")}
+            >
+              Corpus Trends
+            </button>
+            <button
+              type="button"
+              className={`seg__btn ${mode === "live" ? "is-active" : ""}`}
+              aria-selected={mode === "live"}
+              onClick={() => setMode("live")}
+            >
+              Live Trends
+            </button>
+          </div>
+          {mode === "corpus" && (
+            <>
+              <div className="seg" role="group" aria-label="Khoảng thời gian">
             {RANGES.map((r) => (
               <button
                 key={r.id}
@@ -179,10 +204,16 @@ export function TrendsPage({ theme, toggle }: Props) {
               </button>
             ))}
           </div>
+          </>
+          )}
           <ThemeToggle theme={theme} toggle={toggle} />
         </div>
       </header>
 
+      {mode === "live" ? (
+        <LiveTrendPanel theme={theme} />
+      ) : (
+        <>
       {/* topic selector */}
       <div className="topicbar">
         <div className="topicbar__chips" role="group" aria-label="Chọn chủ đề phân tích">
@@ -299,6 +330,8 @@ export function TrendsPage({ theme, toggle }: Props) {
           </button>
         ))}
       </div>}
+      </>
+      )}
     </main>
   );
 }

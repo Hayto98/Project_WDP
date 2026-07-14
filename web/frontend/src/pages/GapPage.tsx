@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
 import type { WidgetStatus } from "../data/types";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -6,7 +6,8 @@ import { Widget } from "../components/Widget";
 import { GapMatrix } from "../components/GapMatrix";
 import { GapScatter } from "../components/GapScatter";
 import { Sparkline } from "../components/Sparkline";
-import { IconGap, IconGrid, IconSparkle, IconTrend } from "../components/icons";
+import { LiveGapPanel } from "../components/LiveGapPanel";
+import { IconGap, IconGrid, IconRefresh, IconSparkle, IconTrend } from "../components/icons";
 import { formatInt } from "../lib/format";
 import { aiApi, analyticsApi } from "../lib/api";
 import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
@@ -19,6 +20,13 @@ import {
 } from "../data/gapSample";
 
 type Demo = "auto" | "loading" | "empty" | "error";
+type GapMode = "corpus" | "live";
+
+interface GapAiSnapshot {
+  summary: string;
+  directions: { topic: string; rationale: string }[];
+  evidence: { label: string; papers: number }[];
+}
 
 interface Props {
   theme: Theme;
@@ -26,9 +34,17 @@ interface Props {
 }
 
 export function GapPage({ theme, toggle }: Props) {
+  const [mode, setMode] = useState<GapMode>("corpus");
   const [remoteItems, setRemoteItems] = useState<GapItem[] | null>(null);
+  const [hasReport, setHasReport] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [corpusAi, setCorpusAi] = useState<GapAiSnapshot>({ summary: "", directions: [], evidence: [] });
   const [loadError, setLoadError] = useState(false);
-  const allItems = useMemo(() => remoteItems ?? (USE_SAMPLE_FALLBACK ? buildGaps() : []), [remoteItems]);
+  const [errorMessage, setErrorMessage] = useState("");
+  const allItems = useMemo(
+    () => remoteItems ?? (USE_SAMPLE_FALLBACK ? buildGaps() : []),
+    [remoteItems],
+  );
   const fieldOptions = useMemo(() => {
     const seen = new Map<string, { key: string; label: string; token: string }>();
     for (const item of allItems) {
@@ -51,32 +67,40 @@ export function GapPage({ theme, toggle }: Props) {
   const [loading, setLoading] = useState(true);
   const [demo, setDemo] = useState<Demo>("auto");
 
-  useEffect(() => {
-    let alive = true;
+  const loadGaps = useCallback(async () => {
     setLoading(true);
-    analyticsApi
-      .gaps(threshold)
-      .then((items) => {
-        if (!alive) return;
-        setRemoteItems(items);
-        setFields(new Set(items.map((item) => item.fieldKey)));
-        setAspects(new Set(items.map((item) => item.aspect)));
-        setLoadError(false);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setRemoteItems(null);
-        setFields(USE_SAMPLE_FALLBACK ? new Set(GAP_FIELDS.map((f) => f.key)) : new Set());
-        setAspects(USE_SAMPLE_FALLBACK ? new Set(GAP_ASPECTS) : new Set());
-        setLoadError(true);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
+    setErrorMessage("");
+    try {
+      const result = await analyticsApi.gaps(0.35);
+      setRemoteItems(result.items);
+      setHasReport(result.hasReport);
+      setGeneratedAt(result.generatedAt);
+      setCorpusAi(result.ai);
+      setFields(new Set(result.items.map((item) => item.fieldKey)));
+      setAspects(new Set(result.items.map((item) => item.aspect)));
+      setLoadError(false);
+      setSelectedId((current) => {
+        if (current && result.items.some((item) => item.id === current)) return current;
+        const firstGap = result.items.find((item) => isGap(item, 0.35)) ?? result.items[0];
+        return firstGap?.id ?? null;
       });
-    return () => {
-      alive = false;
-    };
-  }, [threshold]);
+    } catch (err) {
+      setRemoteItems(null);
+      setHasReport(false);
+      setGeneratedAt(null);
+      setCorpusAi({ summary: "", directions: [], evidence: [] });
+      setFields(USE_SAMPLE_FALLBACK ? new Set(GAP_FIELDS.map((f) => f.key)) : new Set());
+      setAspects(USE_SAMPLE_FALLBACK ? new Set(GAP_ASPECTS) : new Set());
+      setLoadError(true);
+      setErrorMessage(err instanceof Error ? err.message : "Không tải được báo cáo Research Gap.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode === "corpus") void loadGaps();
+  }, [mode, loadGaps]);
 
   const items = useMemo(
     () => allItems.filter((i) => fields.has(i.fieldKey) && aspects.has(i.aspect)),
@@ -93,11 +117,16 @@ export function GapPage({ theme, toggle }: Props) {
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
   const shownFields = fieldOptions.filter((f) => fields.has(f.key));
+  const shownAspects = aspectOptions.filter((a) => aspects.has(a));
 
   const strongest = gapItems[0];
   const avgScore = gapItems.length
     ? gapItems.reduce((a, g) => a + g.score, 0) / gapItems.length
     : 0;
+
+  const emptyMessage = !hasReport && !USE_SAMPLE_FALLBACK
+    ? "Chưa có báo cáo Research Gap từ corpus. Báo cáo tự chạy sau khi đồng bộ dữ liệu, hoặc nhờ admin bấm Refresh reports."
+    : "Không có ô nào khớp bộ lọc hiện tại.";
 
   const status: WidgetStatus =
     demo === "error"
@@ -125,20 +154,63 @@ export function GapPage({ theme, toggle }: Props) {
       return next;
     });
 
+  const generatedLabel = generatedAt
+    ? new Date(generatedAt).toLocaleString("vi-VN")
+    : hasReport
+      ? "—"
+      : "chưa có báo cáo";
+
   return (
     <main className="main gap">
       <header className="topbar">
         <div className="topbar__lead">
           <h1>Research Gap</h1>
           <p className="topbar__sub">
-            Phát hiện khoảng trống nghiên cứu — nơi mức quan tâm cao nhưng công bố còn thưa
+            {mode === "corpus"
+              ? "Phân tích khoảng trống từ corpus nội bộ — quan tâm cao nhưng công bố còn thưa"
+              : "Phân tích live từ OpenAlex / Crossref / arXiv — không cần import trước vào DB"}
           </p>
+          {mode === "corpus" && <p className="topbar__sub">Cập nhật báo cáo: {generatedLabel}</p>}
         </div>
         <div className="topbar__controls">
+          <div className="seg" role="tablist" aria-label="Chế độ Research Gap">
+            <button
+              type="button"
+              className={`seg__btn ${mode === "corpus" ? "is-active" : ""}`}
+              aria-selected={mode === "corpus"}
+              onClick={() => setMode("corpus")}
+            >
+              Corpus Gap
+            </button>
+            <button
+              type="button"
+              className={`seg__btn ${mode === "live" ? "is-active" : ""}`}
+              aria-selected={mode === "live"}
+              onClick={() => setMode("live")}
+            >
+              Live Gap
+            </button>
+          </div>
+          {mode === "corpus" && (
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={() => void loadGaps()}
+              aria-label="Làm mới dữ liệu Research Gap"
+              title="Làm mới"
+              disabled={loading}
+            >
+              <IconRefresh />
+            </button>
+          )}
           <ThemeToggle theme={theme} toggle={toggle} />
         </div>
       </header>
 
+      {mode === "live" ? (
+        <LiveGapPanel />
+      ) : (
+        <>
       {/* controls */}
       <div className="gapctl">
         <div className="gapctl__threshold">
@@ -211,6 +283,21 @@ export function GapPage({ theme, toggle }: Props) {
         </div>
       </div>
 
+      {corpusAi.summary && status === "ready" && (
+        <div className="state__body" role="status" style={{ marginBottom: "1rem" }}>
+          {corpusAi.summary}
+          {corpusAi.directions.length > 0 && (
+            <ul>
+              {corpusAi.directions.slice(0, 3).map((direction) => (
+                <li key={direction.topic}>
+                  <strong>{direction.topic}</strong> — {direction.rationale}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* heatmap + detail */}
       <div className="gap-top">
         <Widget
@@ -219,14 +306,15 @@ export function GapPage({ theme, toggle }: Props) {
           subtitle="Mật độ công bố theo Lĩnh vực × Khía cạnh · chọn ô để xem chi tiết"
           icon={<IconGrid />}
           status={status}
-          onRetry={() => setDemo("auto")}
-          emptyMessage="Không có ô nào khớp bộ lọc"
+          onRetry={() => void loadGaps()}
+          emptyMessage={emptyMessage}
+          errorMessage={errorMessage || undefined}
           skeleton={<div className="skel skel--block" style={{ height: 260 }} />}
         >
           <GapMatrix
             items={items}
             fields={shownFields}
-            aspects={[...aspects]}
+            aspects={shownAspects}
             densityThreshold={threshold}
             selectedId={selectedId}
             onSelect={setSelectedId}
@@ -237,9 +325,10 @@ export function GapPage({ theme, toggle }: Props) {
           className="gw-detail"
           title="Chi tiết khoảng trống"
           icon={<IconSparkle />}
-          status={status}
-          onRetry={() => setDemo("auto")}
+          status={status === "ready" && !selected ? "empty" : status}
+          onRetry={() => void loadGaps()}
           emptyMessage="Chọn một ô trên bản đồ"
+          errorMessage={errorMessage || undefined}
         >
           {selected ? (
             <GapDetail item={selected} isGapCell={isGap(selected, threshold)} />
@@ -259,8 +348,9 @@ export function GapPage({ theme, toggle }: Props) {
           subtitle="Điểm cơ hội = mức quan tâm × độ khan hiếm công bố"
           icon={<IconTrend />}
           status={status}
-          onRetry={() => setDemo("auto")}
-          emptyMessage="Không có khoảng trống nào với ngưỡng hiện tại"
+          onRetry={() => void loadGaps()}
+          emptyMessage={!hasReport && !USE_SAMPLE_FALLBACK ? emptyMessage : "Không có khoảng trống nào với ngưỡng hiện tại"}
+          errorMessage={errorMessage || undefined}
         >
           {gapItems.length ? (
             <ol className="gaprank">
@@ -307,8 +397,9 @@ export function GapPage({ theme, toggle }: Props) {
           subtitle="Góc trên-trái = quan tâm cao, công bố thấp = khoảng trống"
           icon={<IconGap />}
           status={status}
-          onRetry={() => setDemo("auto")}
-          emptyMessage="Không có dữ liệu để hiển thị"
+          onRetry={() => void loadGaps()}
+          emptyMessage={emptyMessage}
+          errorMessage={errorMessage || undefined}
         >
           <GapScatter
             items={items}
@@ -332,6 +423,8 @@ export function GapPage({ theme, toggle }: Props) {
           </button>
         ))}
       </div>}
+        </>
+      )}
     </main>
   );
 }
@@ -340,6 +433,11 @@ function GapDetail({ item, isGapCell }: { item: GapItem; isGapCell: boolean }) {
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+
+  useEffect(() => {
+    setAiText("");
+    setAiError("");
+  }, [item.id]);
 
   const suggest = async () => {
     setAiLoading(true);
@@ -401,6 +499,21 @@ function GapDetail({ item, isGapCell }: { item: GapItem; isGapCell: boolean }) {
           ))}
         </div>
       </div>
+
+      {!!item.evidence?.length && (
+        <div className="gapdetail__kw">
+          <span className="gapdetail__sublabel">Paper đại diện trong corpus</span>
+          <ul>
+            {item.evidence.map((paper) => (
+              <li key={paper.id || paper.title}>
+                {paper.title}
+                {paper.year ? ` (${paper.year})` : ""}
+                {typeof paper.citations === "number" ? ` · ${formatInt(paper.citations)} citations` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="gapdetail__dir">
         <span className="gapdetail__sublabel">Gợi ý hướng nghiên cứu</span>

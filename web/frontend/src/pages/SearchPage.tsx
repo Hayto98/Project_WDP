@@ -47,6 +47,12 @@ const SORTS: { id: SortKey; label: string }[] = [
   { id: "citations", label: "Trích dẫn nhiều" },
 ];
 const SYNCABLE_SOURCES = ["OpenAlex", "Semantic Scholar", "Crossref", "arXiv", "ACM Digital Library", "Exa"] as const;
+/**
+ * Default multi-source sync targets (no fragile/missing API keys).
+ * Note: ACM has no public search API — the backend only approximates it via Crossref,
+ * so it is omitted here to avoid duplicate Crossref pulls under a misleading label.
+ */
+const DEFAULT_SYNC_SOURCES = ["OpenAlex", "Crossref", "arXiv"] as const;
 
 interface Props {
   theme: Theme;
@@ -89,7 +95,11 @@ export function SearchPage({ theme, toggle }: Props) {
   const runSearch = (q: string, options: { resetPage?: boolean } = {}) => {
     setSubmitted(q);
     setHasSearched(true);
-    if (options.resetPage ?? true) setPage(1);
+    if (options.resetPage ?? true) {
+      setPage(1);
+      // Allow auto-sync again for a fresh search submission.
+      autoSyncKeys.current.clear();
+    }
     setSearchNonce((value) => value + 1);
     setSearchError("");
   };
@@ -182,11 +192,20 @@ export function SearchPage({ theme, toggle }: Props) {
     () => submitted.toLowerCase().split(/\s+/).filter(Boolean),
     [submitted],
   );
-  const highlightTerms = useMemo(
-    () => [...queryTokens, ...andTerms.map((c) => c.term), ...orTerms.map((c) => c.term)],
+  const highlightTerms = useMemo(() => {
+    const phrase = submitted.trim();
+    const terms = [
+      // Prefer full phrase highlight over individual tokens.
+      ...(phrase.includes(" ") ? [phrase] : []),
+      ...queryTokens,
+      ...andTerms.map((c) => c.term),
+      ...orTerms.map((c) => c.term),
+    ]
+      .map((term) => term.trim())
+      .filter(Boolean);
+    return [...new Set(terms)].sort((a, b) => b.length - a.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [submitted, conditions],
-  );
+  }, [submitted, conditions]);
 
   const results = remoteResults;
 
@@ -207,11 +226,28 @@ export function SearchPage({ theme, toggle }: Props) {
           : results.length === 0
             ? "empty"
             : "results";
-  const selectedSyncSource = SYNCABLE_SOURCES.find((source) => sources.has(source)) ?? "OpenAlex";
+  // Sync checked syncable sources; otherwise pull from the default multi-source set.
+  // If only non-syncable sources are filtered (e.g. IEEE), do not auto-sync.
+  const syncTargets = useMemo(() => {
+    const selected = SYNCABLE_SOURCES.filter((source) => sources.has(source));
+    if (selected.length) return selected;
+    if (sources.size === 0) return [...DEFAULT_SYNC_SOURCES];
+    return [] as string[];
+  }, [sources]);
   const canSyncSelectedSource =
     (status === "results" || status === "empty") &&
     Boolean((submitted.trim() || query.trim())) &&
-    SYNCABLE_SOURCES.some((source) => sources.has(source));
+    syncTargets.length > 0;
+  const syncSourceLabel =
+    syncTargets.length <= 1
+      ? syncTargets[0] ?? "OpenAlex"
+      : syncTargets.length <= 3
+        ? syncTargets.join(", ")
+        : `${syncTargets.length} nguồn`;
+  const syncButtonLabel =
+    syncTargets.length <= 1
+      ? syncTargets[0] ?? "OpenAlex"
+      : "nhiều nguồn";
   const paginationPages = useMemo(() => {
     const windowSize = 10;
     const start = Math.max(1, Math.min(page - 5, Math.max(1, totalPages - windowSize + 1)));
@@ -304,17 +340,40 @@ export function SearchPage({ theme, toggle }: Props) {
 
   const requestCorpusSync = async () => {
     const term = submitted.trim() || query.trim();
-    if (!term) return;
+    if (!term || syncingRequest || syncTargets.length === 0) return;
     setSyncingRequest(true);
-    setSyncNotice("");
+    setSyncNotice(`Đang tải bài báo từ ${syncSourceLabel}…`);
     try {
-      const job = await paperApi.requestSync(term, selectedSyncSource, 50, {
+      const typesParam = [...types].join(",");
+      const filters = {
         yearFrom,
         yearTo,
-        types: [...types].join(","),
+        ...(typesParam ? { types: typesParam } : {}),
+      };
+      // Fewer records per source when pulling several at once to keep latency reasonable.
+      const maxRecords = syncTargets.length > 1 ? 25 : 50;
+      const settled = await Promise.allSettled(
+        syncTargets.map((sourceName) => paperApi.requestSync(term, sourceName, maxRecords, filters)),
+      );
+
+      let importedTotal = 0;
+      let skippedTotal = 0;
+      const parts = settled.map((result, index) => {
+        const sourceName = syncTargets[index];
+        if (result.status === "fulfilled") {
+          const imported = result.value.result?.imported ?? result.value.records_processed ?? 0;
+          const skipped = result.value.result?.skipped ?? 0;
+          importedTotal += imported;
+          skippedTotal += skipped;
+          return `${sourceName}: +${formatInt(imported)}`;
+        }
+        const reason =
+          result.reason instanceof Error ? result.reason.message : "không tải được";
+        return `${sourceName}: lỗi (${reason})`;
       });
+
       setSyncNotice(
-        `Đã tải thêm ${selectedSyncSource}: import ${formatInt(job.result?.imported ?? job.records_processed ?? 0)} bài, bỏ qua ${formatInt(job.result?.skipped ?? 0)} bài trùng.`,
+        `Đã tải thêm (${formatInt(importedTotal)} mới, bỏ qua ${formatInt(skippedTotal)} trùng) — ${parts.join(" · ")}`,
       );
       runSearch(term, { resetPage: false });
     } catch (err) {
@@ -325,13 +384,14 @@ export function SearchPage({ theme, toggle }: Props) {
   };
 
   useEffect(() => {
-    if (!canSyncSelectedSource || syncingRequest) return;
-    const shouldLoadMore = status === "empty" || (status === "results" && page + 1 >= paginationWindowEnd);
+    if (!canSyncSelectedSource || syncingRequest || syncTargets.length === 0) return;
+    const shouldLoadMore =
+      status === "empty" || (status === "results" && page + 1 >= paginationWindowEnd);
     if (!shouldLoadMore) return;
 
     const term = submitted.trim() || query.trim();
     const key = [
-      selectedSyncSource,
+      syncTargets.join(","),
       term,
       page,
       totalPages,
@@ -346,7 +406,7 @@ export function SearchPage({ theme, toggle }: Props) {
     void requestCorpusSync();
     // requestCorpusSync intentionally stays out to avoid recreating the auto-load trigger on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canSyncSelectedSource, syncingRequest, status, page, totalPages, paginationWindowEnd, selectedSyncSource, submitted, query, yearFrom, yearTo, types]);
+  }, [canSyncSelectedSource, syncingRequest, status, page, totalPages, paginationWindowEnd, syncTargets, submitted, query, yearFrom, yearTo, types]);
 
   return (
     <main className="main search">
@@ -630,10 +690,26 @@ export function SearchPage({ theme, toggle }: Props) {
             <div className="state state--empty">
               <p className="state__title">Không tìm thấy bài báo phù hợp</p>
               <p className="state__body">
-                Corpus hiện chưa có paper khớp với từ khóa và bộ lọc này. Thử nới rộng khoảng năm,
-                bỏ bớt bộ lọc, hoặc đợi hệ thống tự tải thêm dữ liệu từ nguồn đang chọn.
+                {syncingRequest
+                  ? `Đang gọi ${syncSourceLabel} để tải bài báo vào corpus…`
+                  : syncTargets.length
+                    ? `Corpus hiện chưa có paper khớp. Hệ thống sẽ tự tải từ ${syncSourceLabel}, hoặc bạn có thể bấm nút bên dưới.`
+                    : "Corpus hiện chưa có paper khớp. Bỏ lọc nguồn không hỗ trợ đồng bộ (ví dụ IEEE) hoặc chọn OpenAlex / Crossref / arXiv để tải thêm."}
               </p>
               <div className="state__actions">
+                {syncTargets.length > 0 && (
+                  <button
+                    className="btn btn--primary"
+                    type="button"
+                    disabled={syncingRequest || !(submitted.trim() || query.trim())}
+                    onClick={() => {
+                      autoSyncKeys.current.clear();
+                      void requestCorpusSync();
+                    }}
+                  >
+                    {syncingRequest ? "Đang tải…" : `Tải từ ${syncButtonLabel}`}
+                  </button>
+                )}
                 {activeFilterCount > 0 && (
                   <button className="btn btn--ghost" onClick={clearFilters}>
                     Xóa {activeFilterCount} bộ lọc
@@ -661,6 +737,22 @@ export function SearchPage({ theme, toggle }: Props) {
                   />
                 ))}
               </ol>
+
+              {syncTargets.length > 0 && (
+                <div className="state__actions" style={{ marginTop: "1rem" }}>
+                  <button
+                    className="btn btn--ghost"
+                    type="button"
+                    disabled={syncingRequest || !(submitted.trim() || query.trim())}
+                    onClick={() => {
+                      autoSyncKeys.current.clear();
+                      void requestCorpusSync();
+                    }}
+                  >
+                    {syncingRequest ? "Đang tải thêm…" : `Tải thêm từ ${syncButtonLabel}`}
+                  </button>
+                </div>
+              )}
 
               {totalPages > 1 && (
                 <nav className="pager" aria-label="Phân trang kết quả">

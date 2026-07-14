@@ -55,6 +55,10 @@ const MODULES = [
 
 export function HomePage({ theme, toggle }: Props) {
   const revealRef = useReveal();
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.roles.includes("Admin") ?? false;
+  const roleLabel = isAdmin ? "Admin" : "Student";
+  const roleHref = isAdmin ? "#admin" : "#overview";
   const [showWelcome, setShowWelcome] = useState(() => {
     return !sessionStorage.getItem("hasSeenWelcome");
   });
@@ -82,17 +86,19 @@ export function HomePage({ theme, toggle }: Props) {
             <a href="#search" className="nav-item">Tìm kiếm</a>
             <a href="#trends" className="nav-item">Xu hướng</a>
             <a href="#workspace" className="nav-item">Workspace</a>
-            <a href="#admin" className="nav-item">Admin</a>
+            {currentUser ? (
+              <a href={roleHref} className="nav-item">{roleLabel}</a>
+            ) : null}
             <div className="theme-toggle-wrapper">
               <ThemeToggle theme={theme} toggle={toggle} />
             </div>
           </div>
           
           <div className="home-nav__auth" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {getCurrentUser() ? (
-              <a href="#overview" className="nav-item" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }} title="Vào Dashboard">
+            {currentUser ? (
+              <a href={roleHref} className="nav-item" style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }} title="Vào Dashboard">
                 <IconUser width={18} height={18} />
-                <span className="hidden md:inline">{getCurrentUser()?.full_name || "Dashboard"}</span>
+                <span className="hidden md:inline">{currentUser.full_name || "Dashboard"}</span>
               </a>
             ) : (
               <>
@@ -103,7 +109,7 @@ export function HomePage({ theme, toggle }: Props) {
               </>
             )}
           </div>
-        </div>
+          </div>
         </nav>
 
         <section className="home-hero">

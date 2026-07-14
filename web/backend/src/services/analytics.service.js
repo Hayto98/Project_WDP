@@ -106,22 +106,74 @@ async function getGaps(query) {
     .sort({ generated_at: -1 })
     .lean();
 
-  if (!report) return { fields: [], aspects: [], gaps: [] };
+  if (!report) {
+    return {
+      hasReport: false,
+      generatedAt: null,
+      gapCount: 0,
+      fields: [],
+      aspects: [],
+      gaps: [],
+      ai: { summary: '', directions: [], evidence: [] },
+      thresholds: { density: 0.35, interest: 0.55 },
+    };
+  }
 
-  let gaps = report.result_snapshot.gaps || [];
-  const densityThreshold = parseFloat(query.densityThreshold) || 0.4;
+  const densityThreshold = parseFloat(query.densityThreshold);
+  const threshold = Number.isFinite(densityThreshold) ? densityThreshold : 0.35;
+  const interestThreshold = Number(report.result_snapshot?.thresholds?.interest ?? 0.55);
 
-  // Mark gaps based on threshold
-  gaps = gaps.map((g) => ({
-    ...g,
-    isGap: g.density <= densityThreshold && (g.interest || 0) >= 0.55,
-  }));
+  const gaps = (report.result_snapshot.gaps || []).map((g) => {
+    const isGap = g.density <= threshold && (g.interest || 0) >= interestThreshold;
+    return {
+      ...g,
+      gap: isGap,
+      isGap,
+    };
+  });
 
   return {
+    hasReport: true,
+    generatedAt: report.generated_at,
+    gapCount: gaps.filter((gap) => gap.isGap).length,
     fields: report.result_snapshot.fields || [],
     aspects: report.result_snapshot.aspects || [],
     gaps,
+    ai: report.result_snapshot.ai || { summary: '', directions: [], evidence: [] },
+    thresholds: {
+      density: threshold,
+      interest: interestThreshold,
+    },
   };
 }
 
-module.exports = { getTrends, getGrowth, getCooccurrence, getGaps };
+async function getLiveGaps(payload) {
+  const liveGapService = require('./liveGap.service');
+  return liveGapService.getLiveGaps(payload);
+}
+
+async function saveLiveGaps(result, user) {
+  const liveGapService = require('./liveGap.service');
+  return liveGapService.saveLiveGapReport(result, user?.id || null);
+}
+
+async function getLiveTrends(payload) {
+  const liveTrendService = require('./liveTrend.service');
+  return liveTrendService.getLiveTrends(payload);
+}
+
+async function saveLiveTrends(result, user) {
+  const liveTrendService = require('./liveTrend.service');
+  return liveTrendService.saveLiveTrendReport(result, user?.id || null);
+}
+
+module.exports = { 
+  getTrends, 
+  getGrowth, 
+  getCooccurrence, 
+  getGaps, 
+  getLiveGaps, 
+  saveLiveGaps,
+  getLiveTrends,
+  saveLiveTrends 
+};

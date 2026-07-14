@@ -26,7 +26,7 @@ export function GapMatrix({
   const cell = (fk: string, a: string) =>
     items.find((i) => i.fieldKey === fk && i.aspect === a);
 
-  const shownAspects = GAP_ASPECTS.filter((a) => aspects.includes(a));
+  const shownAspects = (aspects.length ? aspects : GAP_ASPECTS).filter(Boolean);
 
   return (
     <div className="heatmap">

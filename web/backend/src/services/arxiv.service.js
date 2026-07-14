@@ -28,7 +28,9 @@ function allMatches(xml, pattern) {
 }
 
 function buildSearchQuery(query, options = {}) {
-  const parts = [`all:${query}`];
+  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
+  const phrase = /\s/.test(cleaned) ? `"${cleaned}"` : cleaned;
+  const parts = [`all:${phrase}`];
   const yearFrom = parseInt(options.yearFrom, 10);
   const yearTo = parseInt(options.yearTo, 10);
 

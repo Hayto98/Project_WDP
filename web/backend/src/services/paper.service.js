@@ -63,12 +63,19 @@ async function searchPapers(query, userId = null) {
 
   // Full-text / scoped search
   if (query.q) {
+    // Strip wrapping quotes; multi-word queries must match as a contiguous phrase
+    // so "genetic algorithm" does not match papers that only contain "algorithm".
+    const cleanedQuery = String(query.q).trim().replace(/^"+|"+$/g, '').trim();
+    const isMultiWord = /\s/.test(cleanedQuery);
+
     if (query.scope === 'title') {
-      andClauses.push({ title: regexFor(query.q) });
+      andClauses.push({ title: regexFor(cleanedQuery) });
     } else if (query.scope === 'author') {
-      andClauses.push({ 'authors.name': regexFor(query.q) });
+      andClauses.push({ 'authors.name': regexFor(cleanedQuery) });
+    } else if (isMultiWord) {
+      andClauses.push(textLikeClause(cleanedQuery));
     } else {
-      filter.$text = { $search: query.q };
+      filter.$text = { $search: cleanedQuery };
       usesTextSearch = true;
     }
   }
