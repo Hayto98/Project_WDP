@@ -3,6 +3,7 @@ import { Widget } from "./Widget";
 import { IconTrend } from "./icons";
 import { analyticsApi } from "../lib/api";
 import { TrendChart } from "./TrendChart";
+import { SavedLiveTrendsModal } from "./SavedLiveTrendsModal";
 
 const LIVE_SOURCES = ["OpenAlex", "Crossref", "arXiv", "Semantic Scholar", "Exa"] as const;
 
@@ -38,6 +39,7 @@ export function LiveTrendPanel({ theme }: Props) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [result, setResult] = useState<LiveTrendResult | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const toggleSource = (source: string) => {
     setSources((prev) => {
@@ -101,10 +103,18 @@ export function LiveTrendPanel({ theme }: Props) {
   return (
     <div className="livegap">
       <div className="livegap__form">
-        <h2 className="livegap__title">
-          <IconTrend width={18} height={18} />
-          <span>Live Trend Analysis</span>
-        </h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 className="livegap__title" style={{ margin: 0 }}>
+            <IconTrend width={18} height={18} />
+            <span>Live Trend Analysis</span>
+          </h2>
+          <button 
+            className="btn btn--outline btn--sm" 
+            onClick={() => setIsHistoryOpen(true)}
+          >
+            Lịch sử đã lưu
+          </button>
+        </div>
         <p className="livegap__desc">
           Phân tích xu hướng công bố trong thời gian thực từ các thư viện học thuật mở.
         </p>
@@ -136,18 +146,6 @@ export function LiveTrendPanel({ theme }: Props) {
           </div>
 
           <div className="livegap__field">
-            <label>Số bài tối đa mỗi nguồn</label>
-            <select
-              value={maxRecordsPerSource}
-              onChange={(e) => setMaxRecordsPerSource(Number(e.target.value))}
-            >
-              <option value={20}>20 bài (nhanh)</option>
-              <option value={50}>50 bài (chuẩn)</option>
-              <option value={100}>100 bài (chậm)</option>
-            </select>
-          </div>
-
-          <div className="livegap__field">
             <label>Nguồn dữ liệu</label>
             <div className="livegap__sources">
               {LIVE_SOURCES.map((src) => (
@@ -165,13 +163,29 @@ export function LiveTrendPanel({ theme }: Props) {
             </div>
           </div>
 
-          <button
-            className="btn btn--primary"
-            onClick={() => void runLive()}
-            disabled={loading || !topic.trim()}
-          >
-            {loading ? "Đang phân tích..." : "Phân tích Live"}
-          </button>
+          <div className="livegap__row" style={{ alignItems: "flex-end" }}>
+            <div className="livegap__field" style={{ flex: 1, marginBottom: 0 }}>
+              <label>Số bài tối đa mỗi nguồn</label>
+              <select
+                value={maxRecordsPerSource}
+                onChange={(e) => setMaxRecordsPerSource(Number(e.target.value))}
+              >
+                <option value={20}>20 bài (nhanh)</option>
+                <option value={50}>50 bài (chuẩn)</option>
+                <option value={100}>100 bài (chậm)</option>
+              </select>
+            </div>
+            <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+              <button
+                className="btn btn--primary"
+                onClick={() => void runLive()}
+                disabled={loading || !topic.trim()}
+                style={{ width: "100%", height: "42px" }}
+              >
+                {loading ? "Đang phân tích..." : "Phân tích Live"}
+              </button>
+            </div>
+          </div>
         </div>
 
         {error && <div className="livegap__error">{error}</div>}
@@ -228,6 +242,20 @@ export function LiveTrendPanel({ theme }: Props) {
           </div>
         )}
       </div>
+
+      <SavedLiveTrendsModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelect={(savedResult) => {
+          setTopic(savedResult.topic);
+          setSources(new Set(savedResult.sources || []));
+          setYearFrom(savedResult.yearFrom);
+          setYearTo(savedResult.yearTo);
+          setResult(savedResult);
+          setError("");
+          setNotice("Đã tải lại phân tích từ lịch sử.");
+        }}
+      />
     </div>
   );
 }

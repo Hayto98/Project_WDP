@@ -878,6 +878,17 @@ export const analyticsApi = {
       })),
     );
   },
+  async savedLiveTrends() {
+    return request<Array<{
+      id: string;
+      topic: string;
+      sources: string[];
+      yearFrom: number;
+      yearTo: number;
+      generatedAt: string;
+      result: any;
+    }>>("/analytics/trends/live/saved");
+  },
 };
 
 export const adminApi = {

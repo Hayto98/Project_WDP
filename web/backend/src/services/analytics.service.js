@@ -212,6 +212,31 @@ async function saveLiveTrends(result, user) {
   return liveTrendService.saveLiveTrendReport(result, user?.id || null);
 }
 
+async function getSavedLiveTrends(user) {
+  const AnalysisReport = require('../models/AnalysisReport');
+  const query = {
+    report_type: 'CustomSearch',
+    'criteria.mode': 'live_trend',
+  };
+  if (user?.id) {
+    query['criteria.requested_by'] = user.id;
+  }
+  const reports = await AnalysisReport.find(query)
+    .sort({ generated_at: -1 })
+    .limit(50)
+    .lean();
+  
+  return reports.map(r => ({
+    id: r._id,
+    topic: r.criteria.topic,
+    sources: r.criteria.sources,
+    yearFrom: r.criteria.yearFrom,
+    yearTo: r.criteria.yearTo,
+    generatedAt: r.generated_at,
+    result: r.result_snapshot
+  }));
+}
+
 module.exports = {
   getTrends,
   getGrowth,
@@ -221,6 +246,7 @@ module.exports = {
   saveLiveGaps,
   getLiveTrends,
   saveLiveTrends,
+  getSavedLiveTrends,
   // exported for tests / reuse
   periodFromYearMonth,
   slugify,

@@ -1,11 +1,11 @@
+const liveFetch = require('./liveFetch.service');
 const {
   DEFAULT_SOURCES,
   extractTerms,
   parseTopicTerms,
-  fetchLivePapers,
   buildWarnings,
   normalizeToken,
-} = require('./liveFetch.service');
+} = liveFetch;
 const AnalysisReport = require('../models/AnalysisReport');
 
 const CACHE_TTL_MS = 20 * 60 * 1000;
@@ -106,7 +106,7 @@ async function getLiveTrends(payload) {
     return { ...cached, cached: true };
   }
 
-  const fetched = await fetchLivePapers(normalizedPayload);
+  const fetched = await liveFetch.fetchLivePapers(normalizedPayload);
   const topicTerms = parseTopicTerms(topic);
   
   const trendPoints = buildTrendData(
