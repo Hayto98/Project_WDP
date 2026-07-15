@@ -31,6 +31,9 @@ Tách và nâng cấp chức năng Phân tích xu hướng (Trend Analysis) thà
   - `granularity=quarter` → period `YYYY-Qn` từ `publication_month` (fallback Q1).
   - `GET /analytics/trends` trả `{ points, series }` với **slug key** thống nhất.
   - `slugify` dùng chung (`utils/slugify.js`) cho trends + report co-occurrence.
+- [x] **Lịch sử Live Trends & Tests (07/2026)**:
+  - Thêm endpoint `GET /api/v1/analytics/trends/live/saved` để lấy danh sách báo cáo.
+  - Hoàn thiện bộ Unit Tests cho `liveTrend.service.js` (xử lý cache, giả lập gọi API, lưu DB) bằng `node:test`.
 
 ### 2.2. Về mặt Frontend (UI/UX)
 - [x] **Tích hợp API Frontend (`api.ts`)**: Thêm các hàm gọi API tương ứng `liveTrends` và `saveLiveTrends`.
@@ -46,14 +49,16 @@ Tách và nâng cấp chức năng Phân tích xu hướng (Trend Analysis) thà
   - Topic chips lấy từ `series` API (không khóa cứng sample).
   - Empty vs error vs retry trên Corpus; nút **Tải lại**.
   - Live: skeleton chart + message rate-limit / timeout dễ hiểu.
+- [x] **Lịch sử Live Trends & UI (07/2026)**:
+  - Tạo Component `SavedLiveTrendsModal` để hiển thị lịch sử báo cáo.
+  - Cập nhật `LiveTrendPanel` thêm nút "Lịch sử đã lưu" (cho phép khôi phục kết quả).
+  - Tinh chỉnh form UI: gộp chọn "Số bài tối đa mỗi nguồn" và nút "Phân tích Live" trên cùng một hàng.
 
 ### 2.3. Tài liệu
 - [x] Guide hướng tiếp cận: `web/HaiTT/docs/trend-analysis-guide.md` (kiến trúc, CAGR, API, checklist).
 
 ## 3. Những công việc chưa hoàn thành (Not Done / Next Steps)
 - **Tối ưu tốc độ API**: Hiện tại việc gọi đồng thời (Promise.all) tới 3-5 nguồn thư viện học thuật mất khá nhiều thời gian (khoảng 3–5 giây cho mỗi request 20 bài). Cần tìm hiểu thêm về việc đưa các request này vào background queue hoặc stream dữ liệu về UI.
-- **Unit Test / Integration Test**: Chưa có kịch bản test tự động cho service `liveTrend.service.js`.
-- **UI lịch sử Live đã lưu**: API save `CustomSearch` đã có; chưa có màn hình mở lại phân tích đã lưu.
 - **Rate limit phía nguồn**: Đã có message thân thiện trên UI khi gặp 429/timeout; chưa có queue/backoff phía server.
 
 ## 4. Trạng thái hiện tại
