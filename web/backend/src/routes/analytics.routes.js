@@ -202,4 +202,18 @@ router.post('/trends/live', validate(liveTrendSchema), ctrl.getLiveTrends);
  */
 router.post('/trends/live/save', validate(saveLiveTrendSchema), ctrl.saveLiveTrends);
 
+/**
+ * @swagger
+ * /api/v1/analytics/trends/live/saved:
+ *   get:
+ *     summary: Get saved live trends analysis reports
+ *     tags: [Analytics]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of saved live trends reports
+ */
+router.get('/trends/live/saved', ctrl.getSavedLiveTrends);
+
 module.exports = router;

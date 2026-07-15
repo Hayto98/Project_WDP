@@ -73,6 +73,15 @@ async function saveLiveTrends(req, res) {
   }
 }
 
+async function getSavedLiveTrends(req, res) {
+  try {
+    const data = await analyticsService.getSavedLiveTrends(req.user);
+    return ApiResponse.success(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
 module.exports = { 
   getTrends, 
   getGrowth, 
@@ -81,5 +90,6 @@ module.exports = {
   getLiveGaps, 
   saveLiveGaps,
   getLiveTrends,
-  saveLiveTrends 
+  saveLiveTrends,
+  getSavedLiveTrends 
 };
