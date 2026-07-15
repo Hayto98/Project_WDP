@@ -205,3 +205,16 @@ export const IconSend = (p: IconProps) => (
     <Path d="m22 2-7 20-4-9-9-4 20-7z" />
   </BaseIcon>
 );
+
+export const IconTrash = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </BaseIcon>
+);
+
+export const IconCalendar = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <Path d="M16 2v4M8 2v4M3 10h18" />
+  </BaseIcon>
+);
