@@ -684,6 +684,12 @@ export const paperApi = {
       body: JSON.stringify({ query, sourceName, maxRecords, ...filters }),
     });
   },
+  saveSearch(query: string, filters: Record<string, any> = {}) {
+    return request("/searches", {
+      method: "POST",
+      body: JSON.stringify({ name: query || 'Unnamed search', query, filters }),
+    });
+  },
 };
 
 export const dashboardApi = {
