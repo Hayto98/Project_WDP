@@ -180,21 +180,20 @@ export interface LibraryEntry {
   notes?: string;
   note?: string;
 }
+export type AlertPriority = "high" | "medium" | "low";
 export interface FollowAlert {
   id: string;
-  title?: string;
-  time?: string;
   when: string;
   unread: boolean;
   subjectId: string;
   paperId: string;
-  priority: string;
+  priority: AlertPriority;
   reason: string;
 }
 export interface FollowSubject {
   id: string;
   label: string;
-  type: string;
+  type: FollowType;
   active: boolean;
   newPapers: number;
   papers7d: number;
