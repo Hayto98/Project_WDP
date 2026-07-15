@@ -6,7 +6,7 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSearch, IconX, IconFilter, IconPlus, IconQuote, IconBookmark, IconExternal, IconChevron } from '../../components/icons';
 import { formatInt } from '../../lib/format';
-import { paperApi, aiApi } from '../../lib/api';
+import { paperApi, aiApi, libraryApi } from '../../lib/api';
 import type { PaperResult } from '../../lib/api';
 
 const SOURCES = [
@@ -136,6 +136,28 @@ export default function SearchScreen() {
     setOrTerms("");
     setNotTerms("");
     setPage(1);
+  };
+
+  const ensureSaveCollection = async () => {
+    const cols = await libraryApi.collections();
+    let defaultCol = cols.find(c => c.name === "Đọc sau");
+    if (!defaultCol) {
+      const created = await libraryApi.createCollection("Đọc sau", "Bài lưu nhanh từ trang tìm kiếm");
+      defaultCol = { id: created._id || created.id || "", name: "Đọc sau", description: "" };
+    }
+    return defaultCol.id;
+  };
+
+  const savePaperToLibrary = async (p: PaperResult) => {
+    if (saved.has(p.id)) return;
+    try {
+      const colId = await ensureSaveCollection();
+      await libraryApi.savePaper(p.id, [colId]);
+      setSaved(prev => new Set(prev).add(p.id));
+      Alert.alert("Thành công", "Đã lưu bài báo vào thư viện.");
+    } catch (err: any) {
+      Alert.alert("Lỗi", err.message || "Không thể lưu bài báo");
+    }
   };
 
   const handleSaveSearch = async () => {
@@ -321,7 +343,7 @@ export default function SearchScreen() {
                     <View style={{ flexDirection: 'row' }}>
                       <TouchableOpacity 
                         style={[styles.actionBtn, isSaved && { backgroundColor: theme.primaryWeak }]}
-                        onPress={() => toggleSet(saved, p.id, setSaved)}
+                        onPress={() => savePaperToLibrary(p)}
                       >
                         <IconBookmark color={isSaved ? theme.primary : theme.inkMuted} size={14} />
                         <Text variant="xs" color={isSaved ? 'primary' : 'inkMuted'} style={{ marginLeft: 4 }}>
