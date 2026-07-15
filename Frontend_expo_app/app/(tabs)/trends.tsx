@@ -2,9 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { ThemeToggle } from '../../components/ThemeToggle';
 import { Widget } from '../../components/Widget';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ThemeToggle } from '../../components/ThemeToggle';
 import { IconTrend, IconSparkle, IconGap } from '../../components/icons';
 import { LiveTrendPanel } from '../../components/LiveTrendPanel';
 import { formatCompact, formatInt, formatPercent } from '../../lib/format';
@@ -103,13 +103,16 @@ export default function TrendsScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text variant="heading" weight="bold">Phân tích xu hướng</Text>
-            <Text variant="xs" color="inkMuted" style={{ marginTop: 4 }}>
-              {mode === 'corpus' 
-                ? 'So sánh diễn biến công bố, tốc độ tăng trưởng'
-                : 'Phân tích xu hướng từ nguồn trực tuyến'}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <View style={styles.headerText}>
+              <Text variant="heading" weight="bold">Phân tích xu hướng</Text>
+              <Text variant="xs" color="inkMuted" style={{ marginTop: 4 }}>
+                {mode === 'corpus' 
+                  ? 'So sánh diễn biến công bố, tốc độ tăng trưởng'
+                  : 'Phân tích xu hướng từ nguồn trực tuyến'}
+              </Text>
+            </View>
+            <ThemeToggle />
           </View>
           
           <View style={[styles.modeToggle, { backgroundColor: theme.surface2 }]}>
@@ -164,9 +167,12 @@ export default function TrendsScreen() {
 
             {/* Topic Selector */}
             <View style={styles.topicBar}>
+              <Text variant="xs" color="inkMuted" style={{ marginBottom: 8, fontStyle: 'italic' }}>
+                * Hiển thị Top 50 chủ đề hot nhất dựa trên tổng số lượng công bố
+              </Text>
               <ScrollView style={{ height: 160 }} nestedScrollEnabled>
                 <View style={styles.topicChips}>
-                  {topics.map(t => {
+                  {topics.slice(0, 50).map(t => {
                     const on = selected.has(t.key);
                     let colorStr = theme.primary;
                     if (t.token === '--c1') colorStr = theme.primary;

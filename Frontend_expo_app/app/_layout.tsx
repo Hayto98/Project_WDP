@@ -30,7 +30,7 @@ function RootLayoutNav() {
       const role = user.roles?.includes('Admin') ? 'admin' : 'student';
       if (role === 'admin' && segments[0] !== '(admin)') {
         router.replace('/(admin)' as any);
-      } else if (role === 'student' && segments[0] !== '(tabs)') {
+      } else if (role === 'student' && segments[0] !== '(tabs)' && segments[0] !== '(user)') {
         router.replace('/(tabs)' as any);
       }
     }
