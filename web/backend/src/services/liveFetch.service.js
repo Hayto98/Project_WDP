@@ -1,8 +1,4 @@
-const { fetchOpenAlexWorks, mapWorkToPaper } = require('./openalex.service');
-const { fetchCrossrefWorks, mapItemToPaper } = require('./crossref.service');
-const { fetchArxivPapers, mapEntryToPaper } = require('./arxiv.service');
-const { fetchSemanticScholarPapers, mapSemanticPaperToPaper } = require('./semanticScholar.service');
-const { fetchExaResults, mapResultToPaper } = require('./exa.service');
+const { normalizeDoi } = require('./paperCleaning.service');
 
 const DEFAULT_SOURCES = ['OpenAlex', 'Crossref', 'arXiv'];
 
@@ -34,6 +30,45 @@ function normalizeToken(value) {
     .replace(/[^a-z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeEvidenceUrl(mapped = {}, source = '') {
+  const raw = String(mapped.original_url || mapped.url || '').trim();
+  if (raw) {
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const doi = normalizeDoi(raw);
+    if (doi) return `https://doi.org/${doi}`;
+  }
+
+  const doi = normalizeDoi(mapped.doi || '');
+  if (doi) return `https://doi.org/${doi}`;
+
+  if (source === 'OpenAlex' && mapped.sources?.[0]?.external_id) {
+    const externalId = String(mapped.sources[0].external_id).trim();
+    if (/^https?:\/\//i.test(externalId)) return externalId;
+  }
+
+  return '';
+}
+
+function getOpenAlexService() {
+  return require('./openalex.service');
+}
+
+function getCrossrefService() {
+  return require('./crossref.service');
+}
+
+function getArxivService() {
+  return require('./arxiv.service');
+}
+
+function getSemanticScholarService() {
+  return require('./semanticScholar.service');
+}
+
+function getExaService() {
+  return require('./exa.service');
 }
 
 function expandAlias(term) {
@@ -117,7 +152,7 @@ function toLivePaper(mapped, source) {
     year: mapped.publication_year || null,
     source,
     doi: mapped.doi || undefined,
-    url: mapped.original_url || undefined,
+    url: normalizeEvidenceUrl(mapped, source) || undefined,
     authors,
     keywords: mapped.keywords || [],
     fields: mapped.research_fields || [],
@@ -147,22 +182,27 @@ async function fetchFromSource(sourceName, payload) {
   const limit = payload.maxRecordsPerSource;
 
   if (sourceName === 'OpenAlex') {
+    const { fetchOpenAlexWorks, mapWorkToPaper } = getOpenAlexService();
     const { works } = await fetchOpenAlexWorks(payload.topic, limit, options);
     return works.map((work) => toLivePaper(mapWorkToPaper(work), 'OpenAlex'));
   }
   if (sourceName === 'Crossref') {
+    const { fetchCrossrefWorks, mapItemToPaper } = getCrossrefService();
     const { items } = await fetchCrossrefWorks(payload.topic, limit, options);
     return items.map((item) => toLivePaper(mapItemToPaper(item), 'Crossref'));
   }
   if (sourceName === 'arXiv') {
+    const { fetchArxivPapers, mapEntryToPaper } = getArxivService();
     const { entries } = await fetchArxivPapers(payload.topic, limit, options);
     return entries.map((entry) => toLivePaper(mapEntryToPaper(entry), 'arXiv'));
   }
   if (sourceName === 'Semantic Scholar') {
+    const { fetchSemanticScholarPapers, mapSemanticPaperToPaper } = getSemanticScholarService();
     const { papers } = await fetchSemanticScholarPapers(payload.topic, limit, options);
     return papers.map((paper) => toLivePaper(mapSemanticPaperToPaper(paper), 'Semantic Scholar'));
   }
   if (sourceName === 'Exa') {
+    const { fetchExaResults, mapResultToPaper } = getExaService();
     const { results } = await fetchExaResults(payload.topic, Math.min(limit, 25), options);
     return results.map((result) => toLivePaper(mapResultToPaper(result), 'Exa'));
   }

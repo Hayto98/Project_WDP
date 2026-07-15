@@ -1107,3 +1107,39 @@ Nên:
 - chỉ lưu report khi user yêu cầu.
 
 Đây là hướng cân bằng giữa tốc độ demo, tính đúng đắn học thuật và khả năng mở rộng sau này.
+
+---
+
+## 22. Cập Nhật Triển Khai Thực Tế
+
+Phần này ghi lại trạng thái sau khi đối chiếu spec với code hiện có trong `web/backend` và `web/frontend`.
+
+### 22.1 Backend đã triển khai
+
+- `POST /api/v1/analytics/gaps/live` và `POST /api/v1/analytics/gaps/live/save` đã có route, controller, validator, service và lưu report.
+- Live Gap chạy qua backend, không gọi trực tiếp source ngoài từ frontend.
+- `LivePaper` đã được chuẩn hóa từ OpenAlex, Crossref, arXiv, Semantic Scholar và Exa.
+- Term extraction, alias map, candidate pair, scoring và summary count đã có trong `liveGap.service.js`.
+- Evidence URL đã được chuẩn hóa về URL dùng được theo từng nguồn.
+- Cache live gap đang dùng in-memory `Map()` với TTL 20 phút.
+- Source services được load lazy để test stub/mocking hoạt động ổn định hơn.
+- Auth rate limit đã được nới trong non-production để tránh flake khi chạy suite test.
+
+### 22.2 Frontend đã triển khai
+
+- Trang Research Gap có 2 chế độ: `Corpus Gap` và `Live Gap`.
+- Live Gap UI có form topic, chọn nguồn, chọn khoảng năm, max records mỗi nguồn, topK, loading/error/notice states.
+- UI có nút lưu phân tích và hiển thị evidence papers, gap score, reasons, confidence.
+- Frontend chỉ gọi backend API qua `analyticsApi.liveGaps()` và `analyticsApi.saveLiveGaps()`.
+
+### 22.3 Test đã xác nhận
+
+- `node --test test/liveGap.integration.test.js` pass `25/25`.
+- Test đã khóa các hành vi chính: validation, cache hit/miss, evidence URL, save report, summary, gap ordering và source error handling.
+
+### 22.4 Những mục vẫn còn là tuỳ chọn / mở rộng
+
+- Redis cache thay cho `Map()`.
+- Timeout warning UI riêng nếu fetch > 10s.
+- Troubleshooting section riêng trong docs cho `429`, timeout, empty results.
+- Live smoke test với API ngoài thật cho 1 topic nhỏ nếu muốn xác nhận hạ tầng production.
