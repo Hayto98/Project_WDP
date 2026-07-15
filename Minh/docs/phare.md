@@ -3532,3 +3532,36 @@ Lenh commit goi y:
 git add Minh/docs/phare.md Minh/docs/research-gap-live.md web/backend/src/services/liveFetch.service.js web/backend/test/liveGap.unit.test.js web/frontend/src/components/LiveGapPanel.tsx web/frontend/src/App.css
 git commit -m "fix: clean live gap source warnings"
 ```
+
+## Cap nhat 2026-07-15 - Docs tong ket backend Research Gap
+
+Muc tieu:
+
+- Tao file markdown moi trong `Minh/docs` de tom tat Research Gap theo goc nhin backend.
+- Ghi ro chuc nang da lam, endpoint, cach xu ly, noi luu du lieu, muc do khop voi ky vong, test da chay, va phan con lai neu nang production.
+
+Da them file:
+
+- `Minh/docs/research-gap-backend-summary.md`
+
+Noi dung chinh:
+
+- Phan biet `Corpus Gap` va `Live Gap`.
+- Mo ta route/API:
+  - `GET /api/v1/analytics/gaps`
+  - `POST /api/v1/analytics/gaps/live`
+  - `POST /api/v1/analytics/gaps/live/save`
+- Ghi ro `Luu phan tich` hien luu vao MongoDB collection `analysis_reports` voi `report_type=CustomSearch`, `criteria.mode=live`, `result_snapshot`, va `expires_at` 7 ngay.
+- Doi chieu ky vong backend voi implementation hien tai.
+- Ghi ro gioi han hien tai:
+  - cache in-memory `Map()`.
+  - chua co UI/API list saved Live Gap reports.
+  - external source van co the rate limit/503.
+  - chua co Redis/observability/rate-limit dashboard rieng.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md Minh/docs/research-gap-backend-summary.md
+git commit -m "docs: summarize research gap backend implementation"
+```

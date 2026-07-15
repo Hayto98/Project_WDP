@@ -205,3 +205,32 @@ export const IconSend = (p: IconProps) => (
     <Path d="m22 2-7 20-4-9-9-4 20-7z" />
   </BaseIcon>
 );
+
+export const IconTrash = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </BaseIcon>
+);
+
+export const IconCalendar = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <Path d="M16 2v4M8 2v4M3 10h18" />
+  </BaseIcon>
+);
+
+export const IconEye = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <Circle cx="12" cy="12" r="3" />
+  </BaseIcon>
+);
+
+export const IconEyeOff = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <Path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <Path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <Path d="m2 2 20 20" />
+  </BaseIcon>
+);
