@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
@@ -6,8 +6,8 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 import { Widget } from '../../components/Widget';
 import { IconTrend, IconGap, IconLibrary, IconSparkle, IconRefresh, IconBookmark } from '../../components/icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { makeDashboardData } from '../../data/sample';
-import type { TimeRange } from '../../data/types';
+import { dashboardApi } from '../../lib/api';
+import type { TimeRange, DashboardData } from '../../data/types';
 import { KpiStrip } from '../../components/KpiStrip';
 import { TrendChart } from '../../components/TrendChart';
 import { ResearchGapHeatmap } from '../../components/ResearchGapHeatmap';
@@ -24,21 +24,59 @@ const RANGES: { id: TimeRange; label: string }[] = [
 export default function OverviewScreen() {
   const { theme } = useTheme();
   const [range, setRange] = useState<TimeRange>('12m');
-  const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<'default' | 'loading' | 'empty' | 'error'>('default');
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<'default' | 'loading' | 'empty' | 'error'>('loading');
+  const [data, setData] = useState<DashboardData | null>(null);
 
-  const data = useMemo(() => makeDashboardData(range), [range]);
+  useEffect(() => {
+    fetchData();
+  }, []); // Note: the actual dashboard API might not take a range parameter yet.
+
+  const fetchData = async () => {
+    setLoading(true);
+    setView('loading');
+    try {
+      const result = await dashboardApi.overview();
+      setData(result);
+      setView('default');
+    } catch (err) {
+      console.error('Failed to load dashboard:', err);
+      setView('error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRefresh = () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 620);
+    fetchData();
   };
 
   const status = view === 'loading' || loading
     ? 'loading'
-    : view === 'error' ? 'error' : view === 'empty' ? 'empty' : 'ready';
+    : view === 'error' ? 'error' : !data ? 'empty' : 'ready';
 
-  const railFirstRun = view === 'empty';
+  const railFirstRun = !data?.followed?.length && !data?.notifications?.length;
+
+  if (view === 'loading' && !data) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Đang tải dữ liệu...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (view === 'error' && !data) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text color="danger">Lỗi khi tải dữ liệu tổng quan</Text>
+        <TouchableOpacity style={{ marginTop: 16, padding: 12, backgroundColor: theme.primary, borderRadius: 8 }} onPress={fetchData}>
+          <Text color="surface">Thử lại</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
@@ -94,7 +132,7 @@ export default function OverviewScreen() {
           status={status}
           onRetry={() => setView('default')}
         >
-          <TrendChart data={data.trend} series={data.trendSeries} />
+          <TrendChart data={data.trend || []} series={data.trendSeries || []} />
         </Widget>
 
         <Widget
@@ -104,7 +142,7 @@ export default function OverviewScreen() {
           status={status}
           onRetry={() => setView('default')}
         >
-          <ResearchGapHeatmap fields={data.gapFields} aspects={data.gapAspects} gaps={data.gaps} />
+          <ResearchGapHeatmap fields={data.gapFields.map(f => f.label)} aspects={data.gapAspects.map(a => a.label)} gaps={data.gaps || []} />
         </Widget>
 
         <Widget

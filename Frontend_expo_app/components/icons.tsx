@@ -191,3 +191,17 @@ export const IconArrowLeft = (p: IconProps) => (
     <Path d="M19 12H5M12 19l-7-7 7-7" />
   </BaseIcon>
 );
+
+export const IconUser = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Circle cx="12" cy="8" r="4" />
+    <Path d="M4 21a8 8 0 0 1 16 0" />
+  </BaseIcon>
+);
+
+export const IconSend = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Path d="M22 2 11 13" />
+    <Path d="m22 2-7 20-4-9-9-4 20-7z" />
+  </BaseIcon>
+);

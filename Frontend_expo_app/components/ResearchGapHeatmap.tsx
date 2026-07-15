@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function ResearchGapHeatmap({ fields, aspects, gaps }: Props) {
-  const { theme } = useTheme();
+  const { theme, themeType } = useTheme();
 
   const getHeatColor = (density: number) => {
     // simplified heat colors based on primary theme color
@@ -21,13 +21,13 @@ export function ResearchGapHeatmap({ fields, aspects, gaps }: Props) {
     // We use a simplified mapping for react native without doing full CSS var replacement
     // teal sequential ramp
     switch(step) {
-      case 0: return theme.themeType === 'dark' ? '#152538' : '#eaf2f9';
-      case 1: return theme.themeType === 'dark' ? '#1a334b' : '#cce0f0';
-      case 2: return theme.themeType === 'dark' ? '#21496b' : '#99c2e3';
-      case 3: return theme.themeType === 'dark' ? '#27628f' : '#66a3d6';
-      case 4: return theme.themeType === 'dark' ? '#2e7cb5' : '#3385c9';
-      case 5: return theme.themeType === 'dark' ? '#3596dc' : '#0066bc';
-      default: return theme.themeType === 'dark' ? '#152538' : '#eaf2f9';
+      case 0: return themeType === 'dark' ? '#152538' : '#eaf2f9';
+      case 1: return themeType === 'dark' ? '#1a334b' : '#cce0f0';
+      case 2: return themeType === 'dark' ? '#21496b' : '#99c2e3';
+      case 3: return themeType === 'dark' ? '#27628f' : '#66a3d6';
+      case 4: return themeType === 'dark' ? '#2e7cb5' : '#3385c9';
+      case 5: return themeType === 'dark' ? '#3596dc' : '#0066bc';
+      default: return themeType === 'dark' ? '#152538' : '#eaf2f9';
     }
   };
 

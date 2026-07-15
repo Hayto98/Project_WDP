@@ -27,9 +27,10 @@ function RootLayoutNav() {
       router.replace('/(auth)/login' as any);
     } else if (user) {
       // Redirect to correct dashboard based on role
-      if (user.role === 'admin' && segments[0] !== '(admin)') {
+      const role = user.roles?.includes('Admin') ? 'admin' : 'student';
+      if (role === 'admin' && segments[0] !== '(admin)') {
         router.replace('/(admin)' as any);
-      } else if (user.role === 'student' && segments[0] !== '(tabs)') {
+      } else if (role === 'student' && segments[0] !== '(tabs)' && segments[0] !== '(user)') {
         router.replace('/(tabs)' as any);
       }
     }

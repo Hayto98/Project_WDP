@@ -64,13 +64,19 @@ export interface NotificationItem {
   unread: boolean;
 }
 
+export interface AxisOption {
+  key: string;
+  label: string;
+  token?: string;
+}
+
 export interface DashboardData {
   updatedAt: string;
   kpis: Kpi[];
   trendSeries: TrendSeries[];
   trend: TrendPoint[];
-  gapFields: string[];
-  gapAspects: string[];
+  gapFields: AxisOption[];
+  gapAspects: AxisOption[];
   gaps: GapCell[];
   trending: TrendingPaper[];
   ai: AiInsight;

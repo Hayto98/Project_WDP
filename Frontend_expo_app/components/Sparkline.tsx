@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, { Polyline } from 'react-native-svg';
+import Svg, { Polyline, Polygon } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 
 interface Props {
@@ -39,6 +39,11 @@ export function Sparkline({ values, token }: Props) {
   return (
     <View style={styles.container}>
       <Svg width={w} height={h}>
+        <Polygon
+          points={`${w},${h} 0,${h} ${points}`}
+          fill={colorStr}
+          fillOpacity={0.15}
+        />
         <Polyline
           points={points}
           fill="none"

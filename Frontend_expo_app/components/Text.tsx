@@ -4,7 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 
 export interface TextProps extends RNTextProps {
   variant?: 'xs' | 'sm' | 'body' | 'lead' | 'title' | 'heading' | 'display';
-  color?: 'ink' | 'inkMuted' | 'inkFaint' | 'primary' | 'success' | 'warning' | 'danger';
+  color?: 'ink' | 'inkMuted' | 'inkFaint' | 'primary' | 'success' | 'warning' | 'danger' | 'surface' | 'surface2';
   weight?: 'normal' | 'bold';
 }
 

@@ -5,18 +5,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { IconArrowLeft } from '../../components/icons';
+import { useAuth } from '../../context/AuthContext';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const { theme } = useTheme();
   const router = useRouter();
+  const { registerUser } = useAuth();
 
-  const handleRegister = () => {
-    // In a real app, send API request then route
-    alert('Đăng ký thành công! Vui lòng đăng nhập.');
-    router.back();
+  const handleRegister = async () => {
+    try {
+      setErrorMsg('');
+      if (!name || !email || !password) {
+        setErrorMsg('Vui lòng nhập đầy đủ thông tin');
+        return;
+      }
+      await registerUser(email, password, name);
+      alert('Đăng ký thành công! Vui lòng đăng nhập.');
+      router.back();
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Đăng ký thất bại');
+    }
   };
 
   return (
@@ -71,6 +83,8 @@ export default function RegisterScreen() {
                 secureTextEntry
               />
             </View>
+
+            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
             <TouchableOpacity 
               style={[styles.btn, { backgroundColor: theme.primary, marginTop: 12 }]}
@@ -140,5 +154,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 24,
+  },
+  errorText: {
+    color: 'red',
+    marginBottom: 12,
+    textAlign: 'center',
   },
 });
