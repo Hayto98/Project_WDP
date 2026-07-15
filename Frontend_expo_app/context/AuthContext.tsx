@@ -1,19 +1,24 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-type Role = 'admin' | 'student';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.41:5000/api/v1';
 
-interface User {
+export type Role = 'admin' | 'student';
+
+export interface User {
   id: string;
-  name: string;
+  name?: string;
+  full_name?: string;
   email: string;
-  role: Role;
+  roles?: string[];
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (role: Role) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  registerUser: (email: string, password: string, fullName: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -30,7 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUser = async () => {
     try {
       const storedUser = await AsyncStorage.getItem('@user');
-      if (storedUser) {
+      const token = await AsyncStorage.getItem('@accessToken');
+      if (storedUser && token) {
         setUser(JSON.parse(storedUser));
       }
     } catch (e) {
@@ -40,24 +46,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (role: Role) => {
-    const mockUser: User = {
-      id: role === 'admin' ? 'u1' : 'u2',
-      name: role === 'admin' ? 'Minh Thành' : 'Sinh viên',
-      email: role === 'admin' ? 'admin@school.edu' : 'student@school.edu',
-      role,
-    };
+  const login = async (email: string, password: string) => {
     try {
-      await AsyncStorage.setItem('@user', JSON.stringify(mockUser));
-      setUser(mockUser);
-    } catch (e) {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Đăng nhập thất bại');
+      }
+
+      const loggedUser = data.data.user;
+      await AsyncStorage.setItem('@user', JSON.stringify(loggedUser));
+      await AsyncStorage.setItem('@accessToken', data.data.accessToken);
+      if (data.data.refreshToken) {
+        await AsyncStorage.setItem('@refreshToken', data.data.refreshToken);
+      }
+      setUser(loggedUser);
+    } catch (e: any) {
       console.error(e);
+      throw e;
+    }
+  };
+
+  const registerUser = async (email: string, password: string, full_name: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, full_name }),
+      });
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Đăng ký thất bại');
+      }
+    } catch (e: any) {
+      console.error(e);
+      throw e;
     }
   };
 
   const logout = async () => {
     try {
       await AsyncStorage.removeItem('@user');
+      await AsyncStorage.removeItem('@accessToken');
+      await AsyncStorage.removeItem('@refreshToken');
       setUser(null);
     } catch (e) {
       console.error(e);
@@ -65,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, registerUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

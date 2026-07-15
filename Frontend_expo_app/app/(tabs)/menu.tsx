@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconGap, IconBookmark, IconLibrary, IconTelescope } from '../../components/icons';
+import { IconGap, IconBookmark, IconLibrary, IconTelescope, IconUser } from '../../components/icons';
 
 const MENU_ITEMS = [
   { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(user)/workspace' },
@@ -17,6 +17,8 @@ export default function MenuTab() {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
+
+  const userName = user?.full_name || user?.name || '';
 
   const handleLogout = async () => {
     await logout();
@@ -33,11 +35,11 @@ export default function MenuTab() {
         <View style={[styles.profileCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
             <Text variant="lead" weight="bold" style={{ color: theme.surface }}>
-              {user?.name?.substring(0, 2).toUpperCase() || 'US'}
+              {userName.substring(0, 2).toUpperCase() || 'US'}
             </Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text variant="lead" weight="bold">{user?.name}</Text>
+            <Text variant="lead" weight="bold">{userName}</Text>
             <Text variant="sm" color="inkMuted">{user?.email}</Text>
           </View>
         </View>
@@ -66,6 +68,16 @@ export default function MenuTab() {
         <View style={styles.section}>
           <Text variant="xs" weight="bold" color="inkMuted" style={styles.sectionTitle}>TÀI KHOẢN</Text>
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <TouchableOpacity 
+              style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: theme.border }]}
+              onPress={() => router.push('/(user)/account')}
+            >
+              <View style={[styles.iconBox, { backgroundColor: theme.surface2 }]}>
+                <IconUser color={theme.primary} size={18} />
+              </View>
+              <Text style={{ flex: 1, marginLeft: 12 }}>Tài khoản</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
               <View style={[styles.iconBox, { backgroundColor: theme.danger + '20' }]}>
                 <IconTelescope color={theme.danger} size={18} />

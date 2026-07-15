@@ -21,8 +21,8 @@ export function TrendingPapers({ papers }: Props) {
           <Text variant="title" weight="bold" color="inkMuted" style={styles.rank}>{i + 1}</Text>
           <View style={styles.main}>
             <TouchableOpacity onPress={() => Linking.openURL(p.url)} style={styles.titleRow}>
-              <Text variant="body" weight="bold" color="primaryInk" style={{ flex: 1 }}>{p.title}</Text>
-              <IconExternal color={theme.primaryInk} size={14} />
+              <Text variant="body" weight="bold" color="primary" style={{ flex: 1 }}>{p.title}</Text>
+              <IconExternal color={theme.primary} size={14} />
             </TouchableOpacity>
             
             <Text variant="xs" color="inkMuted" style={styles.meta}>

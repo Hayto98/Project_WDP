@@ -8,12 +8,13 @@ interface Props {
   nodes: any[];
   edges: any[];
   selected: Set<string>;
+  topics: any[];
 }
 
-export function CoocNetwork({ nodes, edges, selected }: Props) {
+export function CoocNetwork({ nodes, edges, selected, topics }: Props) {
   const { theme } = useTheme();
 
-  const shown = nodes.filter(n => selected.has(n.topic));
+  const shown = [...nodes].filter(n => selected.has(n.topic)).sort((a, b) => b.freq - a.freq).slice(0, 30);
   const ids = new Set(shown.map(n => n.id));
   const shownEdges = edges.filter(e => ids.has(e.a) && ids.has(e.b));
 
@@ -66,13 +67,15 @@ export function CoocNetwork({ nodes, edges, selected }: Props) {
               const lx = p.x + Math.cos(p.ang) * (r + 6);
               const ly = p.y + Math.sin(p.ang) * (r + 6);
               
-              let colorStr = theme.primary; // fallback
-              if (n.topic === 'Large Language Models') colorStr = theme.primary;
-              if (n.topic === 'Computer Vision') colorStr = '#8a2be2';
-              if (n.topic === 'Federated Learning') colorStr = theme.warning;
-              if (n.topic === 'Graph Neural Networks') colorStr = '#ff1493';
-              if (n.topic === 'Quantum ML') colorStr = theme.success;
-              if (n.topic === 'Edge & TinyML') colorStr = '#ffa500';
+              const s = topics.find(t => t.key === n.topic);
+              const token = s?.token || '--c1';
+              let colorStr = theme.primary;
+              if (token === '--c1') colorStr = theme.primary;
+              if (token === '--c2') colorStr = '#8a2be2';
+              if (token === '--c3') colorStr = theme.warning;
+              if (token === '--c4') colorStr = '#ff1493';
+              if (token === '--c5') colorStr = theme.success;
+              if (token === '--c6') colorStr = '#ffa500';
 
               return (
                 <G key={n.id}>

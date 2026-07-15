@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { ResearchGapHeatmap } from '../../components/ResearchGapHeatmap';
-import { makeDashboardData } from '../../data/sample';
+import { dashboardApi } from '../../lib/api';
+import type { DashboardData } from '../../data/types';
 
 export default function GapScreen() {
   const { theme } = useTheme();
-  const data = makeDashboardData('12m');
+  const [data, setData] = useState<DashboardData | null>(null);
+
+  useEffect(() => {
+    dashboardApi.overview().then(setData).catch(console.error);
+  }, []);
+
+  if (!data) return null;
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.bg }]} contentContainerStyle={styles.content}>
@@ -19,7 +26,7 @@ export default function GapScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <ResearchGapHeatmap fields={data.gapFields} aspects={data.gapAspects} gaps={data.gaps} />
+        <ResearchGapHeatmap fields={data.gapFields.map(f => f.label)} aspects={data.gapAspects.map(a => a.label)} gaps={data.gaps} />
       </View>
 
       <View style={{ marginTop: 24 }}>

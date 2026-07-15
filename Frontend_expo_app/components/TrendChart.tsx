@@ -50,7 +50,7 @@ export function TrendChart({ data, series }: Props) {
     <View style={styles.container}>
       {/* Legend */}
       <View style={styles.legend}>
-        {series.map(s => {
+        {series.map((s, idx) => {
           const off = hidden.has(s.key);
           let colorStr = theme.primary;
           if (s.token === '--c1') colorStr = theme.primary;
@@ -62,7 +62,7 @@ export function TrendChart({ data, series }: Props) {
 
           return (
             <TouchableOpacity 
-              key={s.key} 
+              key={`${s.key}-${idx}`} 
               style={[styles.legendChip, off && { opacity: 0.5 }]} 
               onPress={() => toggle(s.key)}
             >
