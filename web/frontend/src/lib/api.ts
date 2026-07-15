@@ -441,8 +441,40 @@ export const paperApi = {
   recordView(id: string) {
     return request(`/papers/${id}?source=Search_Result`);
   },
-  async getById(id: string) {
-    return mapPaper(await request<any>(`/papers/${id}`));
+  async getById(id: string, source = "Search_Result") {
+    return mapPaper(await request<any>(`/papers/${id}?source=${encodeURIComponent(source)}&track=false`));
+  },
+  startReadingSession(
+    id: string,
+    source: "Search_Result" | "Library" | "Recommendation" | "Dashboard" = "Search_Result",
+    device: "desktop" | "tablet" | "mobile" = "desktop",
+  ) {
+    return request<{ viewId: string; startedAt: string; thresholdSeconds: number }>(
+      `/papers/${id}/view-session`,
+      {
+        method: "POST",
+        body: JSON.stringify({ source, device }),
+      },
+    );
+  },
+  updateReadingSession(
+    id: string,
+    viewId: string,
+    durationSeconds: number,
+    finalized = false,
+    keepalive = false,
+  ) {
+    return request<{
+      viewId: string;
+      durationSeconds: number;
+      durationMinutes: number;
+      finalized: boolean;
+      persistStatus: "stored" | "queued" | "skipped";
+    }>(`/papers/${id}/view-session/${viewId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ durationSeconds, finalized }),
+      keepalive,
+    });
   },
   requestSync(query: string, sourceName = "OpenAlex", maxRecords = 25, filters: {
     yearFrom?: number;
@@ -984,6 +1016,7 @@ export const adminApi = {
         source: paper.source_name ?? view.source ?? "Unknown",
         viewedAt: formatWhen(view.viewed_at),
         durationMinutes: Number(view.duration_minutes ?? 0),
+        durationSeconds: Number(view.duration_seconds ?? Math.round(Number(view.duration_minutes ?? 0) * 60)),
         sessionWindow: view.session_window || "N/A",
         device: view.device ?? "web",
         persistStatus: view.persist_status ?? "stored",

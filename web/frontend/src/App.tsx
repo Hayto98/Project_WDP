@@ -16,6 +16,7 @@ const LibraryPage = lazy(() => import("./pages/LibraryPage").then((m) => ({ defa
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const NotificationPage = lazy(() => import("./pages/NotificationPage").then((m) => ({ default: m.NotificationPage })));
 const OverviewPage = lazy(() => import("./pages/OverviewPage").then((m) => ({ default: m.OverviewPage })));
+const PaperDetailPage = lazy(() => import("./pages/PaperDetailPage").then((m) => ({ default: m.PaperDetailPage })));
 const RegisterPage = lazy(() => import("./pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
 const SearchPage = lazy(() => import("./pages/SearchPage").then((m) => ({ default: m.SearchPage })));
 const TrendsPage = lazy(() => import("./pages/TrendsPage").then((m) => ({ default: m.TrendsPage })));
@@ -24,6 +25,7 @@ const WorkspacePage = lazy(() => import("./pages/WorkspacePage").then((m) => ({ 
 export default function App() {
   const { theme, toggle } = useTheme();
   const route = useHashRoute("home");
+  const paperRoute = parsePaperRoute(route);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getCurrentUser());
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
 
@@ -110,9 +112,16 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar active={route} />
+      <Sidebar active={paperRoute ? "search" : route} />
       <RouteSuspense>
-        {route === "search" ? (
+        {paperRoute ? (
+          <PaperDetailPage
+            paperId={paperRoute.paperId}
+            source={paperRoute.source}
+            theme={theme}
+            toggle={toggle}
+          />
+        ) : route === "search" ? (
           <SearchPage theme={theme} toggle={toggle} />
         ) : route === "account" ? (
           <AccountPage theme={theme} toggle={toggle} />
@@ -136,6 +145,20 @@ export default function App() {
       </RouteSuspense>
     </div>
   );
+}
+
+function parsePaperRoute(route: string): {
+  paperId: string;
+  source: "Search_Result" | "Library" | "Recommendation" | "Dashboard";
+} | null {
+  if (!route.startsWith("paper/")) return null;
+  const [path, query = ""] = route.split("?");
+  const paperId = decodeURIComponent(path.slice("paper/".length));
+  if (!paperId) return null;
+  const requestedSource = new URLSearchParams(query).get("source");
+  const sources = ["Search_Result", "Library", "Recommendation", "Dashboard"] as const;
+  const source = sources.find((item) => item === requestedSource) ?? "Search_Result";
+  return { paperId, source };
 }
 
 function RouteSuspense({ children }: { children: ReactNode }) {
