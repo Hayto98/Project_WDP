@@ -5,6 +5,7 @@ const {
   fetchLivePapers,
   buildWarnings,
   normalizeToken,
+  dedupeLivePapers,
   STOP_WORDS,
 } = require('./liveFetch.service');
 const AnalysisReport = require('../models/AnalysisReport');
@@ -323,5 +324,6 @@ module.exports = {
   scoreCandidate,
   extractTerms,
   parseTopicTerms,
+  dedupeLivePapers,
   clamp01,
 };

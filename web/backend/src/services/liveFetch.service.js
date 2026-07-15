@@ -51,6 +51,34 @@ function normalizeEvidenceUrl(mapped = {}, source = '') {
   return '';
 }
 
+function cleanSourceErrorMessage(error) {
+  const text = String(error || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const lower = text.toLowerCase();
+
+  if (lower.includes('429') || lower.includes('rate limit') || lower.includes('too many')) {
+    return 'Đang bị giới hạn tốc độ (429). Đợi một lát hoặc giảm số bài mỗi nguồn.';
+  }
+  if (lower.includes('503') || lower.includes('service unavailable') || lower.includes('temporarily unavailable')) {
+    return 'Đang tạm quá tải hoặc không khả dụng (503). Thử lại sau hoặc bỏ nguồn này khi demo.';
+  }
+  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('abort')) {
+    return 'Phản hồi quá lâu. Thử giảm số bài hoặc chọn ít nguồn hơn.';
+  }
+  if (lower.includes('403') || lower.includes('forbidden') || lower.includes('unauthorized')) {
+    return 'Từ chối truy cập. Kiểm tra API key/quota nếu nguồn này cần key.';
+  }
+  if (lower.includes('404') || lower.includes('not found')) {
+    return 'Không tìm thấy dữ liệu phù hợp từ nguồn này.';
+  }
+
+  return 'Không lấy được dữ liệu từ nguồn này. Có thể là lỗi tạm thời từ dịch vụ ngoài.';
+}
+
 function getOpenAlexService() {
   return require('./openalex.service');
 }
@@ -226,7 +254,7 @@ async function fetchLivePapers(payload) {
       } catch (err) {
         sourceErrors.push({
           source,
-          message: `${query}: ${err.message || 'Source fetch failed'}`,
+          message: cleanSourceErrorMessage(err.message || 'Source fetch failed'),
         });
         return { source, papers: [] };
       }
@@ -262,7 +290,8 @@ function buildWarnings(payload, papers, sourceErrors) {
     warnings.push('Dữ liệu còn ít, kết quả chỉ mang tính tham khảo.');
   }
   if (sourceErrors.length) {
-    warnings.push(`Một số nguồn lỗi: ${sourceErrors.map((row) => row.source).join(', ')}.`);
+    const names = [...new Set(sourceErrors.map((row) => row.source))];
+    warnings.push(`Một số nguồn ngoài đang bận: ${names.join(', ')}. Kết quả vẫn dùng dữ liệu lấy được.`);
   }
   return warnings;
 }
@@ -272,6 +301,7 @@ module.exports = {
   STOP_WORDS,
   ALIASES,
   normalizeToken,
+  cleanSourceErrorMessage,
   expandAlias,
   extractTerms,
   parseTopicTerms,

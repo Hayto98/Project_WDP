@@ -3404,3 +3404,131 @@ Lenh commit goi y:
 git add .
 git commit -m "feat: complete fixlist production handoff"
 ```
+
+## Cap nhat 2026-07-15 - Research Gap demo chay that
+
+Muc tieu:
+
+- Trien khai plan demo Live Research Gap chay that.
+- Go blocker MongoDB `ECONNREFUSED`.
+- Seed database, test Live Gap, smoke API that, xac nhan frontend/backend/CORS.
+
+Da sua file:
+
+- `web/backend/src/services/liveGap.service.js`
+- `Minh/docs/research-gap-live.md`
+- `Minh/docs/phare.md`
+
+Chi tiet:
+
+- Docker Desktop hien da chay.
+- MongoDB dang listen o `localhost:27017` qua Docker.
+- Backend dang listen o `http://localhost:5001`.
+- Frontend dang listen o `http://localhost:5173`.
+- Seed lai database demo thanh cong:
+  - Users: 5
+  - Papers: 8
+  - Data Sources: 7
+  - Analysis reports: 4, co `ResearchGap`.
+- CORS preflight tu `http://localhost:5173` den backend `/api/v1/analytics/gaps/live` pass:
+  - `204 No Content`
+  - `Access-Control-Allow-Origin: http://localhost:5173`
+- Fix nho cho test:
+  - `liveGap.service.js` re-export `dedupeLivePapers` tu `liveFetch.service.js`.
+  - Ly do: function da duoc tach service nhung test unit van import tu `liveGap.service.js`.
+
+Da test:
+
+- Live Gap unit:
+  - `cd web/backend && node --test test/liveGap.unit.test.js`
+  - pass: 4/4
+- Live Gap integration:
+  - `cd web/backend && node --test test/liveGap.integration.test.js`
+  - pass: 25/25
+- Backend unit suite:
+  - `cd web/backend && npm run test:unit`
+  - pass: 21/21
+- Frontend build:
+  - `cd web/frontend && npm run build`
+  - pass
+- API live smoke voi source that OpenAlex:
+  - Login `lan.anh@uni.edu.vn / password123` pass.
+  - `POST /api/v1/analytics/gaps/live` pass `200`.
+  - Payload:
+    - topic: `federated learning medical imaging`
+    - sources: `OpenAlex`
+    - yearFrom/yearTo: `2021-2026`
+    - maxRecordsPerSource: `20`
+    - topK: `12`
+  - Ket qua:
+    - `totalFetched=59`
+    - `gaps=8`
+    - `cached=false` lan dau
+    - top gap: `Federated Learning x Medical Segmentation`
+    - `gapScore=58`
+    - evidence: `3`
+  - Save live gap report pass `201`.
+  - Goi lai cung payload pass `200` va `cached=true`.
+
+Trang thai demo:
+
+- Live Research Gap da du dieu kien demo chay that.
+- Neu demo nhieu nguon cham/rate-limit, chon rieng `OpenAlex` va `20 bai`.
+- Saved live report van giu `reportType=CustomSearch` dung theo plan, khong thay Corpus Gap matrix.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md Minh/docs/research-gap-live.md web/backend/src/services/liveGap.service.js
+git commit -m "fix: verify live research gap demo"
+```
+
+## Cap nhat 2026-07-15 - Lam sach canh bao nguon Live Gap
+
+Muc tieu:
+
+- Che raw external errors nhin phan cam trong UI, vi Crossref/arXiv co the tra `429` hoac HTML `503`.
+- Giu partial result van chay, nhung canh bao nguon phai than thien de demo.
+
+Da sua file:
+
+- `web/backend/src/services/liveFetch.service.js`
+- `web/backend/test/liveGap.unit.test.js`
+- `web/frontend/src/components/LiveGapPanel.tsx`
+- `web/frontend/src/App.css`
+- `Minh/docs/research-gap-live.md`
+- `Minh/docs/phare.md`
+
+Chi tiet:
+
+- Backend them `cleanSourceErrorMessage()`:
+  - strip HTML/script/style.
+  - map `429` thanh thong bao rate limit ngan gon.
+  - map `503` thanh thong bao nguon tam qua tai.
+  - map timeout/abort/403/404 thanh message than thien.
+  - fallback khong tra raw body nua.
+- `sourceErrors` khong con prefix query tho nhu `ai harness engine: ...`.
+- Warning tong quat doi thanh:
+  - `Mot so nguon ngoai dang ban... Ket qua van dung du lieu lay duoc.`
+- Frontend `LiveGapPanel` them `friendlySourceMessage()` de phong response cu/cache cu co HTML.
+- UI `Canh bao nguon` co mo ta ngan va danh sach source/message gon gang.
+- CSS them `.livegap__source-warning` va `.livegap__source-list`.
+
+Da test:
+
+- `cd web/backend && node --test test/liveGap.unit.test.js`
+  - pass: 5/5
+- `cd web/frontend && npm run build`
+  - pass
+- Smoke API voi `Crossref + arXiv`, topic `ai harness engine`:
+  - `200 OK`
+  - `totalFetched=29`
+  - `gaps=6`
+  - `sourceErrors=[]` tai thoi diem test
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md Minh/docs/research-gap-live.md web/backend/src/services/liveFetch.service.js web/backend/test/liveGap.unit.test.js web/frontend/src/components/LiveGapPanel.tsx web/frontend/src/App.css
+git commit -m "fix: clean live gap source warnings"
+```
