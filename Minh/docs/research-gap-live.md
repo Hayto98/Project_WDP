@@ -1107,3 +1107,92 @@ Nên:
 - chỉ lưu report khi user yêu cầu.
 
 Đây là hướng cân bằng giữa tốc độ demo, tính đúng đắn học thuật và khả năng mở rộng sau này.
+
+---
+
+## 22. Cập Nhật Triển Khai Thực Tế
+
+Phần này ghi lại trạng thái sau khi đối chiếu spec với code hiện có trong `web/backend` và `web/frontend`.
+
+### 22.1 Backend đã triển khai
+
+- `POST /api/v1/analytics/gaps/live` và `POST /api/v1/analytics/gaps/live/save` đã có route, controller, validator, service và lưu report.
+- Live Gap chạy qua backend, không gọi trực tiếp source ngoài từ frontend.
+- `LivePaper` đã được chuẩn hóa từ OpenAlex, Crossref, arXiv, Semantic Scholar và Exa.
+- Term extraction, alias map, candidate pair, scoring và summary count đã có trong `liveGap.service.js`.
+- Evidence URL đã được chuẩn hóa về URL dùng được theo từng nguồn.
+- Cache live gap đang dùng in-memory `Map()` với TTL 20 phút.
+- Source services được load lazy để test stub/mocking hoạt động ổn định hơn.
+- Auth rate limit đã được nới trong non-production để tránh flake khi chạy suite test.
+
+### 22.2 Frontend đã triển khai
+
+- Trang Research Gap có 2 chế độ: `Corpus Gap` và `Live Gap`.
+- Live Gap UI có form topic, chọn nguồn, chọn khoảng năm, max records mỗi nguồn, topK, loading/error/notice states.
+- UI có nút lưu phân tích và hiển thị evidence papers, gap score, reasons, confidence.
+- Frontend chỉ gọi backend API qua `analyticsApi.liveGaps()` và `analyticsApi.saveLiveGaps()`.
+
+### 22.3 Test đã xác nhận
+
+- `node --test test/liveGap.integration.test.js` pass `25/25`.
+- Test đã khóa các hành vi chính: validation, cache hit/miss, evidence URL, save report, summary, gap ordering và source error handling.
+
+### 22.4 Những mục vẫn còn là tuỳ chọn / mở rộng
+
+- Redis cache thay cho `Map()`.
+- Timeout warning UI riêng nếu fetch > 10s.
+- Troubleshooting section riêng trong docs cho `429`, timeout, empty results.
+- Live smoke test với API ngoài thật cho 1 topic nhỏ nếu muốn xác nhận hạ tầng production.
+
+### 22.5 Cập nhật demo chạy thật 2026-07-15
+
+- MongoDB local đã hết blocker `ECONNREFUSED`; port `27017` đang listen qua Docker.
+- Backend đang listen ở `http://localhost:5001`.
+- Frontend đang listen ở `http://localhost:5173`.
+- CORS từ `http://localhost:5173` sang `/api/v1/analytics/gaps/live` đã trả:
+  - `204 No Content`
+  - `Access-Control-Allow-Origin: http://localhost:5173`
+- Đã seed lại dữ liệu demo:
+  - Admin: `minh.thanh@uni.edu.vn / password123`
+  - Student: `lan.anh@uni.edu.vn / password123`
+- Đã fix tương thích test:
+  - `liveGap.service.js` re-export `dedupeLivePapers` từ `liveFetch.service.js`.
+
+Kết quả test/smoke:
+
+- `node --test test/liveGap.unit.test.js` pass `4/4`.
+- `node --test test/liveGap.integration.test.js` pass `25/25`.
+- `npm run test:unit` pass `21/21`.
+- `cd web/frontend && npm run build` pass.
+- Smoke API thật với OpenAlex:
+  - Login Student pass.
+  - `POST /api/v1/analytics/gaps/live` pass `200`.
+  - Payload: `federated learning medical imaging`, source `OpenAlex`, `2021-2026`, max `20`, topK `12`.
+  - `totalFetched`: `59`.
+  - `gaps`: `8`.
+  - top gap: `Federated Learning × Medical Segmentation`, `gapScore=58`, `evidence=3`.
+  - `POST /api/v1/analytics/gaps/live/save` pass `201`, `reportType=CustomSearch`.
+  - Gọi lại cùng payload trả `cached=true`.
+
+Trạng thái demo:
+
+- Đủ điều kiện demo Live Gap bằng OpenAlex thật.
+- Nếu demo nhiều nguồn bị chậm/rate-limit, dùng riêng `OpenAlex` và `maxRecordsPerSource=20`.
+- `CustomSearch` cho live saved report được giữ nguyên để không ảnh hưởng Corpus Gap matrix.
+
+### 22.6 Cập nhật cảnh báo nguồn 2026-07-15
+
+- Backend không trả raw HTML/error body từ nguồn ngoài trong `sourceErrors` nữa.
+- Các lỗi phổ biến được map sang thông báo thân thiện:
+  - `429` -> nguồn đang giới hạn tốc độ.
+  - `503`/HTML error page -> nguồn đang tạm quá tải hoặc không khả dụng.
+  - timeout/abort -> nguồn phản hồi quá lâu.
+  - `403` -> kiểm tra API key/quota.
+- Frontend `LiveGapPanel` có lớp phòng thủ để strip HTML nếu gặp response cũ/cache cũ.
+- UI `Cảnh báo nguồn` hiển thị lời giải thích ngắn và gợi ý demo ổn định hơn với OpenAlex + 20 bài mỗi nguồn.
+
+Đã test:
+
+- `node --test test/liveGap.unit.test.js` pass `5/5`.
+- `cd web/frontend && npm run build` pass.
+- Smoke Crossref/arXiv với topic `ai harness engine` trả `200`, `totalFetched=29`, `gaps=6`, không còn raw `sourceErrors`.

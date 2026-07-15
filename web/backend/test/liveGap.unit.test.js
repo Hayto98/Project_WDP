@@ -6,6 +6,7 @@ const {
   parseTopicTerms,
   dedupeLivePapers,
 } = require('../src/services/liveGap.service');
+const { cleanSourceErrorMessage } = require('../src/services/liveFetch.service');
 
 describe('liveGap.service scoring', () => {
   it('clamps values into 0..1', () => {
@@ -47,5 +48,16 @@ describe('liveGap.service scoring', () => {
     assert.ok(scored.gapScore >= 60);
     assert.ok(['strong', 'potential'].includes(scored.level));
     assert.ok(scored.metrics.scarcityScore > 0.7);
+  });
+
+  it('cleans noisy external source errors for UI display', () => {
+    assert.equal(
+      cleanSourceErrorMessage('Crossref HTTP 429'),
+      'Đang bị giới hạn tốc độ (429). Đợi một lát hoặc giảm số bài mỗi nguồn.',
+    );
+    assert.equal(
+      cleanSourceErrorMessage('<!DOCTYPE html><html><head><title>503</title></head><body>503</body></html>'),
+      'Đang tạm quá tải hoặc không khả dụng (503). Thử lại sau hoặc bỏ nguồn này khi demo.',
+    );
   });
 });

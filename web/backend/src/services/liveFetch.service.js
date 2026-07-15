@@ -1,8 +1,4 @@
-const { fetchOpenAlexWorks, mapWorkToPaper } = require('./openalex.service');
-const { fetchCrossrefWorks, mapItemToPaper } = require('./crossref.service');
-const { fetchArxivPapers, mapEntryToPaper } = require('./arxiv.service');
-const { fetchSemanticScholarPapers, mapSemanticPaperToPaper } = require('./semanticScholar.service');
-const { fetchExaResults, mapResultToPaper } = require('./exa.service');
+const { normalizeDoi } = require('./paperCleaning.service');
 
 const DEFAULT_SOURCES = ['OpenAlex', 'Crossref', 'arXiv'];
 
@@ -34,6 +30,73 @@ function normalizeToken(value) {
     .replace(/[^a-z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeEvidenceUrl(mapped = {}, source = '') {
+  const raw = String(mapped.original_url || mapped.url || '').trim();
+  if (raw) {
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const doi = normalizeDoi(raw);
+    if (doi) return `https://doi.org/${doi}`;
+  }
+
+  const doi = normalizeDoi(mapped.doi || '');
+  if (doi) return `https://doi.org/${doi}`;
+
+  if (source === 'OpenAlex' && mapped.sources?.[0]?.external_id) {
+    const externalId = String(mapped.sources[0].external_id).trim();
+    if (/^https?:\/\//i.test(externalId)) return externalId;
+  }
+
+  return '';
+}
+
+function cleanSourceErrorMessage(error) {
+  const text = String(error || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const lower = text.toLowerCase();
+
+  if (lower.includes('429') || lower.includes('rate limit') || lower.includes('too many')) {
+    return 'Đang bị giới hạn tốc độ (429). Đợi một lát hoặc giảm số bài mỗi nguồn.';
+  }
+  if (lower.includes('503') || lower.includes('service unavailable') || lower.includes('temporarily unavailable')) {
+    return 'Đang tạm quá tải hoặc không khả dụng (503). Thử lại sau hoặc bỏ nguồn này khi demo.';
+  }
+  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('abort')) {
+    return 'Phản hồi quá lâu. Thử giảm số bài hoặc chọn ít nguồn hơn.';
+  }
+  if (lower.includes('403') || lower.includes('forbidden') || lower.includes('unauthorized')) {
+    return 'Từ chối truy cập. Kiểm tra API key/quota nếu nguồn này cần key.';
+  }
+  if (lower.includes('404') || lower.includes('not found')) {
+    return 'Không tìm thấy dữ liệu phù hợp từ nguồn này.';
+  }
+
+  return 'Không lấy được dữ liệu từ nguồn này. Có thể là lỗi tạm thời từ dịch vụ ngoài.';
+}
+
+function getOpenAlexService() {
+  return require('./openalex.service');
+}
+
+function getCrossrefService() {
+  return require('./crossref.service');
+}
+
+function getArxivService() {
+  return require('./arxiv.service');
+}
+
+function getSemanticScholarService() {
+  return require('./semanticScholar.service');
+}
+
+function getExaService() {
+  return require('./exa.service');
 }
 
 function expandAlias(term) {
@@ -117,7 +180,7 @@ function toLivePaper(mapped, source) {
     year: mapped.publication_year || null,
     source,
     doi: mapped.doi || undefined,
-    url: mapped.original_url || undefined,
+    url: normalizeEvidenceUrl(mapped, source) || undefined,
     authors,
     keywords: mapped.keywords || [],
     fields: mapped.research_fields || [],
@@ -147,22 +210,27 @@ async function fetchFromSource(sourceName, payload) {
   const limit = payload.maxRecordsPerSource;
 
   if (sourceName === 'OpenAlex') {
+    const { fetchOpenAlexWorks, mapWorkToPaper } = getOpenAlexService();
     const { works } = await fetchOpenAlexWorks(payload.topic, limit, options);
     return works.map((work) => toLivePaper(mapWorkToPaper(work), 'OpenAlex'));
   }
   if (sourceName === 'Crossref') {
+    const { fetchCrossrefWorks, mapItemToPaper } = getCrossrefService();
     const { items } = await fetchCrossrefWorks(payload.topic, limit, options);
     return items.map((item) => toLivePaper(mapItemToPaper(item), 'Crossref'));
   }
   if (sourceName === 'arXiv') {
+    const { fetchArxivPapers, mapEntryToPaper } = getArxivService();
     const { entries } = await fetchArxivPapers(payload.topic, limit, options);
     return entries.map((entry) => toLivePaper(mapEntryToPaper(entry), 'arXiv'));
   }
   if (sourceName === 'Semantic Scholar') {
+    const { fetchSemanticScholarPapers, mapSemanticPaperToPaper } = getSemanticScholarService();
     const { papers } = await fetchSemanticScholarPapers(payload.topic, limit, options);
     return papers.map((paper) => toLivePaper(mapSemanticPaperToPaper(paper), 'Semantic Scholar'));
   }
   if (sourceName === 'Exa') {
+    const { fetchExaResults, mapResultToPaper } = getExaService();
     const { results } = await fetchExaResults(payload.topic, Math.min(limit, 25), options);
     return results.map((result) => toLivePaper(mapResultToPaper(result), 'Exa'));
   }
@@ -186,7 +254,7 @@ async function fetchLivePapers(payload) {
       } catch (err) {
         sourceErrors.push({
           source,
-          message: `${query}: ${err.message || 'Source fetch failed'}`,
+          message: cleanSourceErrorMessage(err.message || 'Source fetch failed'),
         });
         return { source, papers: [] };
       }
@@ -222,7 +290,8 @@ function buildWarnings(payload, papers, sourceErrors) {
     warnings.push('Dữ liệu còn ít, kết quả chỉ mang tính tham khảo.');
   }
   if (sourceErrors.length) {
-    warnings.push(`Một số nguồn lỗi: ${sourceErrors.map((row) => row.source).join(', ')}.`);
+    const names = [...new Set(sourceErrors.map((row) => row.source))];
+    warnings.push(`Một số nguồn ngoài đang bận: ${names.join(', ')}. Kết quả vẫn dùng dữ liệu lấy được.`);
   }
   return warnings;
 }
@@ -232,6 +301,7 @@ module.exports = {
   STOP_WORDS,
   ALIASES,
   normalizeToken,
+  cleanSourceErrorMessage,
   expandAlias,
   extractTerms,
   parseTopicTerms,
