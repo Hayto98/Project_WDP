@@ -4,13 +4,14 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconArrowLeft } from '../../components/icons';
+import { IconArrowLeft, IconEye, IconEyeOff } from '../../components/icons';
 import { useAuth } from '../../context/AuthContext';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const { theme } = useTheme();
   const router = useRouter();
@@ -74,14 +75,23 @@ export default function RegisterScreen() {
 
             <View style={styles.inputGroup}>
               <Text variant="sm" weight="bold" style={styles.label}>Mật khẩu</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.ink }]}
-                placeholder="Tạo mật khẩu"
-                placeholderTextColor={theme.inkMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              <View style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, flexDirection: 'row', alignItems: 'center', paddingRight: 12 }]}>
+                <TextInput
+                  style={{ flex: 1, color: theme.ink, padding: 0 }}
+                  placeholder="Tạo mật khẩu"
+                  placeholderTextColor={theme.inkMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  {showPassword ? (
+                    <IconEyeOff color={theme.inkMuted} size={20} />
+                  ) : (
+                    <IconEye color={theme.inkMuted} size={20} />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
             {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
