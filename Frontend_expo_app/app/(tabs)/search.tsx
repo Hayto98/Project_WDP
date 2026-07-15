@@ -6,7 +6,37 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSearch, IconX, IconFilter, IconPlus, IconQuote, IconBookmark, IconExternal, IconChevron } from '../../components/icons';
 import { formatInt } from '../../lib/format';
-import { FIELDS, PAPERS, RELATED_KEYWORDS, SOURCES, TYPES, type PaperResult } from '../../data/searchSample';
+import { paperApi } from '../../lib/api';
+import type { PaperResult } from '../../lib/api';
+
+const SOURCES = [
+  "OpenAlex",
+  "Semantic Scholar",
+  "Crossref",
+  "arXiv",
+  "IEEE Xplore",
+  "ACM Digital Library",
+];
+
+const FIELDS = [
+  "Large Language Models",
+  "Computer Vision",
+  "Federated Learning",
+  "Graph Neural Networks",
+  "Quantum Machine Learning",
+  "Edge & TinyML",
+];
+
+const TYPES: string[] = ["Journal", "Conference", "Preprint"];
+
+const RELATED_KEYWORDS = [
+  "mixture of experts",
+  "retrieval-augmented generation",
+  "parameter-efficient fine-tuning",
+  "differential privacy",
+  "knowledge distillation",
+  "contrastive learning",
+];
 
 const YEAR_MIN = 2015;
 const YEAR_MAX = 2025;
@@ -29,6 +59,7 @@ export default function SearchScreen() {
   const [scope, setScope] = useState<Scope>("all");
   const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
   
   // Filters
   const [facetsOpen, setFacetsOpen] = useState(false);
@@ -37,30 +68,42 @@ export default function SearchScreen() {
   const [types, setTypes] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState<Set<string>>(new Set());
   
+  const [remoteResults, setRemoteResults] = useState<PaperResult[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
+
   const runSearch = (q: string) => {
     setSubmitted(q);
     setHasSearched(true);
-    setLoading(true);
-    setTimeout(() => setLoading(false), 480);
+    setPage(1);
   };
 
-  const results = useMemo(() => {
-    if (!hasSearched) return [];
-    const q = submitted.toLowerCase().trim();
+  useEffect(() => {
+    if (!hasSearched) return;
+    setLoading(true);
     
-    return PAPERS.filter(p => {
-      if (fields.size && !p.fields.some(f => fields.has(f))) return false;
-      if (sources.size && !sources.has(p.source)) return false;
-      if (types.size && !types.has(p.type)) return false;
-      
-      if (!q) return true;
-      
-      const hay = [p.title, p.authors.join(" "), p.abstract].join(" ").toLowerCase();
-      if (scope === 'title') return p.title.toLowerCase().includes(q);
-      if (scope === 'author') return p.authors.join(" ").toLowerCase().includes(q);
-      return hay.includes(q);
+    // Convert scopes
+    const sortParam = "relevance";
+
+    paperApi.search({
+      q: submitted,
+      scope,
+      sources: [...sources].join(","),
+      types: [...types].join(","),
+      sort: sortParam,
+      page: page,
+      limit: PAGE_SIZE,
+    }).then(({ papers, meta }) => {
+      setRemoteResults(papers);
+      setTotalResults(meta?.total ?? papers.length);
+    }).catch((err) => {
+      console.error(err);
+      setRemoteResults([]);
+    }).finally(() => {
+      setLoading(false);
     });
-  }, [submitted, hasSearched, scope, fields, sources, types]);
+  }, [submitted, hasSearched, scope, fields, sources, types, page]);
+
+  const results = remoteResults;
 
   const activeFilterCount = fields.size + sources.size + types.size;
 
@@ -68,12 +111,14 @@ export default function SearchScreen() {
     const next = new Set(set);
     next.has(key) ? next.delete(key) : next.add(key);
     apply(next);
+    setPage(1);
   };
 
   const clearFilters = () => {
     setFields(new Set());
     setSources(new Set());
     setTypes(new Set());
+    setPage(1);
   };
 
   return (
@@ -112,9 +157,9 @@ export default function SearchScreen() {
             <TouchableOpacity 
               key={s.id} 
               style={[styles.scopeBtn, scope === s.id && { backgroundColor: theme.primaryWeak }]}
-              onPress={() => setScope(s.id)}
+              onPress={() => { setScope(s.id); setPage(1); }}
             >
-              <Text variant="xs" color={scope === s.id ? 'primaryInk' : 'inkMuted'} weight={scope === s.id ? 'bold' : 'normal'}>
+              <Text variant="xs" color={scope === s.id ? 'primary' : 'inkMuted'} weight={scope === s.id ? 'bold' : 'normal'}>
                 {s.label}
               </Text>
             </TouchableOpacity>
@@ -150,7 +195,7 @@ export default function SearchScreen() {
       ) : (
         <>
           <View style={[styles.filterBar, { borderBottomColor: theme.border }]}>
-            <Text variant="sm" weight="bold">{formatInt(results.length)} kết quả</Text>
+            <Text variant="sm" weight="bold">{formatInt(totalResults)} kết quả</Text>
             <TouchableOpacity style={styles.filterBtn} onPress={() => setFacetsOpen(true)}>
               <IconFilter color={theme.ink} size={16} />
               <Text variant="sm" style={{ marginLeft: 6 }}>Bộ lọc</Text>
@@ -167,7 +212,7 @@ export default function SearchScreen() {
               const isSaved = saved.has(p.id);
               return (
                 <View key={p.id} style={[styles.resultCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                  <Text variant="lead" weight="bold" color="primaryInk">{p.title}</Text>
+                  <Text variant="lead" weight="bold" color="primary">{p.title}</Text>
                   
                   <Text variant="xs" color="inkMuted" style={{ marginTop: 6 }}>
                     {p.authors.join(", ")} · {p.year} · {p.source}
@@ -215,6 +260,44 @@ export default function SearchScreen() {
                     <Text color="primary">Xóa bộ lọc</Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+
+            {results.length > 0 && totalResults > PAGE_SIZE && (
+              <View style={styles.pagination}>
+                <TouchableOpacity 
+                  style={[styles.pageBtnText, page === 1 && { opacity: 0.5, borderColor: theme.border }]} 
+                  disabled={page === 1}
+                  onPress={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  <Text variant="sm">Trước</Text>
+                </TouchableOpacity>
+                
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8 }}>
+                  {Array.from({ length: Math.ceil(totalResults / PAGE_SIZE) }).map((_, i) => {
+                    const p = i + 1;
+                    const isActive = p === page;
+                    return (
+                      <TouchableOpacity 
+                        key={p}
+                        style={[styles.pageNumberBtn, isActive && { backgroundColor: theme.primary }]}
+                        onPress={() => setPage(p)}
+                      >
+                        <Text variant="sm" color={isActive ? 'surface' : 'ink'} weight={isActive ? 'bold' : 'normal'}>
+                          {p}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </ScrollView>
+
+                <TouchableOpacity 
+                  style={[styles.pageBtnText, page === Math.ceil(totalResults / PAGE_SIZE) && { opacity: 0.5, borderColor: theme.border }]} 
+                  disabled={page === Math.ceil(totalResults / PAGE_SIZE)}
+                  onPress={() => setPage(p => Math.min(Math.ceil(totalResults / PAGE_SIZE), p + 1))}
+                >
+                  <Text variant="sm">Sau</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -390,5 +473,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
+  },
+  pagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  pageBtnText: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  pageNumberBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 4,
   }
 });

@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { FollowedRail } from '../../components/FollowedRail';
-import { makeDashboardData } from '../../data/sample';
+import { dashboardApi } from '../../lib/api';
+import type { DashboardData } from '../../data/types';
 
 export default function FollowScreen() {
   const { theme } = useTheme();
-  const data = makeDashboardData('12m');
+  const [data, setData] = useState<DashboardData | null>(null);
+
+  useEffect(() => {
+    dashboardApi.overview().then(setData).catch(console.error);
+  }, []);
+
+  if (!data) return null;
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.bg }]} contentContainerStyle={styles.content}>

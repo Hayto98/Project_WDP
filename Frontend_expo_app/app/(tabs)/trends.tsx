@@ -10,15 +10,9 @@ import { formatCompact, formatInt, formatPercent } from '../../lib/format';
 import { TrendChart } from '../../components/TrendChart';
 import { CoocNetwork } from '../../components/CoocNetwork';
 import { Sparkline } from '../../components/Sparkline';
-import { 
-  COOC_EDGES, 
-  COOC_NODES, 
-  TREND_TOPICS, 
-  computeGrowth, 
-  slicePoints,
-  type TrendRange,
-  type Granularity 
-} from '../../data/trendsSample';
+import { analyticsApi } from '../../lib/api';
+import type { TrendRange, Granularity, GrowthRow, CoocNode, CoocEdge } from '../../lib/api';
+import type { TrendPoint, TrendSeries } from '../../data/types';
 
 const RANGES: { id: TrendRange; label: string }[] = [
   { id: "12m", label: "12 tháng" },
@@ -33,26 +27,48 @@ const GRANS: { id: Granularity; label: string }[] = [
 
 export default function TrendsScreen() {
   const { theme } = useTheme();
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(TREND_TOPICS.map((t) => t.key)),
-  );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [range, setRange] = useState<TrendRange>("5y");
   const [gran, setGran] = useState<Granularity>("year");
   const [loading, setLoading] = useState(true);
 
+  const [points, setPoints] = useState<TrendPoint[]>([]);
+  const [topics, setTopics] = useState<TrendSeries[]>([]);
+  const [growth, setGrowth] = useState<GrowthRow[]>([]);
+  const [networkNodes, setNetworkNodes] = useState<CoocNode[]>([]);
+  const [networkEdges, setNetworkEdges] = useState<CoocEdge[]>([]);
+
   useEffect(() => {
+    let alive = true;
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 560);
-    return () => clearTimeout(t);
+    Promise.all([
+      analyticsApi.trends(range, gran),
+      analyticsApi.growth(range, gran),
+      analyticsApi.cooccurrence(),
+    ]).then(([trendPayload, growthData, networkData]) => {
+      if (!alive) return;
+      setPoints(trendPayload.points);
+      setTopics(trendPayload.series);
+      
+      const newSelected = new Set(trendPayload.series.map((t: any) => t.key));
+      setSelected(newSelected);
+      
+      setGrowth(growthData.filter((g: any) => newSelected.has(g.key)));
+      setNetworkNodes(networkData.nodes);
+      setNetworkEdges(networkData.edges);
+    }).catch(err => {
+      console.error(err);
+    }).finally(() => {
+      if (alive) setLoading(false);
+    });
+    return () => { alive = false; };
   }, [range, gran]);
 
-  const points = useMemo(() => slicePoints(range, gran), [range, gran]);
-  const activeSeries = useMemo(() => TREND_TOPICS.filter((t) => selected.has(t.key)), [selected]);
-  const growth = useMemo(() => computeGrowth(points).filter((g) => selected.has(g.key)), [points, selected]);
+  const activeSeries = useMemo(() => topics.filter((t) => selected.has(t.key)), [selected, topics]);
 
   const totalPublications = useMemo(() => {
     let sum = 0;
-    for (const p of points) for (const t of activeSeries) sum += Number(p[t.key]);
+    for (const p of points) for (const t of activeSeries) sum += Number(p[t.key]) || 0;
     return sum;
   }, [points, activeSeries]);
 
@@ -66,7 +82,7 @@ export default function TrendsScreen() {
     });
   };
 
-  const allOn = selected.size === TREND_TOPICS.length;
+  const allOn = selected.size > 0 && selected.size === topics.length;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
@@ -115,7 +131,7 @@ export default function TrendsScreen() {
         {/* Topic Selector */}
         <View style={styles.topicBar}>
           <View style={styles.topicChips}>
-            {TREND_TOPICS.map(t => {
+            {topics.map(t => {
               const on = selected.has(t.key);
               let colorStr = theme.primary;
               if (t.token === '--c1') colorStr = theme.primary;
@@ -137,7 +153,7 @@ export default function TrendsScreen() {
               );
             })}
           </View>
-          <TouchableOpacity onPress={() => setSelected(allOn ? new Set() : new Set(TREND_TOPICS.map((t) => t.key)))}>
+          <TouchableOpacity onPress={() => setSelected(allOn ? new Set() : new Set(topics.map((t) => t.key)))}>
             <Text variant="xs" color="primary" weight="bold" style={{ marginTop: 8 }}>
               {allOn ? "Bỏ chọn tất cả" : "Chọn tất cả"}
             </Text>
@@ -148,7 +164,7 @@ export default function TrendsScreen() {
         <View style={[styles.sumGrid, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.sumStat}>
             <Text variant="xs" color="inkMuted">Chủ đề</Text>
-            <Text variant="title" weight="bold">{selected.size}<Text variant="sm" color="inkMuted"> / {TREND_TOPICS.length}</Text></Text>
+            <Text variant="title" weight="bold">{selected.size}<Text variant="sm" color="inkMuted"> / {topics.length}</Text></Text>
           </View>
           <View style={styles.sumStat}>
             <Text variant="xs" color="inkMuted">Tổng công bố</Text>
@@ -207,7 +223,7 @@ export default function TrendsScreen() {
           icon={<IconGap color={theme.primary} />}
           status={loading ? 'loading' : selected.size === 0 ? 'empty' : 'ready'}
         >
-          <CoocNetwork nodes={COOC_NODES} edges={COOC_EDGES} selected={selected} />
+          <CoocNetwork nodes={networkNodes} edges={networkEdges} selected={selected} />
         </Widget>
 
         <View style={{ height: 60 }} />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,8 @@ import { Text } from '../../components/Text';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { IconTelescope, IconRefresh, IconAlert, IconSearch } from '../../components/icons';
 import { formatInt } from '../../lib/format';
-import { ADMIN_JOBS, DATA_SOURCES, ADMIN_USERS, AUDIT_LOGS, PAPER_READ_LOGS } from '../../data/adminSample';
+import { adminApi } from '../../lib/api';
+import type { AdminJob, DataSource, AdminUser, AuditLog, PaperReadLog } from '../../lib/api';
 
 const TABS = [
   { id: 'overview', label: 'Tổng quan' },
@@ -23,8 +24,24 @@ export default function AdminScreen() {
   const { theme } = useTheme();
   const [tab, setTab] = useState('overview');
 
-  const runningJobs = ADMIN_JOBS.filter((job) => job.status === "running").length;
-  const activeSources = DATA_SOURCES.filter((source) => source.enabled).length;
+  const [stats, setStats] = useState({ totalPapers: 0, totalUsers: 0, activeJobs: 0, dataSources: 0 });
+  const [jobs, setJobs] = useState<AdminJob[]>([]);
+  const [sources, setSources] = useState<DataSource[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [readingLogs, setReadingLogs] = useState<PaperReadLog[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
+  useEffect(() => {
+    adminApi.stats().then(setStats).catch(console.error);
+    adminApi.jobs().then(setJobs).catch(console.error);
+    adminApi.dataSources().then(setSources).catch(console.error);
+    adminApi.users().then(setUsers).catch(console.error);
+    adminApi.paperReads().then(setReadingLogs).catch(console.error);
+    adminApi.auditLogs().then(setAuditLogs).catch(console.error);
+  }, []);
+
+  const runningJobs = stats.activeJobs;
+  const activeSources = stats.dataSources;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
@@ -69,7 +86,7 @@ export default function AdminScreen() {
             <View style={[styles.sumGrid, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.sumStat}>
                 <Text variant="xs" color="inkMuted">Corpus</Text>
-                <Text variant="title" weight="bold">1.28M</Text>
+                <Text variant="title" weight="bold">{formatInt(stats.totalPapers)}</Text>
               </View>
               <View style={styles.sumStat}>
                 <Text variant="xs" color="inkMuted">Job chạy</Text>
@@ -82,7 +99,7 @@ export default function AdminScreen() {
             </View>
 
             <Text variant="lead" weight="bold" style={styles.sectionTitle}>Pipeline gần đây</Text>
-            {ADMIN_JOBS.slice(0, 3).map(job => (
+            {jobs.slice(0, 3).map(job => (
               <View key={job.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.cardHeader}>
                   <Text variant="body" weight="bold">{job.name}</Text>
@@ -99,7 +116,7 @@ export default function AdminScreen() {
         {tab === 'jobs' && (
           <View>
             <Text variant="lead" weight="bold" style={styles.sectionTitle}>Tất cả Batch Jobs</Text>
-            {ADMIN_JOBS.map(job => (
+            {jobs.map(job => (
               <View key={job.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.cardHeader}>
                   <Text variant="body" weight="bold">{job.name}</Text>
@@ -118,7 +135,7 @@ export default function AdminScreen() {
         {tab === 'sources' && (
           <View>
             <Text variant="lead" weight="bold" style={styles.sectionTitle}>Nguồn dữ liệu</Text>
-            {DATA_SOURCES.map(source => (
+            {sources.map(source => (
               <View key={source.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.cardHeader}>
                   <Text variant="body" weight="bold">{source.name}</Text>
@@ -137,7 +154,7 @@ export default function AdminScreen() {
         {tab === 'users' && (
           <View>
             <Text variant="lead" weight="bold" style={styles.sectionTitle}>Quản lý người dùng</Text>
-            {ADMIN_USERS.map(u => (
+            {users.map(u => (
               <View key={u.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.cardHeader}>
                   <Text variant="body" weight="bold">{u.name}</Text>
@@ -156,7 +173,7 @@ export default function AdminScreen() {
         {tab === 'reading' && (
           <View>
             <Text variant="lead" weight="bold" style={styles.sectionTitle}>Lượt đọc gần đây</Text>
-            {PAPER_READ_LOGS.slice(0, 5).map(log => (
+            {readingLogs.slice(0, 5).map(log => (
               <View key={log.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <Text variant="body" weight="bold" numberOfLines={2}>{log.paperTitle}</Text>
                 <Text variant="xs" color="inkMuted" style={{ marginTop: 4 }}>
@@ -170,7 +187,7 @@ export default function AdminScreen() {
         {tab === 'logs' && (
           <View>
             <Text variant="lead" weight="bold" style={styles.sectionTitle}>Audit Logs</Text>
-            {AUDIT_LOGS.map(log => (
+            {auditLogs.map(log => (
               <View key={log.id} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.cardHeader}>
                   <Text variant="body" weight="bold">{log.action}</Text>
