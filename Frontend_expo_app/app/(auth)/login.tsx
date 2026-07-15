@@ -14,9 +14,19 @@ export default function LoginScreen() {
   const { theme } = useTheme();
   const router = useRouter();
 
-  const handleLogin = async (role: 'admin' | 'student') => {
-    // In a real app, this would validate credentials
-    await login(role);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleLogin = async () => {
+    try {
+      setErrorMsg('');
+      if (!email || !password) {
+        setErrorMsg('Vui lòng nhập đầy đủ email và mật khẩu');
+        return;
+      }
+      await login(email, password);
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Đăng nhập thất bại');
+    }
   };
 
   return (
@@ -60,24 +70,15 @@ export default function LoginScreen() {
               />
             </View>
 
+            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+
             <View style={styles.demoButtons}>
-              <Text variant="xs" color="inkMuted" style={{ textAlign: 'center', marginBottom: 12 }}>
-                Đăng nhập nhanh để trải nghiệm (Demo)
-              </Text>
-              
               <TouchableOpacity 
                 style={[styles.btn, { backgroundColor: theme.primary }]}
-                onPress={() => handleLogin('student')}
+                onPress={handleLogin}
               >
-                <Text variant="body" weight="bold" style={{ color: theme.surface }}>Đăng nhập User</Text>
+                <Text variant="body" weight="bold" style={{ color: theme.surface }}>Đăng nhập</Text>
                 <IconArrowRight color={theme.surface} size={18} />
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[styles.btn, styles.btnOutline, { borderColor: theme.border }]}
-                onPress={() => handleLogin('admin')}
-              >
-                <Text variant="body" weight="bold" color="ink">Đăng nhập Admin</Text>
               </TouchableOpacity>
             </View>
 
@@ -157,5 +158,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 24,
+  },
+  errorText: {
+    color: 'red',
+    marginBottom: 12,
+    textAlign: 'center',
   },
 });
