@@ -10,6 +10,7 @@ interface WidgetProps {
   status?: WidgetStatus;
   onRetry?: () => void;
   emptyMessage?: string;
+  errorMessage?: string;
   emptyAction?: ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -26,6 +27,7 @@ export function Widget({
   status = "ready",
   onRetry,
   emptyMessage,
+  errorMessage,
   emptyAction,
   className = "",
   bodyClassName = "",
@@ -57,7 +59,7 @@ export function Widget({
             </span>
             <p className="widget__state-title">Không tải được dữ liệu</p>
             <p className="widget__state-desc">
-              Đã xảy ra lỗi khi lấy phân tích cho khu vực này.
+              {errorMessage || "Đã xảy ra lỗi khi lấy phân tích cho khu vực này."}
             </p>
             {onRetry && (
               <button className="btn btn--ghost" onClick={onRetry}>

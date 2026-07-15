@@ -2,7 +2,7 @@ const Workspace = require('../models/Workspace');
 const WorkspaceItem = require('../models/WorkspaceItem');
 const WorkspaceActivity = require('../models/WorkspaceActivity');
 const CollaborationInvite = require('../models/CollaborationInvite');
-const { notifyCommentAdded } = require('./notification.service');
+const { notifyCommentAdded, notifyTaskAssigned } = require('./notification.service');
 
 function pickWorkspaceFields(payload = {}) {
   const fields = {};
@@ -39,7 +39,32 @@ function pickItemFields(payload = {}) {
 }
 
 function actorName(user) {
-  return user?.name || user?.email || 'Workspace';
+  return user?.full_name || user?.name || user?.email || 'Workspace';
+}
+
+function collectAssigneeIds(itemOrFields = {}) {
+  const ids = [];
+  if (Array.isArray(itemOrFields.assignee_ids)) {
+    ids.push(...itemOrFields.assignee_ids);
+  }
+  if (itemOrFields.assignee_id) {
+    ids.push(itemOrFields.assignee_id);
+  }
+  return [...new Set(ids.map((id) => id?.toString()).filter(Boolean))];
+}
+
+async function notifyNewAssignees(item, previousIds, actor) {
+  if (!item || item.kind !== 'task') return;
+  const actorId = (actor?.id || actor?._id)?.toString();
+  const nextIds = collectAssigneeIds(item);
+  const previous = new Set(previousIds || []);
+  const assigner = actorName(actor);
+
+  for (const assigneeId of nextIds) {
+    if (previous.has(assigneeId)) continue;
+    if (actorId && assigneeId === actorId) continue;
+    notifyTaskAssigned(assigneeId, item, assigner);
+  }
 }
 
 async function getMemberRole(userId, workspaceId) {
@@ -213,21 +238,27 @@ async function createItem(workspaceId, payload, user = null) {
     workspace_id: workspaceId,
   });
   await recordActivity(workspaceId, user, 'item_created', 'item', item, { kind: item.kind, status: item.status });
+  await notifyNewAssignees(item, [], user);
   return item;
 }
 
 async function updateItem(workspaceId, itemId, payload, user = null) {
   const role = await getMemberRole(user?.id || user?._id, workspaceId);
   if (!canWriteItems(role)) return null;
+  const previous = await WorkspaceItem.findOne({ _id: itemId, workspace_id: workspaceId }).lean();
+  const previousIds = collectAssigneeIds(previous || {});
   const item = await WorkspaceItem.findOneAndUpdate(
     { _id: itemId, workspace_id: workspaceId },
     pickItemFields(payload),
     { returnDocument: 'after' },
   );
-  if (item) await recordActivity(workspaceId, user, 'item_updated', 'item', item, {
-    fields: Object.keys(pickItemFields(payload)),
-    status: item.status,
-  });
+  if (item) {
+    await recordActivity(workspaceId, user, 'item_updated', 'item', item, {
+      fields: Object.keys(pickItemFields(payload)),
+      status: item.status,
+    });
+    await notifyNewAssignees(item, previousIds, user);
+  }
   return item;
 }
 

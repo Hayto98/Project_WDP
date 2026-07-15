@@ -32,3 +32,34 @@
 
 ### 5. Tính năng Search bài báo trực tiếp
 - Hiện tại khi thêm bài báo vào hệ thống để tạo task, người dùng chỉ dùng được chức năng lấy từ "gợi ý". Chức năng tìm kiếm tự do (Search) chưa hoạt động hoàn chỉnh.
+
+---
+
+# 🗂️ Tú sửa Thư viện & Bộ sưu tập (Library) — 14/7/2026
+
+## ✅ NHỮNG VIỆC ĐÃ LÀM (DONE)
+
+### 1. Sửa lỗi không lưu được khi đổi bộ sưu tập của bài báo
+- **Mô tả lỗi:** Khi chọn bộ sưu tập khác cho một bài trong panel chi tiết, giao diện có đổi nhưng **không lưu xuống backend**. Nguyên nhân: hàm `updateItem` (trong `frontend/src/pages/LibraryPage.tsx`) bỏ qua thay đổi `collectionIds` (dòng `if (patch.status === undefined && patch.note === undefined) return;`).
+- **Khắc phục:** `updateItem` giờ nhận diện thay đổi `collectionIds` → gọi `savePaper` cho bộ được thêm và `removePaper` cho bộ bị bỏ, sau đó tải lại danh sách để đồng bộ với backend. Có rollback nếu lỗi.
+
+### 2. Hỗ trợ một bài báo thuộc NHIỀU bộ sưu tập cùng lúc
+- **Yêu cầu:** Một bài có thể nằm trong nhiều bộ sưu tập, không bắt buộc chỉ 1.
+- **Khắc phục:**
+  - `api.ts` (`papers()`): gộp các bản ghi cùng `paperId` (backend lưu 1 entry / mỗi collection) thành **một dòng** mang đầy đủ `collectionIds` → mỗi bài hiển thị 1 dòng với nhiều nhãn bộ sưu tập.
+  - Picker bộ sưu tập trong panel chi tiết trở lại kiểu **chọn nhiều** (`toggleCollection`): bấm để thêm / bỏ khỏi từng bộ. Bỏ hết bộ cuối cùng = gỡ bài khỏi thư viện.
+  - Trạng thái đọc & ghi chú được coi là **cấp bài báo**: khi đổi sẽ áp cho **tất cả** bộ sưu tập chứa bài (đồng bộ, không lệch giữa các bộ).
+
+### 3. Sửa lỗi không xóa được bài báo trong bộ sưu tập
+- **Mô tả lỗi:** Bấm "Bỏ lưu" tưởng như không xóa được (do state `collectionIds` local bị lệch, xóa nhắm nhầm bộ).
+- **Khắc phục:** State luôn đồng bộ với backend; nút "Bỏ lưu" giờ gỡ bài khỏi **tất cả** bộ sưu tập chứa nó.
+
+### 4. Giữ nguyên trạng thái đọc khi thêm bài vào bộ sưu tập mới
+- Do `savePaper` mặc định tạo entry mới ở trạng thái "chưa đọc", đã bổ sung khôi phục lại trạng thái đọc cũ (`reading`/`done`) sau khi thêm bài vào bộ mới.
+
+### 5. Giữ nguyên luồng lưu bài ở trang Tìm kiếm (theo yêu cầu)
+- Chưa có bộ sưu tập nào → tự lưu vào bộ mặc định, không cần chọn.
+- Đã có bộ sưu tập → chọn qua dropdown "Lưu vào".
+
+## ❌ NHỮNG VIỆC CHƯA LÀM / GHI CHÚ
+- (Chưa có mục tồn đọng cho phần Thư viện/Bộ sưu tập.)

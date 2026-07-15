@@ -87,8 +87,10 @@ function buildOpenAlexFilters(options = {}) {
 }
 
 async function fetchOpenAlexWorks(query, maxRecords = 25, options = {}) {
+  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
+  const searchQuery = /\s/.test(cleaned) ? `"${cleaned}"` : cleaned;
   const url = new URL('/works', sourceConfig.openAlexApiUrl);
-  url.searchParams.set('search', query);
+  url.searchParams.set('search', searchQuery);
   url.searchParams.set('per-page', String(clampMaxRecords(maxRecords)));
   if (options.page) url.searchParams.set('page', String(Math.max(1, parseInt(options.page, 10) || 1)));
   const filter = buildOpenAlexFilters(options);

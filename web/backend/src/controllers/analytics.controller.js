@@ -37,4 +37,59 @@ async function getGaps(req, res) {
   }
 }
 
-module.exports = { getTrends, getGrowth, getCooccurrence, getGaps };
+async function getLiveGaps(req, res) {
+  try {
+    const data = await analyticsService.getLiveGaps(req.body, req.user);
+    return ApiResponse.success(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function saveLiveGaps(req, res) {
+  try {
+    const data = await analyticsService.saveLiveGaps(req.body.result, req.user);
+    return ApiResponse.created(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function getLiveTrends(req, res) {
+  try {
+    const data = await analyticsService.getLiveTrends(req.body);
+    return ApiResponse.success(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function saveLiveTrends(req, res) {
+  try {
+    const data = await analyticsService.saveLiveTrends(req.body.result, req.user);
+    return ApiResponse.created(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function getSavedLiveTrends(req, res) {
+  try {
+    const data = await analyticsService.getSavedLiveTrends(req.user);
+    return ApiResponse.success(res, data);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+module.exports = { 
+  getTrends, 
+  getGrowth, 
+  getCooccurrence, 
+  getGaps, 
+  getLiveGaps, 
+  saveLiveGaps,
+  getLiveTrends,
+  saveLiveTrends,
+  getSavedLiveTrends 
+};

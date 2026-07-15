@@ -1,12 +1,11 @@
 import type { PaperResult } from "../data/searchSample";
 import type { AiInsight, AxisOption, DashboardData, GapCell, TrendPoint, TrendSeries } from "../data/types";
-import {
-  TREND_TOPICS,
-  type CoocEdge,
-  type CoocNode,
-  type Granularity,
-  type GrowthRow,
-  type TrendRange,
+import type {
+  CoocEdge,
+  CoocNode,
+  Granularity,
+  GrowthRow,
+  TrendRange,
 } from "../data/trendsSample";
 import {
   GAP_ASPECTS,
@@ -614,20 +613,51 @@ function withTrendTokens(series: TrendSeries[]) {
 }
 
 export const analyticsApi = {
-  async trends(range: TrendRange, granularity: Granularity) {
-    const points = await request<TrendPoint[]>(
+  async trends(range: TrendRange, granularity: Granularity): Promise<{
+    points: TrendPoint[];
+    series: TrendSeries[];
+  }> {
+    const data = await request<TrendPoint[] | { points?: TrendPoint[]; series?: { key: string; label: string; token?: string }[] }>(
       `/analytics/trends${toSearchParams({ range, granularity })}`,
     );
-    return points;
+    if (Array.isArray(data)) {
+      return {
+        points: data,
+        series: withTrendTokens(
+          Object.keys(data[0] ?? {})
+            .filter((key) => key !== "period")
+            .map((key) => ({ key, label: key, token: "" })),
+        ),
+      };
+    }
+    const points = data.points ?? [];
+    const series = withTrendTokens(
+      (data.series ?? []).map((item) => ({
+        key: item.key,
+        label: item.label || item.key,
+        token: item.token || "",
+      })),
+    );
+    return {
+      points,
+      series: series.length
+        ? series
+        : withTrendTokens(
+            Object.keys(points[0] ?? {})
+              .filter((key) => key !== "period")
+              .map((key) => ({ key, label: key, token: "" })),
+          ),
+    };
   },
   async growth(range: TrendRange, granularity: Granularity): Promise<GrowthRow[]> {
     const rows = await request<any[]>(
       `/analytics/trends/growth${toSearchParams({ range, granularity })}`,
     );
+    const tokens = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6"];
     return rows.map((row, index) => ({
       key: row.key ?? String(row.label ?? index),
       label: row.label ?? row.key ?? "Unknown",
-      token: TREND_TOPICS[index % TREND_TOPICS.length]?.token ?? "--c1",
+      token: row.token ?? tokens[index % tokens.length],
       latest: Number(row.latest ?? 0),
       cagr: Number(row.cagr ?? 0),
       trend: row.trend ?? [],
@@ -641,11 +671,48 @@ export const analyticsApi = {
       edges: data.edges ?? [],
     };
   },
-  async gaps(threshold: number): Promise<GapItem[]> {
-    const data = await request<{ fields?: unknown[]; aspects?: unknown[]; gaps?: any[] }>(
-      `/analytics/gaps?densityThreshold=${threshold}`,
-    );
-    if (!data.gaps?.length) return [];
+  async gaps(threshold = 0.35): Promise<{
+    items: GapItem[];
+    hasReport: boolean;
+    generatedAt: string | null;
+    gapCount: number;
+    ai: { summary: string; directions: { topic: string; rationale: string }[]; evidence: { label: string; papers: number }[] };
+  }> {
+    const data = await request<{
+      fields?: unknown[];
+      aspects?: unknown[];
+      gaps?: any[];
+      hasReport?: boolean;
+      generatedAt?: string | null;
+      gapCount?: number;
+      ai?: {
+        summary?: string;
+        directions?: { topic?: string; rationale?: string }[];
+        evidence?: { label?: string; papers?: number }[];
+      };
+    }>(`/analytics/gaps?densityThreshold=${threshold}`);
+
+    const hasReport = Boolean(data.hasReport ?? (data.gaps?.length || data.fields?.length));
+    if (!data.gaps?.length) {
+      return {
+        items: [],
+        hasReport,
+        generatedAt: data.generatedAt ? String(data.generatedAt) : null,
+        gapCount: Number(data.gapCount ?? 0),
+        ai: {
+          summary: data.ai?.summary ?? "",
+          directions: (data.ai?.directions ?? []).map((row) => ({
+            topic: row.topic ?? "",
+            rationale: row.rationale ?? "",
+          })),
+          evidence: (data.ai?.evidence ?? []).map((row) => ({
+            label: row.label ?? "",
+            papers: Number(row.papers ?? 0),
+          })),
+        },
+      };
+    }
+
     const fieldDefs = normalizeAxisOptions(data.fields);
     const normalizedFields = fieldDefs.length
       ? fieldDefs.map((field, index) => ({
@@ -654,7 +721,7 @@ export const analyticsApi = {
         }))
       : GAP_FIELDS;
     const normalizedAspects = normalizeAxisOptions(data.aspects);
-    return data.gaps.map((gap, index) => {
+    const items = data.gaps.map((gap, index) => {
       const fallbackField = normalizedFields[index % Math.max(normalizedFields.length, 1)]?.label ?? "Other";
       const fieldLabel = axisLabel(gap.field ?? gap.fieldLabel) || fallbackField;
       const fieldDef = normalizedFields.find((item) => item.label === fieldLabel || item.key === fieldLabel)
@@ -680,7 +747,125 @@ export const analyticsApi = {
         keywords: gap.keywords ?? [],
         direction: gap.direction ?? "Khoảng trống này cần thêm dữ liệu phân tích từ corpus.",
         trend: gap.trend ?? [],
+        evidence: Array.isArray(gap.evidence)
+          ? gap.evidence.map((row: any) => ({
+              id: String(row.id ?? ""),
+              title: row.title ?? "Untitled paper",
+              year: row.year ?? null,
+              citations: Number(row.citations ?? 0),
+            }))
+          : [],
       };
+    });
+
+    return {
+      items,
+      hasReport,
+      generatedAt: data.generatedAt ? String(data.generatedAt) : null,
+      gapCount: Number(data.gapCount ?? items.length),
+      ai: {
+        summary: data.ai?.summary ?? "",
+        directions: (data.ai?.directions ?? []).map((row) => ({
+          topic: row.topic ?? "",
+          rationale: row.rationale ?? "",
+        })),
+        evidence: (data.ai?.evidence ?? []).map((row) => ({
+          label: row.label ?? "",
+          papers: Number(row.papers ?? 0),
+        })),
+      },
+    };
+  },
+  async liveGaps(payload: {
+    topic: string;
+    sources?: string[];
+    yearFrom?: number;
+    yearTo?: number;
+    maxRecordsPerSource?: number;
+    topK?: number;
+  }) {
+    return request<{
+      topic: string;
+      mode: "live";
+      sources: string[];
+      yearFrom: number;
+      yearTo: number;
+      totalFetched: number;
+      generatedAt: string;
+      summary: { strongGaps: number; potentialGaps: number; lowConfidence: number };
+      gaps: Array<{
+        id: string;
+        field: string;
+        aspect: string;
+        gapScore: number;
+        level: "strong" | "potential" | "needs_data" | "unclear";
+        confidence: "low" | "medium" | "high";
+        metrics: {
+          directCount: number;
+          countA: number;
+          countB: number;
+          expectedCount: number;
+          recentDirectCount: number;
+          oldDirectCount: number;
+          growthRate: number;
+          scarcityScore: number;
+          growthScore: number;
+          adjacencyScore: number;
+          noveltyScore: number;
+          evidenceScore: number;
+        };
+        reasons: string[];
+        evidence: Array<{
+          title: string;
+          year?: number | null;
+          source?: string;
+          doi?: string;
+          url?: string;
+          citationCount?: number;
+        }>;
+      }>;
+      sourceErrors?: Array<{ source: string; message: string }>;
+      warnings?: string[];
+      cached?: boolean;
+    }>("/analytics/gaps/live", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  saveLiveGaps(result: unknown) {
+    return request<{ id: string; reportType: string; generatedAt: string }>("/analytics/gaps/live/save", {
+      method: "POST",
+      body: JSON.stringify({ result }),
+    });
+  },
+  async liveTrends(payload: {
+    topic: string;
+    sources?: string[];
+    yearFrom?: number;
+    yearTo?: number;
+    maxRecordsPerSource?: number;
+  }) {
+    return request<{
+      topic: string;
+      mode: "live_trend";
+      sources: string[];
+      yearFrom: number;
+      yearTo: number;
+      totalFetched: number;
+      generatedAt: string;
+      trendPoints: TrendPoint[];
+      sourceErrors?: Array<{ source: string; message: string }>;
+      warnings?: string[];
+      cached?: boolean;
+    }>("/analytics/trends/live", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  saveLiveTrends(result: unknown) {
+    return request<{ id: string; reportType: string; generatedAt: string }>("/analytics/trends/live/save", {
+      method: "POST",
+      body: JSON.stringify({ result }),
     });
   },
   seriesFromPoints(points: TrendPoint[]) {
@@ -692,6 +877,17 @@ export const analyticsApi = {
         token: "",
       })),
     );
+  },
+  async savedLiveTrends() {
+    return request<Array<{
+      id: string;
+      topic: string;
+      sources: string[];
+      yearFrom: number;
+      yearTo: number;
+      generatedAt: string;
+      result: any;
+    }>>("/analytics/trends/live/saved");
   },
 };
 
@@ -795,6 +991,12 @@ export const adminApi = {
       };
     });
   },
+  broadcastNotification(payload: { title: string; content: string; priority?: "high" | "normal" | "low" }) {
+    return request<{ message: string; sent: number }>("/admin/notifications/broadcast", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export const libraryApi = {
@@ -823,18 +1025,43 @@ export const libraryApi = {
   },
   async papers(): Promise<LibraryEntry[]> {
     const { data } = await requestWithMeta<any[]>("/library/papers?limit=100");
-    return data.map((item) => {
+    // A paper can live in several collections (backend stores one saved_paper
+    // entry per collection). Merge those rows into a single library entry that
+    // carries every collectionId, so the UI shows one row per paper with
+    // multiple collection tags. Status/note are treated as paper-level and taken
+    // from the most recently saved copy.
+    const byPaper = new Map<string, LibraryEntry>();
+    for (const item of data) {
       const paper = mapPaper(item.paper ?? item);
-      return {
-        id: `${asId(item.collection_id)}-${asId(item.paper_id)}`,
-        paperId: paper.id,
-        savedAt: String(item.saved_at ?? ""),
-        status: item.status ?? "unread",
-        collectionIds: [asId(item.collection_id)],
-        note: item.note ?? "",
-        paper,
-      };
-    });
+      const collectionId = asId(item.collection_id);
+      const savedAt = String(item.saved_at ?? "");
+      const key = paper.id || asId(item.paper_id) || `${collectionId}-${byPaper.size}`;
+      const existing = byPaper.get(key);
+      if (existing) {
+        if (collectionId && !existing.collectionIds.includes(collectionId)) {
+          existing.collectionIds.push(collectionId);
+        }
+        // Prefer the most recently saved copy for paper-level fields.
+        if (savedAt > existing.savedAt) {
+          existing.savedAt = savedAt;
+          existing.status = item.status ?? existing.status;
+          if (item.note) existing.note = item.note;
+        } else if (!existing.note && item.note) {
+          existing.note = item.note;
+        }
+      } else {
+        byPaper.set(key, {
+          id: key,
+          paperId: paper.id,
+          savedAt,
+          status: item.status ?? "unread",
+          collectionIds: collectionId ? [collectionId] : [],
+          note: item.note ?? "",
+          paper,
+        });
+      }
+    }
+    return [...byPaper.values()];
   },
   savePaper(paperId: string, collectionIds: string[], note = "") {
     return request("/library/papers", {
@@ -1139,10 +1366,23 @@ export const feedbackApi = {
   async list(query: { status?: string; page?: number; limit?: number } = {}) {
     return requestWithMeta<any[]>(`/feedbacks${toSearchParams(query)}`);
   },
+  async pendingCount() {
+    const data = await request<{ count?: number }>("/feedbacks/pending-count");
+    return Number(data.count ?? 0);
+  },
+  getById(id: string) {
+    return request(`/feedbacks/${id}`);
+  },
   update(id: string, patch: { status?: "Pending" | "Reviewed" | "Resolved"; admin_note?: string | null }) {
     return request(`/feedbacks/${id}`, {
       method: "PUT",
       body: JSON.stringify(patch),
+    });
+  },
+  reply(id: string, content: string, status?: "Pending" | "Reviewed" | "Resolved") {
+    return request(`/feedbacks/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content, ...(status ? { status } : {}) }),
     });
   },
 };
