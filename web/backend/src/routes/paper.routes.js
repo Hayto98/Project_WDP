@@ -52,6 +52,12 @@ router.get('/trending', authenticate, ctrl.getTrending);
 router.post('/sync-request', optionalAuth, validate(syncRequestSchema), ctrl.requestCorpusSync);
 
 /**
+ * Start and update a dwell-time session on the in-app paper detail page.
+ */
+router.post('/:id/view-session', authenticate, ctrl.startReadingSession);
+router.patch('/:id/view-session/:viewId', authenticate, ctrl.updateReadingSession);
+
+/**
  * @swagger
  * /api/v1/papers/{id}:
  *   get:
