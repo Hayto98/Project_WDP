@@ -1,5 +1,6 @@
 const Paper = require('../models/Paper');
 const AnalysisReport = require('../models/AnalysisReport');
+const { slugify } = require('../utils/slugify');
 
 const TOKEN_POOL = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6'];
 const GAP_ASPECTS = ['Lý thuyết', 'Hiệu năng', 'An toàn & Riêng tư', 'Y sinh', 'Bền vững'];
@@ -12,14 +13,6 @@ const ASPECT_KEYWORDS = {
   'Y sinh': ['biomedical', 'clinical', 'medical', 'healthcare', 'diagnosis', 'biology', 'y sinh'],
   'Bền vững': ['sustainable', 'carbon', 'energy', 'green', 'efficient', 'tinyml', 'bền vững'],
 };
-
-function slugify(value) {
-  return String(value || 'other')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'other';
-}
 
 function normalizeText(value) {
   return String(value || '').toLowerCase();

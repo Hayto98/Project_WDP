@@ -1,12 +1,11 @@
 import type { PaperResult } from "../data/searchSample";
 import type { AiInsight, AxisOption, DashboardData, GapCell, TrendPoint, TrendSeries } from "../data/types";
-import {
-  TREND_TOPICS,
-  type CoocEdge,
-  type CoocNode,
-  type Granularity,
-  type GrowthRow,
-  type TrendRange,
+import type {
+  CoocEdge,
+  CoocNode,
+  Granularity,
+  GrowthRow,
+  TrendRange,
 } from "../data/trendsSample";
 import {
   GAP_ASPECTS,
@@ -614,20 +613,51 @@ function withTrendTokens(series: TrendSeries[]) {
 }
 
 export const analyticsApi = {
-  async trends(range: TrendRange, granularity: Granularity) {
-    const points = await request<TrendPoint[]>(
+  async trends(range: TrendRange, granularity: Granularity): Promise<{
+    points: TrendPoint[];
+    series: TrendSeries[];
+  }> {
+    const data = await request<TrendPoint[] | { points?: TrendPoint[]; series?: { key: string; label: string; token?: string }[] }>(
       `/analytics/trends${toSearchParams({ range, granularity })}`,
     );
-    return points;
+    if (Array.isArray(data)) {
+      return {
+        points: data,
+        series: withTrendTokens(
+          Object.keys(data[0] ?? {})
+            .filter((key) => key !== "period")
+            .map((key) => ({ key, label: key, token: "" })),
+        ),
+      };
+    }
+    const points = data.points ?? [];
+    const series = withTrendTokens(
+      (data.series ?? []).map((item) => ({
+        key: item.key,
+        label: item.label || item.key,
+        token: item.token || "",
+      })),
+    );
+    return {
+      points,
+      series: series.length
+        ? series
+        : withTrendTokens(
+            Object.keys(points[0] ?? {})
+              .filter((key) => key !== "period")
+              .map((key) => ({ key, label: key, token: "" })),
+          ),
+    };
   },
   async growth(range: TrendRange, granularity: Granularity): Promise<GrowthRow[]> {
     const rows = await request<any[]>(
       `/analytics/trends/growth${toSearchParams({ range, granularity })}`,
     );
+    const tokens = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6"];
     return rows.map((row, index) => ({
       key: row.key ?? String(row.label ?? index),
       label: row.label ?? row.key ?? "Unknown",
-      token: TREND_TOPICS[index % TREND_TOPICS.length]?.token ?? "--c1",
+      token: row.token ?? tokens[index % tokens.length],
       latest: Number(row.latest ?? 0),
       cagr: Number(row.cagr ?? 0),
       trend: row.trend ?? [],

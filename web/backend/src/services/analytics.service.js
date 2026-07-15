@@ -1,23 +1,35 @@
 const Paper = require('../models/Paper');
 const AnalysisReport = require('../models/AnalysisReport');
+const { slugify } = require('../utils/slugify');
+
+function resolveStartYear(range) {
+  const currentYear = new Date().getFullYear();
+  switch (range) {
+    case '12m': return currentYear - 1;
+    case '24m': return currentYear - 2;
+    case '5y':
+    default: return currentYear - 6;
+  }
+}
+
+function periodFromYearMonth(year, month, granularity) {
+  if (granularity !== 'quarter') return String(year);
+  const m = Number(month);
+  const quarter = Number.isFinite(m) && m >= 1 && m <= 12
+    ? Math.ceil(m / 3)
+    : 1;
+  return `${year}-Q${quarter}`;
+}
 
 /**
  * Trend analysis — publication counts by year/quarter (BR-015, BR-016).
+ * Returns { points, series } with slug keys aligned to growth + co-occurrence.
  */
 async function getTrends(query) {
   const { range = '5y', granularity = 'year' } = query;
+  const startYear = resolveStartYear(range);
+  const useQuarter = granularity === 'quarter';
 
-  // Determine year window
-  const currentYear = new Date().getFullYear();
-  let startYear;
-  switch (range) {
-    case '12m': startYear = currentYear - 1; break;
-    case '24m': startYear = currentYear - 2; break;
-    case '5y':
-    default: startYear = currentYear - 6; break;
-  }
-
-  // Aggregate by year
   const pipeline = [
     {
       $match: {
@@ -26,59 +38,92 @@ async function getTrends(query) {
       },
     },
     {
-      $group: {
-        _id: {
-          year: '$publication_year',
-          field: { $arrayElemAt: ['$research_fields', 0] },
+      $project: {
+        year: '$publication_year',
+        month: { $ifNull: ['$publication_month', 1] },
+        field: {
+          $ifNull: [{ $arrayElemAt: ['$research_fields', 0] }, 'Other'],
         },
+      },
+    },
+    {
+      $group: {
+        _id: useQuarter
+          ? {
+            year: '$year',
+            quarter: {
+              $ceil: { $divide: ['$month', 3] },
+            },
+            field: '$field',
+          }
+          : {
+            year: '$year',
+            field: '$field',
+          },
         count: { $sum: 1 },
       },
     },
-    { $sort: { '_id.year': 1 } },
+    {
+      $sort: useQuarter
+        ? { '_id.year': 1, '_id.quarter': 1 }
+        : { '_id.year': 1 },
+    },
   ];
 
   const raw = await Paper.aggregate(pipeline);
 
-  // Reshape into TrendPoint[] format
-  const yearMap = new Map();
+  const seriesMap = new Map();
+  const periodMap = new Map();
+
   for (const r of raw) {
-    const year = r._id.year;
-    const field = r._id.field || 'Other';
-    if (!yearMap.has(year)) yearMap.set(year, { period: String(year) });
-    yearMap.get(year)[field] = r.count;
+    const label = r._id.field || 'Other';
+    const key = slugify(label);
+    if (!seriesMap.has(key)) {
+      seriesMap.set(key, { key, label });
+    }
+
+    const period = useQuarter
+      ? `${r._id.year}-Q${r._id.quarter || 1}`
+      : String(r._id.year);
+
+    if (!periodMap.has(period)) {
+      periodMap.set(period, { period });
+    }
+    periodMap.get(period)[key] = (periodMap.get(period)[key] || 0) + r.count;
   }
 
-  return Array.from(yearMap.values());
+  const series = Array.from(seriesMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  const points = Array.from(periodMap.values()).map((point) => {
+    const filled = { ...point };
+    for (const s of series) {
+      if (filled[s.key] === undefined) filled[s.key] = 0;
+    }
+    return filled;
+  });
+
+  return { points, series };
 }
 
 /**
  * Compute growth rates per field (BR-016).
  */
 async function getGrowth(query) {
-  const points = await getTrends(query);
+  const { points, series } = await getTrends(query);
 
-  // Extract unique fields from points
-  if (points.length < 2) return [];
+  if (points.length < 2 || series.length === 0) return [];
 
-  const fields = new Set();
-  for (const p of points) {
-    for (const key of Object.keys(p)) {
-      if (key !== 'period') fields.add(key);
-    }
-  }
+  const periods = Math.max(1, points.length - 1);
 
-  const years = Math.max(1, points.length - 1);
-
-  return Array.from(fields).map((field) => {
-    const vals = points.map((p) => Number(p[field]) || 0);
-    const first = Math.max(1, vals[0]);
-    const last = vals[vals.length - 1];
-    const cagr = Math.pow(last / first, 1 / years) - 1;
+  return series.map((field) => {
+    const vals = points.map((p) => Number(p[field.key]) || 0);
+    const first = Math.max(1, vals[0] || 0);
+    const last = vals[vals.length - 1] || 0;
+    const cagr = Math.pow(Math.max(1, last) / first, 1 / periods) - 1;
     const status = cagr >= 0.18 ? 'emerging' : cagr <= -0.03 ? 'declining' : 'stable';
 
     return {
-      key: field.toLowerCase().replace(/\s+/g, '_'),
-      label: field,
+      key: field.key,
+      label: field.label,
       latest: last,
       cagr,
       trend: vals,
@@ -167,13 +212,16 @@ async function saveLiveTrends(result, user) {
   return liveTrendService.saveLiveTrendReport(result, user?.id || null);
 }
 
-module.exports = { 
-  getTrends, 
-  getGrowth, 
-  getCooccurrence, 
-  getGaps, 
-  getLiveGaps, 
+module.exports = {
+  getTrends,
+  getGrowth,
+  getCooccurrence,
+  getGaps,
+  getLiveGaps,
   saveLiveGaps,
   getLiveTrends,
-  saveLiveTrends 
+  saveLiveTrends,
+  // exported for tests / reuse
+  periodFromYearMonth,
+  slugify,
 };
