@@ -38,7 +38,7 @@ export function KpiStrip({ kpis, loading }: Props) {
         return (
           <View key={k.id} style={[styles.kpiCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text variant="xs" color="inkMuted" numberOfLines={2}>{k.label}</Text>
-            <Text variant="lg" weight="bold" style={{ marginVertical: 4 }}>
+            <Text variant="title" weight="bold" style={{ marginVertical: 4 }}>
               {k.format === 'percent' ? formatPercent(k.value) : formatInt(k.value)}
             </Text>
             <View style={styles.hintRow}>
