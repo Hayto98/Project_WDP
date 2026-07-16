@@ -1184,13 +1184,21 @@ function ReadLogRow({ log }: { log: PaperReadLog }) {
       </td>
       <td>{log.source}</td>
       <td className="num">{log.viewedAt}</td>
-      <td className="num">{formatInt(log.durationMinutes)} phút</td>
+      <td className="num">{formatReadDuration(log)}</td>
       <td className="num">{log.sessionWindow}</td>
       <td>
         <StatusPill status={log.persistStatus} label={READING_STATUS_LABEL[log.persistStatus]} />
       </td>
     </tr>
   );
+}
+
+function formatReadDuration(log: PaperReadLog) {
+  const seconds = Math.max(0, Math.round(log.durationSeconds ?? log.durationMinutes * 60));
+  if (seconds < 60) return `${seconds} giây`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return remainder ? `${minutes} phút ${remainder} giây` : `${minutes} phút`;
 }
 
 function AuditList({ logs }: { logs: AuditLog[] }) {

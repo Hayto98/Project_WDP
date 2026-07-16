@@ -64,6 +64,39 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabBarIcon name="bars" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="workspace"
+        options={{
+          href: null,
+          title: 'Workspace',
+          headerShown: false
+        }}
+      />
+      <Tabs.Screen
+        name="gap"
+        options={{
+          href: null,
+          title: 'Research Gap',
+          headerShown: true,
+          headerStyle: { backgroundColor: theme.surface },
+          headerTintColor: theme.ink,
+          headerTitleStyle: { fontWeight: 'bold' }
+        }}
+      />
+      <Tabs.Screen
+        name="follow"
+        options={{
+          href: null,
+          headerShown: false
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          href: null,
+          headerShown: false
+        }}
+      />
     </Tabs>
   );
 }

@@ -67,6 +67,7 @@ export interface PaperReadLog {
   source: string;
   viewedAt: string;
   durationMinutes: number;
+  durationSeconds?: number;
   sessionWindow: string;
   device: string;
   persistStatus: ReadingPersistStatus;

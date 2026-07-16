@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, TextInput, TouchableOpacity, Modal, Alert, Linking, FlatList, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
@@ -7,6 +7,7 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 import { IconBookmark, IconSearch, IconX, IconExternal, IconPlus } from '../../components/icons';
 import { libraryApi } from '../../lib/api';
 import type { LibraryCollection, LibraryEntry } from '../../lib/api';
+import { useFocusEffect } from 'expo-router';
 
 type StatusFilter = "all" | "unread" | "reading" | "done";
 
@@ -40,30 +41,31 @@ export default function LibraryScreen() {
     }
   }, [activeCollection, collections]);
 
-  useEffect(() => {
-    let alive = true;
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [nextCollections, nextItems] = await Promise.all([
-          libraryApi.collections(),
-          libraryApi.papers()
-        ]);
-        if (alive) {
-          setCollections(nextCollections);
-          setItems(nextItems);
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      const fetchData = async () => {
+        try {
+          const [nextCollections, nextItems] = await Promise.all([
+            libraryApi.collections(),
+            libraryApi.papers()
+          ]);
+          if (alive) {
+            setCollections(nextCollections);
+            setItems(nextItems);
+            setLoading(false);
+          }
+        } catch (err: any) {
+          if (alive) {
+            console.error("Lỗi", "Không thể tải thư viện: " + err.message);
+            setLoading(false);
+          }
         }
-      } catch (err: any) {
-        if (alive) {
-          Alert.alert("Lỗi", "Không thể tải thư viện: " + err.message);
-        }
-      } finally {
-        if (alive) setLoading(false);
-      }
-    };
-    fetchData();
-    return () => { alive = false; };
-  }, []);
+      };
+      fetchData();
+      return () => { alive = false; };
+    }, [])
+  );
 
   const stats = useMemo(() => {
     let readCount = 0;

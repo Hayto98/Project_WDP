@@ -31,6 +31,29 @@ function friendlyLiveError(err: unknown): string {
   return message || "Không phân tích được Live Gap.";
 }
 
+function friendlySourceMessage(message: string): string {
+  const text = String(message || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const lower = text.toLowerCase();
+  if (lower.includes("429") || lower.includes("rate limit") || lower.includes("too many")) {
+    return "Đang giới hạn tốc độ. Đợi một lát hoặc giảm số bài mỗi nguồn.";
+  }
+  if (lower.includes("503") || lower.includes("service unavailable") || lower.includes("temporarily unavailable")) {
+    return "Đang tạm quá tải. Có thể bỏ nguồn này khi demo và thử lại sau.";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("abort")) {
+    return "Phản hồi quá lâu. Thử giảm số bài hoặc chọn ít nguồn hơn.";
+  }
+  if (lower.includes("403") || lower.includes("forbidden") || lower.includes("unauthorized")) {
+    return "Từ chối truy cập. Kiểm tra API key hoặc hạn mức nguồn.";
+  }
+  return text && !text.includes("<") ? text : "Không lấy được dữ liệu từ nguồn này. Kết quả vẫn dùng các nguồn còn lại.";
+}
+
 export function LiveGapPanel() {
   const [topic, setTopic] = useState("federated learning medical imaging");
   const [sources, setSources] = useState<Set<string>>(new Set(["OpenAlex", "Crossref", "arXiv"]));
@@ -418,10 +441,17 @@ export function LiveGapPanel() {
 
             {!!result?.sourceErrors?.length && !loading && (
               <Widget title="Cảnh báo nguồn" icon={<IconGap />} status="ready">
-                <ul>
+                <div className="livegap__source-warning">
+                  <p>
+                    Một số nguồn học thuật đang bận hoặc giới hạn tốc độ. Bạn vẫn có thể dùng kết quả hiện tại,
+                    hoặc chạy demo ổn định hơn với OpenAlex và 20 bài mỗi nguồn.
+                  </p>
+                </div>
+                <ul className="livegap__source-list">
                   {result.sourceErrors.map((row) => (
-                    <li key={row.source}>
-                      {row.source}: {row.message}
+                    <li key={`${row.source}-${row.message}`}>
+                      <strong>{row.source}</strong>
+                      <span>{friendlySourceMessage(row.message)}</span>
                     </li>
                   ))}
                 </ul>

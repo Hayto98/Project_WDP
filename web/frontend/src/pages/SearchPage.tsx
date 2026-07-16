@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Theme } from "../hooks/useTheme";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { formatInt } from "../lib/format";
-import { aiApi, libraryApi, paperApi, searchApi } from "../lib/api";
+import { libraryApi, paperApi, searchApi } from "../lib/api";
 import type { LibraryCollection } from "../data/librarySample";
 import {
   RELATED_KEYWORDS,
@@ -83,7 +83,6 @@ export function SearchPage({ theme, toggle }: Props) {
   const [saveNotice, setSaveNotice] = useState("");
   const [savingPaperId, setSavingPaperId] = useState("");
   const [savingSearch, setSavingSearch] = useState(false);
-  const [expandedId, setExpandedId] = useState("");
   const [collections, setCollections] = useState<LibraryCollection[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
   const [collectionsLoading, setCollectionsLoading] = useState(false);
@@ -730,9 +729,7 @@ export function SearchPage({ theme, toggle }: Props) {
                     terms={highlightTerms}
                     saved={saved.has(p.id)}
                     saving={savingPaperId === p.id}
-                    expanded={expandedId === p.id}
                     onToggleSave={() => savePaperToLibrary(p)}
-                    onToggleExpand={() => setExpandedId((current) => (current === p.id ? "" : p.id))}
                     onOpenSource={() => paperApi.recordView(p.id).catch(() => undefined)}
                   />
                 ))}
@@ -838,74 +835,27 @@ function ResultItem({
   terms,
   saved,
   saving,
-  expanded,
   onToggleSave,
-  onToggleExpand,
   onOpenSource,
 }: {
   paper: PaperResult;
   terms: string[];
   saved: boolean;
   saving: boolean;
-  expanded: boolean;
   onToggleSave: () => void;
-  onToggleExpand: () => void;
   onOpenSource: () => void;
 }) {
-  const [aiSummary, setAiSummary] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
-  const [relatedLoading, setRelatedLoading] = useState(false);
-  const [relatedPapers, setRelatedPapers] = useState<PaperResult[]>([]);
   const authors =
     paper.authors.length > 3
       ? `${paper.authors.slice(0, 3).join(", ")} +${paper.authors.length - 3}`
       : paper.authors.join(", ");
   const doiHref = paper.doi ? `https://doi.org/${paper.doi.replace(/^https?:\/\/doi\.org\//i, "")}` : paper.url;
   const doiLabel = paper.doi ? paper.doi.replace(/^https?:\/\/doi\.org\//i, "") : paper.url;
-  const summarize = async () => {
-    setAiLoading(true);
-    setAiError("");
-    try {
-      const result = await aiApi.summarize({
-        title: paper.title,
-        abstract: paper.abstract,
-        year: paper.year,
-        source: paper.source,
-        keywords: paper.keywords,
-      });
-      setAiSummary(result.summary);
-    } catch (err) {
-      setAiError(err instanceof Error ? err.message : "Không tóm tắt được paper.");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const loadRelated = async () => {
-    setRelatedLoading(true);
-    setAiError("");
-    try {
-      const results = await aiApi.relatedPapers({
-        paperId: paper.id,
-        title: paper.title,
-        keywords: paper.keywords,
-        fields: paper.fields,
-        limit: 4,
-      });
-      setRelatedPapers(results);
-    } catch (err) {
-      setAiError(err instanceof Error ? err.message : "Không lấy được paper liên quan.");
-    } finally {
-      setRelatedLoading(false);
-    }
-  };
-
   return (
     <li className="rcard">
       <div className="rcard__main">
         <h3 className="rcard__title">
-          <a href={paper.url} target="_blank" rel="noreferrer noopener" onClick={onOpenSource}>
+          <a href={`#paper/${paper.id}?source=Search_Result`}>
             {highlight(paper.title, terms)}
           </a>
         </h3>
@@ -937,49 +887,6 @@ function ResultItem({
             </span>
           ))}
         </div>
-        {expanded && (
-          <div className="rcard__detail">
-            <span className="rcard__detail-label">Chi tiết paper</span>
-            <dl>
-              <div>
-                <dt>Lĩnh vực</dt>
-                <dd>{paper.fields.join(", ") || "Chưa phân loại"}</dd>
-              </div>
-              <div>
-                <dt>Từ khóa</dt>
-                <dd>{paper.keywords.join(", ") || "Chưa có từ khóa"}</dd>
-              </div>
-              <div>
-                <dt>Liên kết</dt>
-                <dd>
-                  <a href={paper.url} target="_blank" rel="noreferrer noopener" onClick={onOpenSource}>
-                    {paper.url}
-                  </a>
-                </dd>
-              </div>
-            </dl>
-            <div className="rcard__detail-actions">
-              <button className="btn btn--ghost btn--sm" type="button" onClick={summarize} disabled={aiLoading}>
-                {aiLoading ? "Đang tóm tắt..." : "AI tóm tắt"}
-              </button>
-              <button className="btn btn--ghost btn--sm" type="button" onClick={loadRelated} disabled={relatedLoading}>
-                {relatedLoading ? "Đang tìm..." : "Paper liên quan"}
-              </button>
-            </div>
-            {aiError && <p className="state__body">{aiError}</p>}
-            {aiSummary && <p className="rcard__abstract">{aiSummary}</p>}
-            {relatedPapers.length > 0 && (
-              <div className="rcard__related">
-                {relatedPapers.map((related) => (
-                  <a key={related.id} href={related.url || "#"} target="_blank" rel="noreferrer noopener">
-                    <span>{related.title}</span>
-                    <small>{related.year} · {related.source}</small>
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="rcard__side">
@@ -999,10 +906,10 @@ function ResultItem({
             <IconBookmark width={16} height={16} />
             {saving ? "Đang lưu" : saved ? "Đã lưu" : "Lưu"}
           </button>
-          <button className="iconpill" type="button" onClick={onToggleExpand} aria-expanded={expanded}>
+          <a className="iconpill" href={`#paper/${paper.id}?source=Search_Result`}>
             <IconSearch width={16} height={16} />
-            {expanded ? "Thu gọn" : "Chi tiết"}
-          </button>
+            Chi tiết
+          </a>
           <a
             className="iconpill"
             href={paper.url}

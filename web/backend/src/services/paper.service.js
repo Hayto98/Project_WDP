@@ -170,14 +170,14 @@ async function searchPapers(query, userId = null) {
 /**
  * Get paper by ID and record unique view (BR-043).
  */
-async function getPaperById(paperId, userId, viewSource = 'Search_Result') {
+async function getPaperById(paperId, userId, viewSource = 'Search_Result', trackView = true) {
   const paper = await Paper.findById(paperId).lean();
   if (!paper) {
     throw Object.assign(new Error('Paper not found'), { statusCode: 404 });
   }
 
   // Record unique view (dedup via Redis)
-  if (userId) {
+  if (userId && trackView) {
     const isNew = await shouldCountView(userId, paperId);
     if (isNew) {
       await PaperView.create({
@@ -191,6 +191,96 @@ async function getPaperById(paperId, userId, viewSource = 'Search_Result') {
   }
 
   return paper;
+}
+
+const READING_THRESHOLD_SECONDS = 120;
+const MAX_READING_SECONDS = 12 * 60 * 60;
+const VIEW_SOURCES = new Set(['Search_Result', 'Library', 'Recommendation', 'Dashboard']);
+
+function sessionWindow(date) {
+  const hour = date.getHours();
+  const minute = date.getMinutes() < 30 ? 0 : 30;
+  const endHour = minute === 30 ? hour + 1 : hour;
+  const endMinute = minute === 30 ? 0 : 30;
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${pad(hour)}:${pad(minute)}-${pad(endHour % 24)}:${pad(endMinute)}`;
+}
+
+/**
+ * Start an authenticated in-app reading session.
+ * This is separate from the legacy external-source view ping so dwell time can
+ * be updated while the dedicated detail page remains visible.
+ */
+async function startReadingSession(paperId, userId, source = 'Search_Result', device = 'desktop') {
+  const paper = await Paper.findById(paperId).select('_id').lean();
+  if (!paper) {
+    throw Object.assign(new Error('Paper not found'), { statusCode: 404 });
+  }
+
+  const startedAt = new Date();
+  const view = await PaperView.create({
+    user_id: userId,
+    paper_id: paperId,
+    viewed_at: startedAt,
+    source: VIEW_SOURCES.has(source) ? source : 'Search_Result',
+    duration_minutes: 0,
+    duration_seconds: 0,
+    session_window: sessionWindow(startedAt),
+    device: ['desktop', 'tablet', 'mobile'].includes(device) ? device : 'desktop',
+    persist_status: 'queued',
+    reason: 'Đang đọc',
+  });
+
+  invalidateTopPapersCache();
+  return {
+    viewId: view._id.toString(),
+    startedAt,
+    thresholdSeconds: READING_THRESHOLD_SECONDS,
+  };
+}
+
+/**
+ * Update active dwell time. Heartbeats keep a session useful even when the
+ * browser closes before the final request; finalized sessions receive the
+ * existing two-minute stored/skipped classification used by Admin analytics.
+ */
+async function updateReadingSession(paperId, viewId, userId, durationSeconds, finalized = false) {
+  const seconds = Math.min(
+    MAX_READING_SECONDS,
+    Math.max(0, Math.round(Number(durationSeconds) || 0)),
+  );
+  const update = {
+    duration_seconds: seconds,
+    duration_minutes: Number((seconds / 60).toFixed(2)),
+  };
+
+  if (finalized) {
+    update.ended_at = new Date();
+    update.persist_status = seconds >= READING_THRESHOLD_SECONDS ? 'stored' : 'skipped';
+    update.reason = seconds >= READING_THRESHOLD_SECONDS ? 'Đủ ngưỡng đọc' : 'Dưới ngưỡng đọc';
+  }
+
+  const view = await PaperView.findOneAndUpdate(
+    {
+      _id: viewId,
+      paper_id: paperId,
+      user_id: userId,
+    },
+    { $set: update },
+    { returnDocument: 'after' },
+  ).lean();
+
+  if (!view) {
+    throw Object.assign(new Error('Reading session not found'), { statusCode: 404 });
+  }
+
+  return {
+    viewId: view._id.toString(),
+    durationSeconds: view.duration_seconds,
+    durationMinutes: view.duration_minutes,
+    finalized: Boolean(view.ended_at),
+    persistStatus: view.persist_status,
+  };
 }
 
 /**
@@ -249,4 +339,10 @@ async function getTrendingPapers(days = 30, limit = 10) {
   return results;
 }
 
-module.exports = { searchPapers, getPaperById, getTrendingPapers };
+module.exports = {
+  searchPapers,
+  getPaperById,
+  getTrendingPapers,
+  startReadingSession,
+  updateReadingSession,
+};

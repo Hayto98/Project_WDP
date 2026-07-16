@@ -10,9 +10,7 @@ export default function UserLayout() {
       headerTintColor: theme.ink,
       headerTitleStyle: { fontWeight: 'bold' }
     }}>
-      <Stack.Screen name="gap" options={{ title: 'Research Gap' }} />
-      <Stack.Screen name="workspace" options={{ title: 'Workspace' }} />
-      <Stack.Screen name="follow" options={{ title: 'Theo dõi' }} />
+      <Stack.Screen name="paper/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

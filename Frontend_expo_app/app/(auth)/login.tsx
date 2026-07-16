@@ -5,11 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconTelescope, IconArrowRight } from '../../components/icons';
+import { IconTelescope, IconArrowRight, IconEye, IconEyeOff } from '../../components/icons';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
@@ -60,14 +61,23 @@ export default function LoginScreen() {
 
             <View style={styles.inputGroup}>
               <Text variant="sm" weight="bold" style={styles.label}>Mật khẩu</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.ink }]}
-                placeholder="Nhập mật khẩu"
-                placeholderTextColor={theme.inkMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              <View style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, flexDirection: 'row', alignItems: 'center', paddingRight: 12 }]}>
+                <TextInput
+                  style={{ flex: 1, color: theme.ink, padding: 0 }}
+                  placeholder="Nhập mật khẩu"
+                  placeholderTextColor={theme.inkMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  {showPassword ? (
+                    <IconEyeOff color={theme.inkMuted} size={20} />
+                  ) : (
+                    <IconEye color={theme.inkMuted} size={20} />
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
             {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}

@@ -41,11 +41,12 @@ export function GapPage({ theme, toggle }: Props) {
   const [corpusAi, setCorpusAi] = useState<GapAiSnapshot>({ summary: "", directions: [], evidence: [] });
   const [loadError, setLoadError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const allItems = useMemo(
-    () => remoteItems ?? (USE_SAMPLE_FALLBACK && !loadError ? buildGaps() : []),
-    [remoteItems, loadError],
-  );
+  const allItems = useMemo(() => {
+    if (mode === 'live') return [];
+    return remoteItems ?? (USE_SAMPLE_FALLBACK && !loadError ? buildGaps() : []);
+  }, [remoteItems, loadError, mode]);
   const fieldOptions = useMemo(() => {
+    if (mode === 'live') return [];
     const seen = new Map<string, { key: string; label: string; token: string }>();
     for (const item of allItems) {
       if (!seen.has(item.fieldKey)) {
@@ -53,11 +54,12 @@ export function GapPage({ theme, toggle }: Props) {
       }
     }
     return seen.size ? [...seen.values()] : USE_SAMPLE_FALLBACK && !loadError ? GAP_FIELDS : [];
-  }, [allItems, loadError]);
+  }, [allItems, loadError, mode]);
   const aspectOptions = useMemo(() => {
+    if (mode === 'live') return [];
     const values = [...new Set(allItems.map((item) => item.aspect))];
     return values.length ? values : USE_SAMPLE_FALLBACK && !loadError ? GAP_ASPECTS : [];
-  }, [allItems, loadError]);
+  }, [allItems, loadError, mode]);
   const [threshold, setThreshold] = useState(0.35);
   const [fields, setFields] = useState<Set<string>>(
     () => new Set(USE_SAMPLE_FALLBACK ? GAP_FIELDS.map((f) => f.key) : []),
@@ -100,6 +102,7 @@ export function GapPage({ theme, toggle }: Props) {
 
   useEffect(() => {
     if (mode === "corpus") void loadGaps();
+    else setSelectedId(null);
   }, [mode, loadGaps]);
 
   const items = useMemo(

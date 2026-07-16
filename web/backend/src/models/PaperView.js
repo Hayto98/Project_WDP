@@ -12,6 +12,8 @@ const paperViewSchema = new Schema(
       default: 'Search_Result',
     },
     duration_minutes: { type: Number, default: 0 },
+    duration_seconds: { type: Number, default: 0 },
+    ended_at: { type: Date, default: null },
     session_window: { type: String, default: '' },
     device: { type: String, default: 'web' },
     persist_status: {

@@ -38,8 +38,38 @@ async function getById(req, res) {
       req.params.id,
       req.user?.id,
       req.query.source || 'Search_Result',
+      req.query.track !== 'false',
     );
     return ApiResponse.success(res, paper);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function startReadingSession(req, res) {
+  try {
+    const session = await paperService.startReadingSession(
+      req.params.id,
+      req.user.id,
+      req.body.source,
+      req.body.device,
+    );
+    return ApiResponse.created(res, session);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function updateReadingSession(req, res) {
+  try {
+    const session = await paperService.updateReadingSession(
+      req.params.id,
+      req.params.viewId,
+      req.user.id,
+      req.body.durationSeconds,
+      req.body.finalized === true,
+    );
+    return ApiResponse.success(res, session);
   } catch (err) {
     return ApiResponse.error(res, err.message, err.statusCode || 500);
   }
@@ -167,4 +197,11 @@ async function requestCorpusSync(req, res) {
   }
 }
 
-module.exports = { search, getById, getTrending, requestCorpusSync };
+module.exports = {
+  search,
+  getById,
+  startReadingSession,
+  updateReadingSession,
+  getTrending,
+  requestCorpusSync,
+};

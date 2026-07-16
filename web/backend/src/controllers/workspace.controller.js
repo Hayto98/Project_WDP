@@ -74,7 +74,7 @@ const deleteItem = asyncHandler(async (req, res) => {
 
 const addComment = asyncHandler(async (req, res) => {
   const comment = await workspaceService.addComment(req.user, req.params.id, req.params.itemId, req.body);
-  if (!comment) return ApiResponse.notFound(res);
+  if (!comment) return ApiResponse.forbidden(res, 'Only owner or editor can comment');
   return ApiResponse.created(res, comment);
 });
 
