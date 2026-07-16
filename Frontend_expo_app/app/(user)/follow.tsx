@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking, Modal, TouchableWithoutFeedback } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconChevron, IconPlus, IconSearch, IconBell, IconBookmark, IconExternal } from '../../components/icons';
+import { IconChevron, IconPlus, IconSearch, IconBell, IconBookmark, IconExternal, IconQuote } from '../../components/icons';
 import { KpiStrip } from '../../components/KpiStrip';
 import { Widget } from '../../components/Widget';
-import { followApi } from '../../lib/api';
-import { makeFollowAlerts } from '../../data/followSample';
-import type { FollowSubject, FollowAlert } from '../../lib/api';
+import { followApi, libraryApi, aiApi } from '../../lib/api';
+import type { FollowSubject, FollowAlert, PaperResult } from '../../lib/api';
+import { formatInt } from '../../lib/format';
 import type { Kpi } from '../../data/types';
-import type { FollowAlertEntry } from '../../data/followSample';
+
+export interface FollowAlertEntry extends FollowAlert {
+  subject: FollowSubject;
+  paper: PaperResult;
+}
 
 type FeedFilter = 'all' | 'unread' | 'high';
 
@@ -25,6 +29,75 @@ export default function FollowScreen() {
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [aiSummaries, setAiSummaries] = useState<Record<string, { loading?: boolean; text?: string; error?: string }>>({});
+  const [relatedPapers, setRelatedPapers] = useState<Record<string, { loading?: boolean; papers?: PaperResult[]; error?: string }>>({});
+
+  const toggleSet = (set: Set<string>, id: string, setFn: (val: Set<string>) => void) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setFn(next);
+  };
+
+  const ensureSaveCollection = async () => {
+    const cols = await libraryApi.collections();
+    let defaultCol = cols.find(c => c.name === "Đọc sau");
+    if (!defaultCol) {
+      const created = await libraryApi.createCollection("Đọc sau", "Bài lưu nhanh từ mục theo dõi");
+      defaultCol = { id: created._id || created.id || "", name: "Đọc sau", description: "" };
+    }
+    return defaultCol.id;
+  };
+
+  const savePaperToLibrary = async (p: PaperResult) => {
+    if (saved.has(p.id)) return;
+    try {
+      const colId = await ensureSaveCollection();
+      await libraryApi.savePaper(p.id, [colId]);
+      setSaved(prev => new Set(prev).add(p.id));
+      Alert.alert("Thành công", "Đã lưu bài báo vào thư viện.");
+    } catch (err: any) {
+      Alert.alert("Lỗi", err.message || "Không thể lưu bài báo");
+    }
+  };
+
+  const handleSummarize = async (p: PaperResult) => {
+    if (aiSummaries[p.id]?.loading) return;
+    setAiSummaries(prev => ({ ...prev, [p.id]: { loading: true } }));
+    try {
+      const result = await aiApi.summarize({
+        title: p.title,
+        abstract: p.abstract,
+        year: p.year,
+        source: p.source,
+        keywords: p.keywords
+      });
+      setAiSummaries(prev => ({ ...prev, [p.id]: { loading: false, text: result.summary } }));
+    } catch (err: any) {
+      setAiSummaries(prev => ({ ...prev, [p.id]: { loading: false, error: err.message } }));
+    }
+  };
+
+  const handleRelatedPapers = async (p: PaperResult) => {
+    if (relatedPapers[p.id]?.loading) return;
+    setRelatedPapers(prev => ({ ...prev, [p.id]: { loading: true } }));
+    try {
+      const papers = await aiApi.relatedPapers({
+        paperId: p.id,
+        title: p.title,
+        keywords: p.keywords,
+        fields: p.fields,
+        limit: 3
+      });
+      setRelatedPapers(prev => ({ ...prev, [p.id]: { loading: false, papers } }));
+    } catch (err: any) {
+      setRelatedPapers(prev => ({ ...prev, [p.id]: { loading: false, error: err.message } }));
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -47,7 +120,34 @@ export default function FollowScreen() {
     }
   };
 
-  const entries = useMemo(() => makeFollowAlerts(subjects, alerts), [subjects, alerts]);
+  const entries = useMemo<FollowAlertEntry[]>(() => {
+    return alerts.map(alert => {
+      const subject = subjects.find(s => s.id === alert.subjectId) || {
+        id: alert.subjectId,
+        label: 'Mục theo dõi chung',
+        type: 'keyword',
+        active: true,
+        newPapers: 0,
+        papers7d: 0,
+        rule: { frequency: 'daily', threshold: 'all', email: false, inApp: true, exclude: [] }
+      };
+      const paper = alert.paper || {
+        id: alert.paperId,
+        title: 'Untitled Paper',
+        authors: [],
+        year: new Date().getFullYear(),
+        source: 'Unknown',
+        type: 'Preprint',
+        fields: [],
+        keywords: [],
+        abstract: '',
+        citations: 0,
+        doi: '',
+        url: '#'
+      };
+      return { ...alert, subject, paper } as FollowAlertEntry;
+    });
+  }, [subjects, alerts]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -79,10 +179,10 @@ export default function FollowScreen() {
   const highCount = alerts.filter(a => a.priority === 'high').length;
 
   const kpis: Kpi[] = [
-    { id: '1', label: 'Mục đang bật', value: activeCount, format: 'int', hint: '' },
-    { id: '2', label: 'Thông báo chưa đọc', value: unreadCount, format: 'int', deltaKind: unreadCount > 0 ? 'up' : 'neutral', hint: unreadCount > 0 ? 'Có thông báo mới' : 'Đã xem hết' },
+    { id: '1', label: 'Đang bật', value: activeCount, format: 'int', hint: '' },
+    { id: '2', label: 'Chưa đọc', value: unreadCount, format: 'int', deltaKind: unreadCount > 0 ? 'up' : 'neutral', hint: unreadCount > 0 ? 'Có thông báo mới' : 'Đã xem hết' },
     { id: '3', label: 'Ưu tiên cao', value: highCount, format: 'int', hint: '' },
-    { id: '4', label: 'Bài mới 7 ngày', value: entries.length, format: 'int', hint: '' },
+    { id: '4', label: '7 ngày qua', value: entries.length, format: 'int', hint: '' },
   ];
 
   const handleAdd = async () => {
@@ -124,43 +224,53 @@ export default function FollowScreen() {
         </View>
 
         {/* Subjects List */}
-        <View style={{ marginBottom: 24 }}>
+        <View style={{ marginBottom: 24, zIndex: 10 }}>
           <Text variant="sm" weight="bold" style={{ marginBottom: 12 }}>Mục theo dõi</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16, paddingHorizontal: 16 }}>
-            <TouchableOpacity 
-              style={[
-                styles.subjectChip, 
-                { backgroundColor: theme.surface, borderColor: theme.border },
-                activeId === 'all' && { borderColor: theme.primary, backgroundColor: theme.primary + '20' }
-              ]}
-              onPress={() => setActiveId('all')}
-            >
-              <Text variant="sm" weight={activeId === 'all' ? 'bold' : 'normal'} color={activeId === 'all' ? 'primary' : 'ink'}>Tất cả</Text>
-            </TouchableOpacity>
-            
-            {subjects.map(sub => {
-              const isActive = activeId === sub.id;
-              return (
-                <TouchableOpacity 
-                  key={sub.id}
-                  style={[
-                    styles.subjectChip, 
-                    { backgroundColor: theme.surface, borderColor: theme.border },
-                    isActive && { borderColor: theme.primary, backgroundColor: theme.primary + '20' }
-                  ]}
-                  onPress={() => setActiveId(sub.id)}
-                >
-                  <Text variant="sm" weight={isActive ? 'bold' : 'normal'} color={isActive ? 'primary' : 'ink'}>{sub.label}</Text>
-                </TouchableOpacity>
-              )
-            })}
+          <TouchableOpacity 
+            style={[styles.subjectChip, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'space-between' }]}
+            onPress={() => setMenuOpen(true)}
+          >
+            <Text variant="sm" weight="bold" color="ink" numberOfLines={1} style={{ flex: 1 }}>
+              {activeId === 'all' ? 'Tất cả' : subjects.find(s => s.id === activeId)?.label || 'Chọn mục theo dõi'}
+            </Text>
+            <IconChevron color={theme.inkMuted} size={16} style={{ transform: [{ rotate: '90deg' }] }} />
+          </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.subjectChip, { backgroundColor: theme.surface, borderColor: theme.border, borderStyle: 'dashed' }]} onPress={handleAdd}>
-              <IconPlus color={theme.primary} size={16} style={{ marginRight: 4 }} />
-              <Text variant="sm" color="primary">Thêm</Text>
-            </TouchableOpacity>
-            <View style={{ width: 32 }} />
-          </ScrollView>
+          <Modal visible={menuOpen} transparent={true} animationType="fade">
+            <TouchableWithoutFeedback onPress={() => setMenuOpen(false)}>
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 }}>
+                <TouchableWithoutFeedback>
+                  <View style={{ backgroundColor: theme.surface, borderRadius: 12, padding: 16, maxHeight: '70%' }}>
+                    <Text variant="lead" weight="bold" style={{ marginBottom: 16 }}>Chọn mục theo dõi</Text>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      <TouchableOpacity 
+                        style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}
+                        onPress={() => { setActiveId('all'); setMenuOpen(false); }}
+                      >
+                        <Text variant="sm" weight={activeId === 'all' ? 'bold' : 'normal'} color={activeId === 'all' ? 'primary' : 'ink'}>Tất cả</Text>
+                      </TouchableOpacity>
+                      {subjects.map(sub => (
+                        <TouchableOpacity 
+                          key={sub.id} 
+                          style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}
+                          onPress={() => { setActiveId(sub.id); setMenuOpen(false); }}
+                        >
+                          <Text variant="sm" weight={activeId === sub.id ? 'bold' : 'normal'} color={activeId === sub.id ? 'primary' : 'ink'}>{sub.label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      <TouchableOpacity 
+                        style={{ paddingVertical: 12, flexDirection: 'row', alignItems: 'center' }}
+                        onPress={() => { handleAdd(); setMenuOpen(false); }}
+                      >
+                        <IconPlus size={16} color={theme.primary} />
+                        <Text variant="sm" color="primary" weight="bold" style={{ marginLeft: 8 }}>Thêm chủ đề mới</Text>
+                      </TouchableOpacity>
+                    </ScrollView>
+                  </View>
+                </TouchableWithoutFeedback>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
         </View>
 
         {/* Feed section */}
@@ -200,34 +310,104 @@ export default function FollowScreen() {
             </View>
           ) : (
             <View style={{ marginTop: 16 }}>
-              {filtered.map(entry => (
-                <TouchableOpacity 
-                  key={entry.id} 
-                  style={[
-                    styles.alertCard, 
-                    { backgroundColor: theme.surface, borderColor: theme.border },
-                    entry.unread && { borderLeftWidth: 3, borderLeftColor: theme.primary }
-                  ]}
-                  onPress={() => {
-                    if (entry.unread) markRead(entry.id);
-                  }}
-                >
-                  <View style={styles.alertHeader}>
-                    <Text variant="xs" color="primary" weight="bold">{entry.subject.label}</Text>
-                    {entry.priority === 'high' && (
-                      <View style={[styles.badge, { backgroundColor: theme.danger + '20' }]}>
-                        <Text variant="xs" color="danger" weight="bold">Cao</Text>
+              {filtered.map(entry => {
+                const p = entry.paper;
+                const isSaved = saved.has(p.id);
+                const isExpanded = expandedCards.has(p.id);
+                
+                return (
+                  <TouchableOpacity 
+                    key={entry.id} 
+                    activeOpacity={0.9}
+                    onPress={() => { 
+                      if (entry.unread) markRead(entry.id); 
+                      router.push(`/(user)/paper/${p.id}` as any); 
+                    }}
+                    style={[
+                      styles.alertCard, 
+                      { backgroundColor: theme.surface, borderColor: theme.border },
+                      entry.unread && { borderLeftWidth: 3, borderLeftColor: theme.primary }
+                    ]}
+                  >
+                    <View style={[styles.alertHeader, { marginBottom: 12 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, paddingRight: 8 }}>
+                        <Text variant="xs" color="primary" weight="bold" numberOfLines={1} style={{ flexShrink: 1 }}>{entry.subject.label || 'Thông báo'}</Text>
+                        {entry.priority === 'high' && (
+                          <View style={[styles.badge, { backgroundColor: theme.danger, marginLeft: 8, flexShrink: 0 }]}>
+                            <Text variant="xs" color="surface" weight="bold" numberOfLines={1}>Cao</Text>
+                          </View>
+                        )}
                       </View>
+                      <Text variant="xs" color="inkMuted" numberOfLines={1} style={{ flexShrink: 1, flex: 1, textAlign: 'right', marginLeft: 12 }}>{entry.reason}</Text>
+                    </View>
+                    
+                    <Text variant="lead" weight="bold" color="primary">{p.title}</Text>
+                    
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+                      <Text variant="xs" color="inkMuted">
+                        {p.authors.join(", ")} · {p.year} · {p.source}
+                      </Text>
+                      {!!p.type && (
+                        <View style={{ backgroundColor: '#ffedd5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 12, marginLeft: 6 }}>
+                          <Text variant="xs" style={{ color: '#c2410c', fontSize: 11, fontWeight: 'bold' }}>{p.type}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {(!!p.doi || !!p.url) && (
+                      <Text variant="xs" style={{ color: '#0d9488', marginTop: 4 }}>
+                        DOI/Link: {p.doi || p.url}
+                      </Text>
                     )}
-                  </View>
-                  <Text variant="sm" weight="bold" style={{ marginVertical: 4 }}>{entry.paper.title}</Text>
-                  <Text variant="xs" color="inkMuted" numberOfLines={1}>{entry.paper.authors.join(', ')}</Text>
-                  <View style={[styles.alertFooter, { borderTopColor: theme.border }]}>
-                    <Text variant="xs" color="inkMuted">{entry.reason}</Text>
-                    <IconExternal color={theme.inkMuted} size={14} />
-                  </View>
-                </TouchableOpacity>
-              ))}
+                    
+                    <Text variant="sm" style={{ marginTop: 8 }} numberOfLines={3}>
+                      {p.abstract}
+                    </Text>
+
+                    <View style={styles.tags}>
+                      {p.keywords.slice(0, 3).map((k: string) => (
+                        <View key={k} style={[styles.tag, { backgroundColor: theme.surface2 }]}>
+                          <Text variant="xs" color="inkMuted">{k}</Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    <View style={styles.actions}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <IconQuote color={theme.inkMuted} size={14} />
+                        <Text variant="sm" weight="bold" style={{ marginLeft: 4 }}>{formatInt(p.citations)} trích dẫn</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row' }}>
+                        <TouchableOpacity 
+                          style={[styles.actionBtn, isSaved && { backgroundColor: theme.primaryWeak }]}
+                          onPress={() => savePaperToLibrary(p)}
+                        >
+                          <IconBookmark color={isSaved ? theme.primary : theme.inkMuted} size={14} />
+                          <Text variant="xs" color={isSaved ? 'primary' : 'inkMuted'} style={{ marginLeft: 4 }}>
+                            {isSaved ? 'Đã lưu' : 'Lưu'}
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        <View style={[styles.actionBtn, { marginLeft: 8 }]}>
+                          <IconSearch color={theme.inkMuted} size={14} />
+                          <Text variant="xs" color="inkMuted" style={{ marginLeft: 4 }}>Chi tiết</Text>
+                        </View>
+
+                        {!!p.url && (
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { marginLeft: 8 }]}
+                            onPress={() => Linking.openURL(p.url)}
+                          >
+                            <IconExternal color={theme.inkMuted} size={14} />
+                            <Text variant="xs" color="inkMuted" style={{ marginLeft: 4 }}>Nguồn</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
           
@@ -261,7 +441,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
-    marginRight: 8,
   },
   filterRow: {
     flexDirection: 'row',
@@ -291,9 +470,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   emptyState: {
+    padding: 32,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
+  },
+  tags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  tag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  expandedDetails: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  miniBtn: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginRight: 8,
   },
   alertCard: {
     borderWidth: 1,
