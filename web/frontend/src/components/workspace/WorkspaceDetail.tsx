@@ -6,6 +6,21 @@ import { ItemActivityTimeline } from "./ItemActivityTimeline";
 import { ConfirmModal, type ConfirmConfig } from "../ConfirmModal";
 import { PaperPicker } from "./PaperPicker";
 
+const renderMentions = (text: string) => {
+  if (!text) return null;
+  const parts = text.split(/(\s+)/);
+  return parts.map((part, i) => {
+    if (part.startsWith("@") && part.length > 1) {
+      return (
+        <span key={i} style={{ color: "var(--primary)", fontWeight: "bold" }}>
+          {part}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+};
+
 export function WorkspaceDetail({
   item,
   members,
@@ -47,6 +62,7 @@ export function WorkspaceDetail({
   canEdit: boolean;
   canManageMembers: boolean;
 }) {
+  const [visibleCommentsCount, setVisibleCommentsCount] = useState(5);
   const [confirmConfig, setConfirmConfig] = useState<ConfirmConfig>({ isOpen: false, title: "", message: "", onConfirm: () => {}, onCancel: () => {} });
   const showConfirm = (title: string, message: string, onConfirm: () => void, danger = true, confirmText = "Xác nhận") => {
     setConfirmConfig({
@@ -287,7 +303,7 @@ export function WorkspaceDetail({
       <div className="workspace-detail__section">
         <span className="workspace-detail__label">Discussion</span>
         <ul className="comment-list">
-          {item.comments.map((comment, idx) => {
+          {item.comments.slice(0, visibleCommentsCount).map((comment, idx) => {
             const isEditing = editingCommentId === comment.id;
             // Only the comment's author may edit their own comment. Owners can delete any comment.
             const canEditComment = comment.authorId === currentUserId;
@@ -347,24 +363,89 @@ export function WorkspaceDetail({
                     </div>
                   </div>
                 ) : (
-                  <p className="comment-item__body">{comment.content}</p>
+                  <p className="comment-item__body">{renderMentions(comment.content)}</p>
                 )}
               </li>
             );
           })}
         </ul>
+        {item.comments.length > visibleCommentsCount && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            style={{ width: "100%", marginTop: "8px", justifyContent: "center" }}
+            onClick={() => setVisibleCommentsCount(prev => prev + 5)}
+          >
+            Tải thêm bình luận ({item.comments.length - visibleCommentsCount} bình luận nữa)
+          </button>
+        )}
         <form
           className="comment-compose"
           onSubmit={(e) => {
             e.preventDefault();
             onAddComment();
           }}
+          style={{ position: 'relative' }}
         >
+          {(() => {
+            const words = newComment.split(' ');
+            const lastWord = words[words.length - 1];
+            if (lastWord.startsWith('@')) {
+              const search = lastWord.slice(1).toLowerCase();
+              const suggestedMembers = members.filter(m => m.name?.toLowerCase().includes(search));
+              if (suggestedMembers.length > 0) {
+                return (
+                  <ul style={{
+                    position: 'absolute', bottom: '100%', left: 0, backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)', borderRadius: '8px', padding: '6px',
+                    listStyle: 'none', margin: '0 0 8px 0', zIndex: 10, maxHeight: '200px', overflowY: 'auto',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)', minWidth: '220px',
+                    display: 'flex', flexDirection: 'column', gap: '2px'
+                  }}>
+                    {suggestedMembers.map(m => {
+                      const initials = m.name?.substring(0, 1).toUpperCase() || '?';
+                      return (
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            style={{
+                              width: '100%', textAlign: 'left', padding: '8px 12px',
+                              background: 'transparent', border: 'none', color: 'var(--ink)',
+                              cursor: 'pointer', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '10px',
+                              fontSize: '0.9rem', fontWeight: 500
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--surface-hover, rgba(255,255,255,0.05))'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            onClick={() => {
+                              const newWords = [...words];
+                              newWords[newWords.length - 1] = `@${m.name} `;
+                              onNewComment(newWords.join(' '));
+                            }}
+                          >
+                            <span style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                              width: '24px', height: '24px', borderRadius: '12px',
+                              backgroundColor: 'var(--primary)', color: '#fff',
+                              fontSize: '0.75rem', fontWeight: 'bold'
+                            }}>
+                              {initials}
+                            </span>
+                            {m.name}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              }
+            }
+            return null;
+          })()}
           <textarea
             value={newComment}
             onChange={(e) => onNewComment(e.target.value)}
             rows={3}
-            placeholder="Thêm bình luận cho nhóm…"
+            placeholder="Thêm bình luận cho nhóm (gõ @ để nhắc tên)…"
             aria-label="Thêm bình luận cho item"
           />
           <button className="btn btn--primary btn--sm" type="submit">

@@ -503,15 +503,14 @@ export function WorkspacePage({ theme, toggle }: Props) {
     const comment = newComment.trim();
     if (!comment) return;
     const authorName = currentUser?.full_name ?? "Người dùng";
-    const previous = items;
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, comments: [...item.comments, { id: Date.now().toString(), content: comment, authorId: currentUser?.id ?? "", authorName, createdAt: "vừa xong" }] } : item)));
     try {
-      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: authorName });
       setNewComment("");
-      await refreshWorkspaceDetails(activeWorkspace.id);
+      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: authorName });
+      // Bỏ qua update UI tạm (optimistic update) vì WebSockets sẽ ngay lập tức trả về event comment_added
+      // Tránh lỗi hiển thị double comment (1 tạm, 1 thật).
     } catch {
-      setItems(previous);
       setWorkspaceNotice("Không thêm được bình luận.");
+      setNewComment(comment);
     }
   };
 

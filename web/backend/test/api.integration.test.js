@@ -319,9 +319,16 @@ test('workspace permissions enforce viewer editor and nonmember access', async (
   const viewerComment = await request(`/workspaces/${workspaceId}/items/${itemId}/comments`, {
     method: 'POST',
     headers: auth(viewerToken),
-    body: JSON.stringify({ content: 'viewer can comment', author_name: 'API Workspace Viewer' }),
+    body: JSON.stringify({ content: 'viewer cannot comment', author_name: 'API Workspace Viewer' }),
   });
-  assert.equal(viewerComment.res.status, 201);
+  assert.equal(viewerComment.res.status, 403);
+
+  const editorComment = await request(`/workspaces/${workspaceId}/items/${itemId}/comments`, {
+    method: 'POST',
+    headers: auth(editorToken),
+    body: JSON.stringify({ content: 'editor can comment', author_name: 'API Workspace Editor' }),
+  });
+  assert.equal(editorComment.res.status, 201);
 
   const editorUpdate = await request(`/workspaces/${workspaceId}/items/${itemId}`, {
     method: 'PUT',
