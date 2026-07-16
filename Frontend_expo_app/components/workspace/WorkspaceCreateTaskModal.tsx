@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { IconCalendar } from '../icons';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../Text';
 import { type WorkspaceMember, workspaceApi, libraryApi, paperApi } from '../../lib/api';
@@ -25,6 +27,7 @@ export function WorkspaceCreateTaskModal({ visible, onClose, workspaceId, worksp
   const [paperId, setPaperId] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Paper Picker States
   const [paperTab, setPaperTab] = useState<'library'|'search'>('library');
@@ -163,13 +166,32 @@ export function WorkspaceCreateTaskModal({ visible, onClose, workspaceId, worksp
 
               <View style={{ flex: 1, marginLeft: 8 }}>
                 <Text variant="sm" weight="bold" style={styles.label}>Deadline</Text>
-                <TextInput 
-                  style={[styles.input, { borderColor: theme.border, color: theme.ink, marginBottom: 0 }]} 
-                  placeholder="dd/mm/yyyy"
-                  placeholderTextColor={theme.inkMuted}
-                  value={dueDate}
-                  onChangeText={setDueDate}
-                />
+                <TouchableOpacity 
+                  style={[styles.input, { borderColor: theme.border, flexDirection: 'row', alignItems: 'center', marginBottom: 0, paddingVertical: 12, paddingHorizontal: 12 }]} 
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={{ flex: 1, color: dueDate ? theme.ink : theme.inkMuted }}>
+                    {dueDate ? dueDate.split('-').reverse().join('/') : "Chọn ngày"}
+                  </Text>
+                  <IconCalendar color={theme.ink} size={18} />
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={dueDate ? new Date(dueDate) : new Date()}
+                    mode="date"
+                    display="default"
+                    minimumDate={new Date()}
+                    onChange={(event: any, selectedDate?: Date) => {
+                      setShowDatePicker(false);
+                      if (selectedDate && event.type === 'set') {
+                        const day = String(selectedDate.getDate()).padStart(2, '0');
+                        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                        const year = selectedDate.getFullYear();
+                        setDueDate(`${year}-${month}-${day}`);
+                      }
+                    }}
+                  />
+                )}
               </View>
             </View>
 
@@ -233,7 +255,7 @@ export function WorkspaceCreateTaskModal({ visible, onClose, workspaceId, worksp
                 />
                 {searchLoading && <Text variant="xs" color="inkMuted" style={{ marginBottom: 8 }}>Đang tìm kiếm...</Text>}
                 {!searchLoading && searchResults.length > 0 && searchQuery !== selectedPaperTitle && (
-                  <ScrollView style={[styles.dropdownMenu, { top: 55, backgroundColor: theme.surface, borderColor: theme.border, maxHeight: 200 }]} nestedScrollEnabled>
+                  <ScrollView style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border, maxHeight: 200 }]} nestedScrollEnabled>
                     {searchResults.map(p => (
                       <TouchableOpacity 
                         key={p.id} 
@@ -267,7 +289,7 @@ export function WorkspaceCreateTaskModal({ visible, onClose, workspaceId, worksp
           </ScrollView>
 
           {/* Footer actions */}
-          <View style={[styles.footer, { borderTopColor: theme.border }]}>
+          <View style={[styles.footer, { borderTopColor: theme.border, paddingBottom: Platform.OS === 'android' ? 48 : 24 }]}>
             <TouchableOpacity style={[styles.btn, { borderWidth: 1, borderColor: theme.border }]} onPress={onClose}>
               <Text weight="bold">Hủy</Text>
             </TouchableOpacity>
@@ -335,15 +357,10 @@ const styles = StyleSheet.create({
     height: 46,
   },
   dropdownMenu: {
-    position: 'absolute',
-    top: 70,
-    left: 0,
-    right: 0,
     borderWidth: 1,
     borderRadius: 8,
-    maxHeight: 150,
-    zIndex: 999,
-    elevation: 5,
+    maxHeight: 200,
+    marginTop: 4,
   },
   dropdownItem: {
     padding: 12,
