@@ -8,9 +8,9 @@ import { Text } from '../../components/Text';
 import { IconGap, IconBookmark, IconLibrary, IconTelescope, IconUser } from '../../components/icons';
 
 const MENU_ITEMS = [
-  { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(user)/workspace' },
-  { id: 'follow', title: 'Theo dõi', icon: IconBookmark, href: '/(user)/follow' },
-  { id: 'gap', title: 'Research Gap', icon: IconGap, href: '/(user)/gap' },
+  { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(tabs)/workspace' },
+  { id: 'follow', title: 'Theo dõi', icon: IconBookmark, href: '/(tabs)/follow' },
+  { id: 'gap', title: 'Research Gap', icon: IconGap, href: '/(tabs)/gap' },
 ];
 
 export default function MenuTab() {
@@ -70,7 +70,7 @@ export default function MenuTab() {
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <TouchableOpacity 
               style={[styles.menuItem, { borderBottomWidth: 1, borderBottomColor: theme.border }]}
-              onPress={() => router.push('/(user)/account')}
+              onPress={() => router.push('/(tabs)/account')}
             >
               <View style={[styles.iconBox, { backgroundColor: theme.surface2 }]}>
                 <IconUser color={theme.primary} size={18} />

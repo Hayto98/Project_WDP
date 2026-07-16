@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconChevron, IconPlus, IconSearch, IconBell, IconBookmark, IconExternal, IconQuote } from '../../components/icons';
+import { IconChevron, IconPlus, IconSearch, IconBell, IconBookmark, IconExternal, IconQuote, IconEdit } from '../../components/icons';
 import { KpiStrip } from '../../components/KpiStrip';
 import { Widget } from '../../components/Widget';
 import { followApi, libraryApi, aiApi } from '../../lib/api';
@@ -30,6 +30,9 @@ export default function FollowScreen() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [addSubjectOpen, setAddSubjectOpen] = useState(false);
+  const [newSubjectText, setNewSubjectText] = useState('');
+  const [subjectSettingsOpen, setSubjectSettingsOpen] = useState(false);
 
   const [saved, setSaved] = useState<Set<string>>(new Set());
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
@@ -185,14 +188,51 @@ export default function FollowScreen() {
     { id: '4', label: '7 ngày qua', value: entries.length, format: 'int', hint: '' },
   ];
 
-  const handleAdd = async () => {
-    // Basic placeholder for adding a subject
+  const handleAdd = () => {
+    setMenuOpen(false);
+    setNewSubjectText('');
+    setAddSubjectOpen(true);
+  };
+
+  const submitAddSubject = async () => {
+    if (!newSubjectText.trim()) return;
     try {
-      const added = await followApi.addSubject({ type: 'keyword', value: 'New Topic' });
+      const added = await followApi.addSubject({ type: 'keyword', value: newSubjectText.trim() });
       setSubjects(curr => [...curr, added]);
+      setAddSubjectOpen(false);
+      setNewSubjectText('');
+      setActiveId(added.id); // switch to the new subject immediately
     } catch (e) {
       console.error(e);
+      Alert.alert('Lỗi', 'Không thể thêm chủ đề mới');
     }
+  };
+
+  const handleUpdateSubject = async (active: boolean) => {
+    if (activeId === 'all') return;
+    try {
+      await followApi.updateSubject(activeId, { active });
+      setSubjects(curr => curr.map(s => s.id === activeId ? { ...s, active } : s));
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
+    }
+  };
+
+  const handleDeleteSubject = () => {
+    if (activeId === 'all') return;
+    Alert.alert("Xóa mục theo dõi", "Bạn có chắc chắn muốn xóa?", [
+      { text: "Hủy", style: "cancel" },
+      { text: "Xóa", style: "destructive", onPress: async () => {
+        try {
+          await followApi.removeSubject(activeId);
+          setSubjects(curr => curr.filter(s => s.id !== activeId));
+          setSubjectSettingsOpen(false);
+          setActiveId('all');
+        } catch (e) {
+          Alert.alert('Lỗi', 'Không thể xóa chủ đề');
+        }
+      }}
+    ]);
   };
 
   const markRead = async (id: string) => {
@@ -226,15 +266,26 @@ export default function FollowScreen() {
         {/* Subjects List */}
         <View style={{ marginBottom: 24, zIndex: 10 }}>
           <Text variant="sm" weight="bold" style={{ marginBottom: 12 }}>Mục theo dõi</Text>
-          <TouchableOpacity 
-            style={[styles.subjectChip, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'space-between' }]}
-            onPress={() => setMenuOpen(true)}
-          >
-            <Text variant="sm" weight="bold" color="ink" numberOfLines={1} style={{ flex: 1 }}>
-              {activeId === 'all' ? 'Tất cả' : subjects.find(s => s.id === activeId)?.label || 'Chọn mục theo dõi'}
-            </Text>
-            <IconChevron color={theme.inkMuted} size={16} style={{ transform: [{ rotate: '90deg' }] }} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity 
+              style={[styles.subjectChip, { flex: 1, backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'space-between' }]}
+              onPress={() => setMenuOpen(true)}
+            >
+              <Text variant="sm" weight="bold" color="ink" numberOfLines={1} style={{ flex: 1 }}>
+                {activeId === 'all' ? 'Tất cả' : subjects.find(s => s.id === activeId)?.label || 'Chọn mục theo dõi'}
+              </Text>
+              <IconChevron color={theme.inkMuted} size={16} style={{ transform: [{ rotate: '90deg' }] }} />
+            </TouchableOpacity>
+
+            {activeId !== 'all' && (
+              <TouchableOpacity 
+                style={{ marginLeft: 8, padding: 12, backgroundColor: theme.surface, borderRadius: 8, borderWidth: 1, borderColor: theme.border }}
+                onPress={() => setSubjectSettingsOpen(true)}
+              >
+                <IconEdit size={18} color={subjects.find(s => s.id === activeId)?.active ? theme.primary : theme.inkMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           <Modal visible={menuOpen} transparent={true} animationType="fade">
             <TouchableWithoutFeedback onPress={() => setMenuOpen(false)}>
@@ -260,12 +311,75 @@ export default function FollowScreen() {
                       ))}
                       <TouchableOpacity 
                         style={{ paddingVertical: 12, flexDirection: 'row', alignItems: 'center' }}
-                        onPress={() => { handleAdd(); setMenuOpen(false); }}
+                        onPress={handleAdd}
                       >
                         <IconPlus size={16} color={theme.primary} />
                         <Text variant="sm" color="primary" weight="bold" style={{ marginLeft: 8 }}>Thêm chủ đề mới</Text>
                       </TouchableOpacity>
                     </ScrollView>
+                  </View>
+                </TouchableWithoutFeedback>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+
+          <Modal visible={addSubjectOpen} transparent={true} animationType="fade">
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 }}>
+              <View style={{ backgroundColor: theme.surface, borderRadius: 12, padding: 16 }}>
+                <Text variant="lead" weight="bold" style={{ marginBottom: 16 }}>Thêm chủ đề mới</Text>
+                <TextInput 
+                  style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 12, fontSize: 14, color: theme.ink, marginBottom: 16 }}
+                  placeholder="Nhập tên chủ đề hoặc từ khóa..."
+                  placeholderTextColor={theme.inkMuted}
+                  value={newSubjectText}
+                  onChangeText={setNewSubjectText}
+                  autoFocus={true}
+                  onSubmitEditing={submitAddSubject}
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                  <TouchableOpacity 
+                    style={{ paddingVertical: 8, paddingHorizontal: 16, marginRight: 8 }}
+                    onPress={() => setAddSubjectOpen(false)}
+                  >
+                    <Text variant="sm" color="inkMuted">Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={{ backgroundColor: theme.primary, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                    onPress={submitAddSubject}
+                  >
+                    <Text variant="sm" color="surface" weight="bold">Thêm</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal visible={subjectSettingsOpen} transparent={true} animationType="fade">
+            <TouchableWithoutFeedback onPress={() => setSubjectSettingsOpen(false)}>
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 }}>
+                <TouchableWithoutFeedback>
+                  <View style={{ backgroundColor: theme.surface, borderRadius: 12, padding: 20 }}>
+                    <Text variant="lead" weight="bold" style={{ marginBottom: 8 }}>{subjects.find(s => s.id === activeId)?.label}</Text>
+                    <Text variant="sm" color="inkMuted" style={{ marginBottom: 24 }}>Quản lý chủ đề theo dõi</Text>
+                    
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                      <Text variant="sm" weight="bold">Nhận thông báo</Text>
+                      <TouchableOpacity 
+                        onPress={() => handleUpdateSubject(!subjects.find(s => s.id === activeId)?.active)}
+                        style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: subjects.find(s => s.id === activeId)?.active ? theme.primary : theme.surface2 }}
+                      >
+                        <Text variant="sm" color={subjects.find(s => s.id === activeId)?.active ? "surface" : "inkMuted"} weight="bold">
+                          {subjects.find(s => s.id === activeId)?.active ? "Đang bật" : "Tạm dừng"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity 
+                      style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#ef444420', borderRadius: 8 }}
+                      onPress={handleDeleteSubject}
+                    >
+                      <Text variant="sm" weight="bold" style={{ color: '#ef4444' }}>Xóa theo dõi</Text>
+                    </TouchableOpacity>
                   </View>
                 </TouchableWithoutFeedback>
               </View>
