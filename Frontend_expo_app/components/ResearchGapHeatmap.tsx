@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from './Text';
 import { useTheme } from '../context/ThemeContext';
 import type { GapCell } from '../data/types';
@@ -9,17 +9,16 @@ interface Props {
   fields: string[];
   aspects: string[];
   gaps: GapCell[];
+  selectedField?: string | null;
+  selectedAspect?: string | null;
+  onSelect?: (field: string, aspect: string) => void;
 }
 
-export function ResearchGapHeatmap({ fields, aspects, gaps }: Props) {
+export function ResearchGapHeatmap({ fields, aspects, gaps, selectedField, selectedAspect, onSelect }: Props) {
   const { theme, themeType } = useTheme();
 
   const getHeatColor = (density: number) => {
-    // simplified heat colors based on primary theme color
-    // from light blue to dark blue based on density (0 to 1)
     const step = Math.min(5, Math.round(density * 5));
-    // We use a simplified mapping for react native without doing full CSS var replacement
-    // teal sequential ramp
     switch(step) {
       case 0: return themeType === 'dark' ? '#152538' : '#eaf2f9';
       case 1: return themeType === 'dark' ? '#1a334b' : '#cce0f0';
@@ -37,7 +36,6 @@ export function ResearchGapHeatmap({ fields, aspects, gaps }: Props) {
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View>
-          {/* Header row */}
           <View style={styles.row}>
             <View style={styles.fieldColHead} />
             {aspects.map(a => (
@@ -47,7 +45,6 @@ export function ResearchGapHeatmap({ fields, aspects, gaps }: Props) {
             ))}
           </View>
 
-          {/* Grid rows */}
           {fields.map(f => (
             <View key={f} style={styles.row}>
               <View style={styles.fieldCol}>
@@ -55,20 +52,33 @@ export function ResearchGapHeatmap({ fields, aspects, gaps }: Props) {
               </View>
               {aspects.map(a => {
                 const cell = getCell(f, a);
-                if (!cell) return <View key={a} style={styles.cell} />;
+                const isSelected = selectedField === f && selectedAspect === a;
+                if (!cell) {
+                  return (
+                    <TouchableOpacity 
+                      key={a} 
+                      style={[styles.cell, isSelected && { borderColor: theme.primary, borderWidth: 2 }]} 
+                      onPress={() => onSelect?.(f, a)}
+                      disabled={!onSelect}
+                    />
+                  );
+                }
                 return (
-                  <View 
+                  <TouchableOpacity 
                     key={a} 
                     style={[
                       styles.cell, 
                       { backgroundColor: getHeatColor(cell.density) },
-                      cell.gap && { borderColor: theme.warning, borderWidth: 2 }
+                      cell.gap && { borderColor: theme.warning, borderWidth: 2 },
+                      isSelected && { borderColor: theme.primary, borderWidth: 3 }
                     ]}
+                    onPress={() => onSelect?.(f, a)}
+                    disabled={!onSelect}
                   >
                     {cell.gap && (
                       <View style={[styles.gapMark, { backgroundColor: theme.warning }]} />
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
