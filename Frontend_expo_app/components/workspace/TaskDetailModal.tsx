@@ -1,11 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, Platform, StatusBar, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, Platform, StatusBar, RefreshControl, KeyboardAvoidingView } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { IconCalendar, IconX, IconTrash, IconLogOut } from '../icons';
 import { Text } from '../Text';
 import { type WorkspaceItem, type WorkspaceMember, workspaceApi, type WorkspaceActivity, libraryApi, paperApi } from '../../lib/api';
+
+const renderMentions = (text: string) => {
+  if (!text) return null;
+  const parts = text.split(/(\s+)/);
+  return parts.map((part, i) => {
+    if (part.startsWith('@') && part.length > 1) {
+      return (
+        <Text key={i} color="primary" weight="bold">
+          {part}
+        </Text>
+      );
+    }
+    return <Text key={i}>{part}</Text>;
+  });
+};
 
 export function TaskDetailModal({ 
   visible, 
@@ -30,6 +45,9 @@ export function TaskDetailModal({
 }) {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [commentSectionY, setCommentSectionY] = useState(0);
+  const [inputRelativeY, setInputRelativeY] = useState(0);
 
   // Local state for editing fields
   const [status, setStatus] = useState(item.status);
@@ -40,6 +58,7 @@ export function TaskDetailModal({
   const [paperId, setPaperId] = useState(item.paperId || '');
   const [selectedPaperTitle, setSelectedPaperTitle] = useState(item._populatedPaper?.title || '');
   
+  const [visibleCommentsCount, setVisibleCommentsCount] = useState(5);
   const [newComment, setNewComment] = useState('');
   
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -254,7 +273,11 @@ export function TaskDetailModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.container, { backgroundColor: theme.bg }]}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={[styles.container, { backgroundColor: theme.bg }]}>
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <View style={[styles.kindBadge, { backgroundColor: theme.surface2 }]}>
             <Text variant="xs" color="primary" weight="bold">
@@ -279,6 +302,7 @@ export function TaskDetailModal({
         </View>
 
         <ScrollView 
+          ref={scrollViewRef}
           style={styles.body} 
           contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
           refreshControl={
@@ -497,10 +521,13 @@ export function TaskDetailModal({
           </View>
 
           {/* Discussion */}
-          <View style={styles.section}>
-            <Text variant="sm" weight="bold" style={styles.label}>Discussion</Text>
+          <View 
+            style={styles.section}
+            onLayout={(e) => setCommentSectionY(e.nativeEvent.layout.y)}
+          >
+            <Text variant="sm" weight="bold" style={styles.label}>Thảo luận</Text>
             <View style={{ gap: 12, marginBottom: 12 }}>
-              {item.comments?.map((c: any) => {
+              {item.comments?.slice(0, visibleCommentsCount).map((c: any) => {
                 const isAuthor = c.authorId === user?.id || c.author_id === user?.id;
                 const cId = c.id || c.comment_id || c.timestamp;
                 const isEditing = editingCommentId === cId;
@@ -525,7 +552,7 @@ export function TaskDetailModal({
                     </View>
                   ) : (
                     <>
-                      <Text style={{ marginTop: 4 }}>{c.content}</Text>
+                      <Text style={{ marginTop: 4 }}>{renderMentions(c.content)}</Text>
                       {isAuthor && (
                         <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, justifyContent: 'flex-end' }}>
                           <TouchableOpacity onPress={() => { setEditingCommentId(cId); setEditContent(c.content); }}><Text color="primary" variant="xs">Sửa</Text></TouchableOpacity>
@@ -537,16 +564,82 @@ export function TaskDetailModal({
                 </View>
                 );
               })}
+              {(item.comments?.length || 0) > visibleCommentsCount && (
+                <TouchableOpacity 
+                  style={{ padding: 8, alignItems: 'center', backgroundColor: theme.surface2, borderRadius: 8 }}
+                  onPress={() => setVisibleCommentsCount(prev => prev + 5)}
+                >
+                  <Text color="primary" variant="xs">Tải thêm bình luận ({(item.comments?.length || 0) - visibleCommentsCount} bình luận nữa)</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <TextInput
-              style={[styles.input, { borderColor: theme.border, color: theme.ink, minHeight: 80 }]}
-              multiline
-              textAlignVertical="top"
-              value={newComment}
-              onChangeText={setNewComment}
-              placeholder="Thêm bình luận cho nhóm..."
-              placeholderTextColor={theme.inkMuted}
-            />
+            <View 
+              style={{ zIndex: 10 }}
+              onLayout={(e) => setInputRelativeY(e.nativeEvent.layout.y)}
+            >
+              {(() => {
+                const words = newComment.split(' ');
+                const lastWord = words[words.length - 1];
+                if (lastWord.startsWith('@')) {
+                  const search = lastWord.slice(1).toLowerCase();
+                  const suggestedMembers = members.filter(m => m.name?.toLowerCase().includes(search));
+                  if (suggestedMembers.length > 0) {
+                    return (
+                      <View style={{
+                        position: 'absolute', bottom: '100%', left: 0, right: 0, 
+                        backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, 
+                        borderRadius: 12, maxHeight: 180, marginBottom: 12, zIndex: 20,
+                        shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10
+                      }}>
+                        <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled style={{ padding: 6 }}>
+                          {suggestedMembers.map(m => {
+                            const initials = m.name?.substring(0, 1).toUpperCase() || '?';
+                            return (
+                              <TouchableOpacity 
+                                key={m.id} 
+                                style={{ 
+                                  paddingVertical: 10, paddingHorizontal: 12, 
+                                  flexDirection: 'row', alignItems: 'center', gap: 12,
+                                  borderRadius: 8
+                                }}
+                                onPress={() => {
+                                  const newWords = [...words];
+                                  newWords[newWords.length - 1] = `@${m.name} `;
+                                  setNewComment(newWords.join(' '));
+                                }}
+                              >
+                                <View style={{
+                                  width: 28, height: 28, borderRadius: 14,
+                                  backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{initials}</Text>
+                                </View>
+                                <Text weight="bold" style={{ fontSize: 14 }}>{m.name}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    );
+                  }
+                }
+                return null;
+              })()}
+              <TextInput
+                style={[styles.input, { borderColor: theme.border, color: theme.ink, minHeight: 80 }]}
+                multiline
+                textAlignVertical="top"
+                value={newComment}
+                onChangeText={setNewComment}
+                placeholder="Thêm bình luận cho nhóm (gõ @ để nhắc tên)..."
+                placeholderTextColor={theme.inkMuted}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: commentSectionY + inputRelativeY - 40, animated: true });
+                  }, 150);
+                }}
+              />
+            </View>
             <TouchableOpacity style={[styles.commentBtn, { backgroundColor: theme.primary }]} onPress={handleAddComment}>
               <Text color="surface" weight="bold">Gửi bình luận</Text>
             </TouchableOpacity>
@@ -575,7 +668,8 @@ export function TaskDetailModal({
           </View>
 
         </ScrollView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -1,5 +1,18 @@
 {
-  "description": "Impeccable design detector: runs after Edit/Write/MultiEdit on UI files and surfaces findings as system reminders.",
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(ipconfig)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :5000)",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(findstr \":500\")",
+      "Bash(curl -s -m 5 http://192.168.1.7:5001/api/health)",
+      "Bash(curl -s -m 5 -o /dev/null -w \"%{http_code}\" http://192.168.1.7:5000/api/health)",
+      "Bash(echo 'EXPO_PUBLIC_API_URL=http://192.168.1.7:5001/api/v1')",
+      "Read(//d/d/S8_Summer26/WDP301/Project_WDP/Frontend_expo_app/**)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -14,5 +27,6 @@
         ]
       }
     ]
-  }
+  },
+  "description": "Impeccable design detector: runs after Edit/Write/MultiEdit on UI files and surfaces findings as system reminders."
 }
