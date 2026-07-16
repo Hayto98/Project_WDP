@@ -4,6 +4,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { IconSearch, IconX, IconFilter, IconPlus, IconQuote, IconBookmark, IconExternal, IconChevron } from '../../components/icons';
 import { formatInt } from '../../lib/format';
 import { paperApi, aiApi, libraryApi } from '../../lib/api';
@@ -53,6 +54,7 @@ const SCOPES: { id: Scope; label: string }[] = [
 
 export default function SearchScreen() {
   const { theme } = useTheme();
+  const router = useRouter();
   
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
@@ -301,9 +303,13 @@ export default function SearchScreen() {
           <ScrollView style={styles.resultsList} contentContainerStyle={{ padding: 16 }}>
             {results.map(p => {
               const isSaved = saved.has(p.id);
-              const isExpanded = expandedCards.has(p.id);
               return (
-                <View key={p.id} style={[styles.resultCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <TouchableOpacity 
+                  key={p.id}
+                  activeOpacity={0.9}
+                  onPress={() => router.push(`/(user)/paper/${p.id}` as any)}
+                  style={[styles.resultCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                >
                   <Text variant="lead" weight="bold" color="primary">{p.title}</Text>
                   
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
@@ -333,6 +339,11 @@ export default function SearchScreen() {
                         <Text variant="xs" color="inkMuted">{k}</Text>
                       </View>
                     ))}
+                    {p.keywords.length > 3 && (
+                      <View style={[styles.tag, { backgroundColor: theme.surface2 }]}>
+                        <Text variant="xs" color="inkMuted">+{p.keywords.length - 3}</Text>
+                      </View>
+                    )}
                   </View>
 
                   <View style={styles.actions}>
@@ -351,15 +362,10 @@ export default function SearchScreen() {
                         </Text>
                       </TouchableOpacity>
                       
-                      <TouchableOpacity 
-                        style={[styles.actionBtn, { marginLeft: 8 }]}
-                        onPress={() => toggleSet(expandedCards, p.id, setExpandedCards)}
-                      >
+                      <View style={[styles.actionBtn, { marginLeft: 8 }]}>
                         <IconSearch color={theme.inkMuted} size={14} />
-                        <Text variant="xs" color="inkMuted" style={{ marginLeft: 4 }}>
-                          {isExpanded ? 'Thu gọn' : 'Chi tiết'}
-                        </Text>
-                      </TouchableOpacity>
+                        <Text variant="xs" color="inkMuted" style={{ marginLeft: 4 }}>Chi tiết</Text>
+                      </View>
 
                       {!!p.url && (
                         <TouchableOpacity 
@@ -372,66 +378,7 @@ export default function SearchScreen() {
                       )}
                     </View>
                   </View>
-
-                  {isExpanded && (
-                    <View style={[styles.expandedDetails, { backgroundColor: theme.surface2 }]}>
-                      <Text variant="xs" weight="bold" style={{ marginBottom: 4 }}>Chi tiết paper</Text>
-                      <View style={styles.detailRow}>
-                        <Text variant="xs" style={{ width: 60 }} color="inkMuted">Lĩnh vực</Text>
-                        <Text variant="xs" style={{ flex: 1 }}>{p.fields.join(", ") || 'Không có'}</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text variant="xs" style={{ width: 60 }} color="inkMuted">Từ khóa</Text>
-                        <Text variant="xs" style={{ flex: 1 }}>{p.keywords.join(", ") || 'Không có'}</Text>
-                      </View>
-                      {!!p.url && (
-                        <View style={styles.detailRow}>
-                          <Text variant="xs" style={{ width: 60 }} color="inkMuted">Liên kết</Text>
-                          <Text variant="xs" style={{ flex: 1 }} color="primary" onPress={() => Linking.openURL(p.url)}>
-                            {p.url}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={[styles.detailRow, { marginTop: 12 }]}>
-                        <TouchableOpacity 
-                          style={[styles.miniBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
-                          onPress={() => handleSummarize(p)}
-                        >
-                          <Text variant="xs" weight="bold">AI tóm tắt</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.miniBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
-                          onPress={() => handleRelatedPapers(p)}
-                        >
-                          <Text variant="xs">Paper liên quan</Text>
-                        </TouchableOpacity>
-                      </View>
-                      
-                      {!!aiSummaries[p.id] && (
-                        <View style={{ marginTop: 12, padding: 12, backgroundColor: theme.surface, borderRadius: 8, borderWidth: 1, borderColor: theme.border }}>
-                          {aiSummaries[p.id].loading && <Text variant="xs" color="inkMuted">Đang phân tích...</Text>}
-                          {aiSummaries[p.id].error && <Text variant="xs" style={{ color: '#dc2626' }}>Lỗi: {aiSummaries[p.id].error}</Text>}
-                          {aiSummaries[p.id].text && <Text variant="sm">{aiSummaries[p.id].text}</Text>}
-                        </View>
-                      )}
-
-                      {!!relatedPapers[p.id] && (
-                        <View style={{ marginTop: 12, padding: 12, backgroundColor: theme.surface, borderRadius: 8, borderWidth: 1, borderColor: theme.border }}>
-                          {relatedPapers[p.id].loading && <Text variant="xs" color="inkMuted">Đang tìm kiếm...</Text>}
-                          {relatedPapers[p.id].error && <Text variant="xs" style={{ color: '#dc2626' }}>Lỗi: {relatedPapers[p.id].error}</Text>}
-                          {relatedPapers[p.id].papers?.map((rp, i) => (
-                            <TouchableOpacity key={rp.id} style={{ marginTop: i > 0 ? 8 : 0 }} onPress={() => Linking.openURL(rp.url || '')} disabled={!rp.url}>
-                              <Text variant="xs" weight="bold" color="primary">{rp.title}</Text>
-                              <Text variant="xs" color="inkMuted" numberOfLines={1}>{rp.authors.join(", ")} · {rp.year}</Text>
-                            </TouchableOpacity>
-                          ))}
-                          {relatedPapers[p.id].papers?.length === 0 && <Text variant="xs" color="inkMuted">Không tìm thấy paper liên quan.</Text>}
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                </View>
+                </TouchableOpacity>
               );
             })}
             
