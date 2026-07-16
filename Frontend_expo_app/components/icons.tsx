@@ -99,6 +99,13 @@ export const IconAlert = (p: IconProps) => (
   </BaseIcon>
 );
 
+export const IconSettings = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+    <Circle cx="12" cy="12" r="3" />
+  </BaseIcon>
+);
+
 export const IconRefresh = (p: IconProps) => (
   <BaseIcon {...p}>
     <Path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
@@ -241,3 +248,12 @@ export const IconEdit = (p: IconProps) => (
     <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
   </BaseIcon>
 );
+
+export const IconLogOut = (p: IconProps) => (
+  <BaseIcon {...p}>
+    <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <Path d="m16 17 5-5-5-5" />
+    <Path d="M21 12H9" />
+  </BaseIcon>
+);
+

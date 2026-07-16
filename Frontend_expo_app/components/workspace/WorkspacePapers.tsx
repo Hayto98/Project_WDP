@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Linking, RefreshControl } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../Text';
 import { type WorkspaceItem, type PaperResult } from '../../lib/api';
 import { IconExternal } from '../icons';
 
-export function WorkspacePapers({ items, workspaceName }: { items: WorkspaceItem[], workspaceName: string }) {
+export function WorkspacePapers({ items, workspaceName, refreshing = false, onRefresh }: { items: WorkspaceItem[], workspaceName: string, refreshing?: boolean, onRefresh?: () => void }) {
   const { theme } = useTheme();
 
   const papers = useMemo(() => {
@@ -19,7 +19,13 @@ export function WorkspacePapers({ items, workspaceName }: { items: WorkspaceItem
   }, [items]);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+      refreshControl={
+        onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} /> : undefined
+      }
+    >
       <View style={styles.headerArea}>
         <Text variant="sm" weight="bold" color="inkMuted" style={{ marginBottom: 4 }}>Tài nguyên</Text>
         <Text variant="heading" weight="bold" style={{ marginBottom: 8 }}>Bài báo trong {workspaceName}</Text>

@@ -3,6 +3,7 @@ const WorkspaceItem = require('../models/WorkspaceItem');
 const WorkspaceActivity = require('../models/WorkspaceActivity');
 const CollaborationInvite = require('../models/CollaborationInvite');
 const { notifyCommentAdded, notifyTaskAssigned } = require('./notification.service');
+const socket = require('../utils/socket');
 
 function pickWorkspaceFields(payload = {}) {
   const fields = {};
@@ -176,11 +177,19 @@ async function updateMember(userId, workspaceId, memberId, payload, user = null)
 }
 
 async function removeMember(userId, workspaceId, memberId, user = null) {
-  const workspaceBefore = await Workspace.findOne({ _id: workspaceId, owner_id: userId }).select('members').lean();
+  // Allow owner to remove anyone, OR allow a member to remove themselves
+  const isSelfRemoval = userId?.toString() === memberId?.toString();
+  const query = isSelfRemoval 
+    ? { _id: workspaceId, 'members.user_id': userId } 
+    : { _id: workspaceId, owner_id: userId };
+
+  const workspaceBefore = await Workspace.findOne(query).select('members').lean();
+  if (!workspaceBefore) return null;
+
   const removed = workspaceBefore?.members?.find((member) => member.user_id?.toString() === memberId);
   const mongoose = require('mongoose');
   const workspace = await Workspace.findOneAndUpdate(
-    { _id: workspaceId, owner_id: userId },
+    query,
     { $pull: { members: { user_id: new mongoose.Types.ObjectId(memberId) } } },
     { returnDocument: 'after' },
   );
@@ -220,19 +229,6 @@ async function createItem(workspaceId, payload, user = null) {
   const role = await getMemberRole(user?.id || user?._id, workspaceId);
   if (!canWriteItems(role)) return null;
   const fields = pickItemFields(payload);
-  // One paper can be linked to at most one task within the same workspace.
-  if (fields.paper_id) {
-    const existing = await WorkspaceItem.findOne({
-      workspace_id: workspaceId,
-      paper_id: fields.paper_id,
-    }).select('_id').lean();
-    if (existing) {
-      const err = new Error('Bài báo này đã được gắn cho một task trong workspace.');
-      err.statusCode = 409;
-      err.code = 'PAPER_ALREADY_LINKED';
-      throw err;
-    }
-  }
   const item = await WorkspaceItem.create({
     ...fields,
     workspace_id: workspaceId,
@@ -244,9 +240,37 @@ async function createItem(workspaceId, payload, user = null) {
 
 async function updateItem(workspaceId, itemId, payload, user = null) {
   const role = await getMemberRole(user?.id || user?._id, workspaceId);
-  if (!canWriteItems(role)) return null;
+  const isWriter = canWriteItems(role);
+  
   const previous = await WorkspaceItem.findOne({ _id: itemId, workspace_id: workspaceId }).lean();
-  const previousIds = collectAssigneeIds(previous || {});
+  if (!previous) return null;
+
+  if (!isWriter) {
+    const userIdStr = (user?.id || user?._id)?.toString();
+    const previousIds = collectAssigneeIds(previous);
+    
+    // Check if the update is strictly a "leave task" operation by an assignee
+    const isAssignee = previousIds.includes(userIdStr);
+    if (!isAssignee) return null;
+
+    const newFields = pickItemFields(payload);
+    const keys = Object.keys(newFields);
+    
+    // The only change requested must be `assignee_ids` missing their ID
+    if (keys.length === 1 && keys[0] === 'assignee_ids') {
+      const newIds = newFields.assignee_ids.map(id => id.toString());
+      const expectedIds = previousIds.filter(id => id !== userIdStr);
+      
+      const isExactlyLeave = newIds.length === expectedIds.length && 
+                             expectedIds.every(id => newIds.includes(id));
+      
+      if (!isExactlyLeave) return null;
+    } else {
+      return null;
+    }
+  }
+
+  const previousIds = collectAssigneeIds(previous);
   const item = await WorkspaceItem.findOneAndUpdate(
     { _id: itemId, workspace_id: workspaceId },
     pickItemFields(payload),
@@ -273,7 +297,7 @@ async function deleteItem(workspaceId, itemId, user = null) {
 
 async function addComment(user, workspaceId, itemId, payload) {
   const role = await getMemberRole(user.id, workspaceId);
-  if (!role) return null;
+  if (!canWriteItems(role)) return null;
   const workspace = await Workspace.findById(workspaceId).select('members').lean();
   const item = await WorkspaceItem.findOneAndUpdate(
     { _id: itemId, workspace_id: workspaceId },
@@ -304,12 +328,16 @@ async function addComment(user, workspaceId, itemId, payload) {
     title: item.title,
   }, { item_id: itemId });
 
+  try {
+    socket.getIO().to(workspaceId.toString()).emit('comment_added', { itemId, comment });
+  } catch (e) { console.error('Socket emit error:', e); }
+
   return comment;
 }
 
 async function editComment(userId, workspaceId, itemId, commentId, content) {
   const role = await getMemberRole(userId, workspaceId);
-  if (!role) return null;
+  if (!canWriteItems(role)) return null;
   const item = await WorkspaceItem.findOneAndUpdate(
     {
       _id: itemId,
@@ -320,23 +348,37 @@ async function editComment(userId, workspaceId, itemId, commentId, content) {
     { returnDocument: 'after' },
   );
   if (!item) return null;
+
+  try {
+    socket.getIO().to(workspaceId.toString()).emit('comment_edited', { itemId, commentId, content });
+  } catch (e) { console.error('Socket emit error:', e); }
+
   return item.comments.find((c) => c.comment_id === commentId) || null;
 }
 
 async function deleteComment(userId, workspaceId, itemId, commentId) {
   const role = await getMemberRole(userId, workspaceId);
-  if (!role) return null;
-  // Only the comment's author may delete it.
+  if (!canWriteItems(role)) return null;
+  // Owners can delete any comment. Others can only delete their own.
   const filter = {
     _id: itemId,
     workspace_id: workspaceId,
-    comments: { $elemMatch: { comment_id: commentId, author_id: userId } },
   };
+  if (role !== 'owner') {
+    filter.comments = { $elemMatch: { comment_id: commentId, author_id: userId } };
+  }
   const item = await WorkspaceItem.findOneAndUpdate(
     filter,
     { $pull: { comments: { comment_id: commentId } } },
     { returnDocument: 'after' },
   );
+
+  if (item) {
+    try {
+      socket.getIO().to(workspaceId.toString()).emit('comment_deleted', { itemId, commentId });
+    } catch (e) { console.error('Socket emit error:', e); }
+  }
+
   return item ? { message: 'Comment deleted' } : null;
 }
 

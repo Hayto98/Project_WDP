@@ -261,7 +261,7 @@ export interface NotificationItem {
 
 
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.41:5000/api/v1";
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.41:5000/api/v1";
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -343,10 +343,12 @@ function redirectToLogin() { /* handle navigation in app */ }
 async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   const { _isRetry, ...fetchInit } = init;
   const token = await getAccessToken();
-  const headers = new Headers(fetchInit.headers);
-  headers.set("Accept", "application/json");
-  if (fetchInit.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const headers: Record<string, string> = { "Accept": "application/json" };
+  if (fetchInit.headers) {
+    new Headers(fetchInit.headers).forEach((value, key) => { headers[key] = value; });
+  }
+  if (fetchInit.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...fetchInit,
@@ -370,10 +372,12 @@ async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
 async function requestWithMeta<T>(path: string, init: ApiRequestInit = {}) {
   const { _isRetry, ...fetchInit } = init;
   const token = await getAccessToken();
-  const headers = new Headers(fetchInit.headers);
-  headers.set("Accept", "application/json");
-  if (fetchInit.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const headers: Record<string, string> = { "Accept": "application/json" };
+  if (fetchInit.headers) {
+    new Headers(fetchInit.headers).forEach((value, key) => { headers[key] = value; });
+  }
+  if (fetchInit.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...fetchInit,
@@ -393,6 +397,7 @@ async function requestWithMeta<T>(path: string, init: ApiRequestInit = {}) {
   }
   return { data: payload.data, meta: payload.meta };
 }
+
 
 function asId(value: unknown) {
   if (typeof value === "string") return value;
@@ -424,7 +429,7 @@ function mapPaper(raw: any): PaperResult {
   };
 }
 
-function formatWhen(value: unknown) {
+export function formatWhen(value: unknown) {
   if (!value) return "vừa xong";
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) return String(value);
@@ -697,12 +702,7 @@ export const paperApi = {
 export const dashboardApi = {
   async overview(): Promise<DashboardData> {
     const data = await request<any>("/dashboard/overview");
-    let ai = data.ai ?? { summary: "", directions: [], evidence: [] };
-    try {
-      ai = await aiApi.insights();
-    } catch {
-      // Keep cached report AI if the live LLM endpoint is unavailable.
-    }
+    const ai = data.ai ?? { summary: "", directions: [], evidence: [] };
     return {
       updatedAt: data.updatedAt ? new Date(data.updatedAt).toLocaleString("vi-VN") : "",
       kpis: data.kpis ?? [],

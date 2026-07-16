@@ -69,10 +69,7 @@ export default function TabLayout() {
         options={{
           href: null,
           title: 'Workspace',
-          headerShown: true,
-          headerStyle: { backgroundColor: theme.surface },
-          headerTintColor: theme.ink,
-          headerTitleStyle: { fontWeight: 'bold' }
+          headerShown: false
         }}
       />
       <Tabs.Screen

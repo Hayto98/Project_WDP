@@ -31,8 +31,9 @@ import {
 import type { LibraryEntry } from "../data/librarySample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { getCurrentUser, workspaceApi, libraryApi } from "../lib/api";
+import { getCurrentUser, workspaceApi, libraryApi, API_BASE_URL, formatWhen } from "../lib/api";
 import { USE_SAMPLE_FALLBACK } from "../lib/flags";
+import { io, Socket } from "socket.io-client";
 
 import { WorkspaceSkeleton } from "../components/workspace/WorkspaceSkeleton";
 import { WorkspaceEmpty } from "../components/workspace/WorkspaceEmpty";
@@ -177,19 +178,65 @@ export function WorkspacePage({ theme, toggle }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+
+    const backendUrl = API_BASE_URL.replace("/api/v1", "");
+    const socket: Socket = io(backendUrl, { transports: ["websocket", "polling"] });
+
+    socket.on("connect", () => {
+      socket.emit("join_workspace", activeWorkspaceId);
+    });
+
+    socket.on("comment_added", (data: { itemId: string; comment: any }) => {
+      setItems((current) => current.map((item) => {
+        if (item.id === data.itemId) {
+          const commentId = data.comment.comment_id || data.comment.id || data.comment._id;
+          if (item.comments.some(c => c.id === commentId)) return item;
+          return { 
+            ...item, 
+            comments: [...item.comments, { 
+              id: commentId, 
+              content: data.comment.content, 
+              authorId: data.comment.author_id || data.comment.authorId, 
+              authorName: data.comment.author_name || data.comment.authorName, 
+              createdAt: formatWhen(data.comment.created_at || data.comment.createdAt)
+            }] 
+          };
+        }
+        return item;
+      }));
+    });
+
+    socket.on("comment_edited", (data: { itemId: string; commentId: string; content: string }) => {
+      setItems((current) => current.map((item) => {
+        if (item.id === data.itemId) {
+          return { ...item, comments: item.comments.map(c => c.id === data.commentId ? { ...c, content: data.content } : c) };
+        }
+        return item;
+      }));
+    });
+
+    socket.on("comment_deleted", (data: { itemId: string; commentId: string }) => {
+      setItems((current) => current.map((item) => {
+        if (item.id === data.itemId) {
+          return { ...item, comments: item.comments.filter(c => c.id !== data.commentId) };
+        }
+        return item;
+      }));
+    });
+
+    return () => {
+      socket.emit("leave_workspace", activeWorkspaceId);
+      socket.disconnect();
+    };
+  }, [activeWorkspaceId]);
+
   const libraryPapers = useMemo(
     () => libraryEntries.map((entry) => ({ id: entry.paperId, title: entry.paper.title })),
     [libraryEntries],
   );
-  // Papers in the active workspace that are already linked to a task (1 paper = 1 task / workspace).
-  const usedPaperIds = useMemo(
-    () => new Set(items.filter((item) => item.workspaceId === activeWorkspaceId).map((item) => item.paperId)),
-    [items, activeWorkspaceId],
-  );
-  const availablePapers = useMemo(
-    () => libraryPapers.filter((paper) => !usedPaperIds.has(paper.id)),
-    [libraryPapers, usedPaperIds],
-  );
+  const availablePapers = libraryPapers;
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
   const workspaceMembers = members.filter((m) => m.workspaceId === activeWorkspaceId);
   const currentUser = getCurrentUser();
@@ -203,7 +250,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
     [items, activeWorkspaceId, workspaceMembers, libraryEntries],
   );
 
-  // Keep the "new task" paper selection pointing at a paper that is still free.
+  // Ensure a paper is selected by default if available.
   useEffect(() => {
     setNewItemPaperId((current) =>
       availablePapers.some((paper) => paper.id === current) ? current : (availablePapers[0]?.id ?? ""),
@@ -292,7 +339,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
   };
 
   const saveWorkspaceName = async () => {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !canEditWorkspace) return;
     const name = editingWorkspaceName.trim();
     setIsRenamingWorkspace(false);
     if (name === activeWorkspace.name) return;
@@ -310,6 +357,7 @@ export function WorkspacePage({ theme, toggle }: Props) {
   };
 
   const removeWorkspace = async (id: string) => {
+    if (!canEditWorkspace) return;
     const workspace = workspaces.find((w) => w.id === id);
     if (!workspace) return;
     
@@ -340,13 +388,33 @@ export function WorkspacePage({ theme, toggle }: Props) {
   const handleRemoveMember = async (memberId: string) => {
     if (!activeWorkspaceId) return;
     setWorkspaceNotice("");
-    const previous = members;
+    const previousMembers = members;
+    const previousWorkspaces = workspaces;
+    const isSelf = currentUser?.id === memberId;
+
     setMembers((current) => current.filter((m) => m.id !== memberId));
+    
+    if (isSelf) {
+      const remainingWorkspaces = workspaces.filter(w => w.id !== activeWorkspaceId);
+      setWorkspaces(remainingWorkspaces);
+      if (remainingWorkspaces.length > 0) {
+        const nextActive = remainingWorkspaces[0].id;
+        setActiveWorkspaceId(nextActive);
+        refreshWorkspaceDetails(nextActive);
+      } else {
+        setActiveWorkspaceId("");
+      }
+    }
+
     try {
       await workspaceApi.removeMember(activeWorkspaceId, memberId);
-      setWorkspaceNotice("Đã xóa thành viên khỏi workspace.");
+      setWorkspaceNotice(isSelf ? "Đã rời khỏi workspace." : "Đã xóa thành viên khỏi workspace.");
     } catch (err) {
-      setMembers(previous);
+      setMembers(previousMembers);
+      if (isSelf) {
+        setWorkspaces(previousWorkspaces);
+        setActiveWorkspaceId(activeWorkspaceId);
+      }
       setWorkspaceNotice(err instanceof Error ? err.message : "Không xóa được thành viên.");
     }
   };
@@ -369,10 +437,6 @@ export function WorkspacePage({ theme, toggle }: Props) {
     }
     setWorkspaceNotice("");
     const paperId = newItemPaperId;
-    if (paperId && usedPaperIds.has(paperId)) {
-      setWorkspaceNotice("Bài báo này đã được gắn cho một task trong workspace.");
-      return;
-    }
     try {
       const item = await workspaceApi.createItem(activeWorkspace.id, {
         kind: newItemKind,
@@ -432,24 +496,29 @@ export function WorkspacePage({ theme, toggle }: Props) {
   };
 
   const addComment = async (id: string) => {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !canEditWorkspace) {
+      setWorkspaceNotice("Bạn cần quyền editor hoặc owner để bình luận.");
+      return;
+    }
     const comment = newComment.trim();
     if (!comment) return;
     const authorName = currentUser?.full_name ?? "Người dùng";
-    const previous = items;
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, comments: [...item.comments, { id: Date.now().toString(), content: comment, authorId: currentUser?.id ?? "", authorName, createdAt: "vừa xong" }] } : item)));
     try {
-      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: authorName });
       setNewComment("");
-      await refreshWorkspaceDetails(activeWorkspace.id);
+      await workspaceApi.addComment(activeWorkspace.id, id, { content: comment, author_name: authorName });
+      // Bỏ qua update UI tạm (optimistic update) vì WebSockets sẽ ngay lập tức trả về event comment_added
+      // Tránh lỗi hiển thị double comment (1 tạm, 1 thật).
     } catch {
-      setItems(previous);
       setWorkspaceNotice("Không thêm được bình luận.");
+      setNewComment(comment);
     }
   };
 
   const handleEditComment = async (itemId: string, commentId: string) => {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !canEditWorkspace) {
+      setWorkspaceNotice("Bạn cần quyền editor hoặc owner để sửa bình luận.");
+      return;
+    }
     const content = editingCommentContent.trim();
     if (!content) return;
     const previous = items;
@@ -470,7 +539,10 @@ export function WorkspacePage({ theme, toggle }: Props) {
   };
 
   const handleDeleteComment = async (itemId: string, commentId: string) => {
-    if (!activeWorkspace) return;
+    if (!activeWorkspace || !canEditWorkspace) {
+      setWorkspaceNotice("Bạn cần quyền editor hoặc owner để xóa bình luận.");
+      return;
+    }
     const previous = items;
     setItems((current) => current.map((item) => {
       if (item.id === itemId) {
