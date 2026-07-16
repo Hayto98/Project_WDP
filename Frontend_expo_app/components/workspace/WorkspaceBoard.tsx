@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../Text';
 import { type WorkspaceItem } from '../../lib/api';
 
-export function WorkspaceBoard({ items, onItemPress }: { items: WorkspaceItem[], onItemPress?: (item: WorkspaceItem) => void }) {
+export function WorkspaceBoard({ items, onItemPress, refreshing = false, onRefresh }: { items: WorkspaceItem[], onItemPress?: (item: WorkspaceItem) => void, refreshing?: boolean, onRefresh?: () => void }) {
   const { theme } = useTheme();
 
   const columns: { id: string, title: string, color: string }[] = [
@@ -21,7 +21,8 @@ export function WorkspaceBoard({ items, onItemPress }: { items: WorkspaceItem[],
   return (
     <View style={styles.boardContainer}>
       {/* Sub-tabs for Columns */}
-      <View style={[styles.columnTabs, { backgroundColor: theme.surface2 }]}>
+      <View style={{ marginBottom: 16 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.columnTabs, { backgroundColor: theme.surface2 }]} contentContainerStyle={{ padding: 4, gap: 4 }}>
         {columns.map(col => {
           const colCount = items.filter(i => i.status === col.id).length;
           const isActive = col.id === activeColumnId;
@@ -37,11 +38,18 @@ export function WorkspaceBoard({ items, onItemPress }: { items: WorkspaceItem[],
             </TouchableOpacity>
           );
         })}
+        </ScrollView>
       </View>
 
       {/* Active Column Content */}
       <View style={[styles.column, { backgroundColor: theme.surface2 }]}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.colContent}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.colContent}
+          refreshControl={
+            onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} /> : undefined
+          }
+        >
           {activeColumnItems.map(item => (
             <TouchableOpacity key={item.id} style={[styles.card, { backgroundColor: theme.surface }]} onPress={() => onItemPress && onItemPress(item)}>
               <View style={[styles.cardKind, { backgroundColor: theme.surface2 }]}>
@@ -77,11 +85,9 @@ const styles = StyleSheet.create({
   columnTabs: {
     flexDirection: 'row',
     borderRadius: 8,
-    padding: 4,
-    marginBottom: 16,
   },
   colTab: {
-    flex: 1,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 6,

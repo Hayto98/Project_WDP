@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(JSON.parse(storedUser));
       }
     } catch (e) {
-      console.error(e);
+      console.warn(e);
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(loggedUser);
     } catch (e: any) {
-      console.error(e);
+      console.warn(e);
       throw e;
     }
   };
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.message || 'Đăng ký thất bại');
       }
     } catch (e: any) {
-      console.error(e);
+      console.warn(e);
       throw e;
     }
   };
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.removeItem('@refreshToken');
       setUser(null);
     } catch (e) {
-      console.error(e);
+      console.warn(e);
     }
   };
 

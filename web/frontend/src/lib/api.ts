@@ -26,7 +26,7 @@ import type {
   WorkspaceMember,
 } from "../data/workspaceSample";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api/v1";
 const TOKEN_KEY = "wdp_access_token";
 const REFRESH_TOKEN_KEY = "wdp_refresh_token";
 const USER_KEY = "wdp_user";
@@ -197,7 +197,7 @@ function mapPaper(raw: any): PaperResult {
   };
 }
 
-function formatWhen(value: unknown) {
+export function formatWhen(value: unknown) {
   if (!value) return "vừa xong";
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) return String(value);

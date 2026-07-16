@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const socket = require('./utils/socket');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
@@ -125,6 +126,9 @@ async function start() {
       }
     }
   });
+
+  // Initialize Socket.IO
+  socket.init(server);
 
   return server;
 }

@@ -32,13 +32,14 @@ export default function AdminScreen() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   useEffect(() => {
+    if (!user?.roles?.includes('Admin')) return;
     adminApi.stats().then(setStats).catch(console.error);
     adminApi.jobs().then(setJobs).catch(console.error);
     adminApi.dataSources().then(setSources).catch(console.error);
     adminApi.users().then(setUsers).catch(console.error);
     adminApi.paperReads().then(setReadingLogs).catch(console.error);
     adminApi.auditLogs().then(setAuditLogs).catch(console.error);
-  }, []);
+  }, [user]);
 
   const runningJobs = stats.activeJobs;
   const activeSources = stats.dataSources;

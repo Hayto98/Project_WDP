@@ -1,14 +1,20 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../Text';
 import { type WorkspaceMember } from '../../lib/api';
 
-export function WorkspaceMembers({ members }: { members: WorkspaceMember[] }) {
+export function WorkspaceMembers({ members, refreshing = false, onRefresh }: { members: WorkspaceMember[], refreshing?: boolean, onRefresh?: () => void }) {
   const { theme } = useTheme();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+      refreshControl={
+        onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} /> : undefined
+      }
+    >
       <Text variant="title" weight="bold" style={{ marginBottom: 16 }}>Thành viên nhóm</Text>
       
       {members.map(member => {

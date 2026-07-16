@@ -15,6 +15,7 @@ export function PaperPicker({ value, onChange, libraryPapers, disabled }: PaperP
   const [results, setResults] = useState<{ id: string; title: string; authors?: string[]; year?: number; source?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedSearchPaper, setSelectedSearchPaper] = useState<{ id: string; title: string; authors?: string[]; year?: number; source?: string } | null>(null);
   
   // Debounce search
   useEffect(() => {
@@ -86,6 +87,25 @@ export function PaperPicker({ value, onChange, libraryPapers, disabled }: PaperP
             />
           </div>
           
+          {value && selectedSearchPaper && value === selectedSearchPaper.id && (
+            <div style={{ padding: "8px 12px", border: "1px solid var(--primary)", borderRadius: "8px", background: "var(--primary-light, rgba(0,0,0,0.02))", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, paddingRight: "8px" }}>
+                <strong style={{ fontSize: "13px", color: "var(--primary)" }}>{selectedSearchPaper.title}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  setSelectedSearchPaper(null);
+                }}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "4px" }}
+                title="Bỏ chọn"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          
           {loading && <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Đang tìm kiếm...</div>}
           {error && <div style={{ fontSize: "12px", color: "var(--danger)" }}>{error}</div>}
           
@@ -95,7 +115,12 @@ export function PaperPicker({ value, onChange, libraryPapers, disabled }: PaperP
                 <button
                   key={paper.id}
                   type="button"
-                  onClick={() => onChange(paper.id)}
+                  onClick={() => {
+                    onChange(paper.id);
+                    setSelectedSearchPaper(paper);
+                    setQuery("");
+                    setResults([]);
+                  }}
                   style={{
                     width: "100%",
                     textAlign: "left",
