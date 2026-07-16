@@ -40,7 +40,7 @@ export default function OverviewScreen() {
       setData(result);
       setView('default');
     } catch (err) {
-      console.error('Failed to load dashboard:', err);
+      console.warn('Failed to load dashboard:', err);
       setView('error');
     } finally {
       setLoading(false);

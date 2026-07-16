@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, Platform, StatusBar, RefreshControl } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import { IconCalendar } from '../icons';
+import { useAuth } from '../../context/AuthContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { IconCalendar, IconX, IconTrash, IconLogOut } from '../icons';
 import { Text } from '../Text';
-import { type WorkspaceItem, type WorkspaceMember, workspaceApi, type WorkspaceActivity } from '../../lib/api';
+import { type WorkspaceItem, type WorkspaceMember, workspaceApi, type WorkspaceActivity, libraryApi, paperApi } from '../../lib/api';
 
 export function TaskDetailModal({ 
   visible, 
@@ -11,6 +13,9 @@ export function TaskDetailModal({
   workspaceId, 
   item, 
   members,
+  canEdit = true,
+  refreshing = false,
+  onRefresh,
   onItemUpdated
 }: { 
   visible: boolean, 
@@ -18,20 +23,27 @@ export function TaskDetailModal({
   workspaceId: string,
   item: WorkspaceItem,
   members: WorkspaceMember[],
+  canEdit?: boolean,
+  refreshing?: boolean,
+  onRefresh?: () => void,
   onItemUpdated: () => void
 }) {
   const { theme } = useTheme();
+  const { user } = useAuth();
 
   // Local state for editing fields
   const [status, setStatus] = useState(item.status);
   const [assigneeIds, setAssigneeIds] = useState<string[]>(item.assigneeIds || (item.assigneeId ? [item.assigneeId] : []));
   const [dueDate, setDueDate] = useState((item.due && item.due !== 'Chưa đặt') ? item.due : '');
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [note, setNote] = useState(item.note || '');
   const [paperId, setPaperId] = useState(item.paperId || '');
   const [selectedPaperTitle, setSelectedPaperTitle] = useState(item._populatedPaper?.title || '');
   
   const [newComment, setNewComment] = useState('');
   
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
   const [activities, setActivities] = useState<WorkspaceActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   
@@ -72,14 +84,11 @@ export function TaskDetailModal({
 
   useEffect(() => {
     if (visible && paperTab === 'library') {
-      workspaceApi.items(workspaceId).then(items => {
-        const papers = items
-          .filter(i => i.kind === 'paper' && i.paperId)
-          .map(i => ({ id: i.paperId, title: i.title }));
-        setLibraryPapers(papers);
+      libraryApi.papers().then(res => {
+        setLibraryPapers(res.map(i => ({ id: i.paperId, title: i.paper?.title || i.paperId })));
       }).catch(console.error);
     }
-  }, [visible, paperTab, workspaceId]);
+  }, [visible, paperTab]);
 
   useEffect(() => {
     if (paperTab !== 'search') return;
@@ -89,7 +98,10 @@ export function TaskDetailModal({
     }
     const timeout = setTimeout(() => {
       setSearchLoading(true);
-      setSearchLoading(false);
+      paperApi.search({ q: searchQuery.trim(), limit: 5 })
+        .then(res => setSearchResults(res.papers))
+        .catch(console.error)
+        .finally(() => setSearchLoading(false));
     }, 500);
     return () => clearTimeout(timeout);
   }, [searchQuery, paperTab, selectedPaperTitle]);
@@ -101,6 +113,32 @@ export function TaskDetailModal({
     } catch (err) {
       Alert.alert("Lỗi", "Không thể cập nhật task");
     }
+  };
+
+  const handleDeleteItem = () => {
+    Alert.alert("Xác nhận", "Bạn chắc chắn muốn xóa task này?", [
+      { text: "Hủy", style: "cancel" },
+      { text: "Xóa", style: "destructive", onPress: async () => {
+        try {
+          await workspaceApi.deleteItem(workspaceId, item.id);
+          onClose();
+          onItemUpdated();
+        } catch(e) { Alert.alert("Lỗi", "Không thể xóa task"); }
+      }}
+    ]);
+  };
+
+  const handleLeaveTask = () => {
+    Alert.alert("Xác nhận", "Rời khỏi task này?", [
+      { text: "Hủy", style: "cancel" },
+      { text: "Rời khỏi", style: "destructive", onPress: async () => {
+        const newIds = assigneeIds.filter(aid => aid !== (user?.id || (user as any)?._id));
+        setAssigneeIds(newIds);
+        await handleUpdate({ assigneeIds: newIds });
+        if (onRefresh) onRefresh();
+        onClose(); // Automatically close after leaving
+      }}
+    ]);
   };
 
   const handleStatusChange = (newStatus: string) => {
@@ -129,22 +167,18 @@ export function TaskDetailModal({
     }
   };
 
-  const handleDateBlur = () => {
-    if (dueDate !== item.due) {
-      handleUpdate({ due: dueDate });
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate && event.type === 'set') {
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const year = selectedDate.getFullYear();
+      const formatted = `${year}-${month}-${day}`;
+      setDueDate(formatted);
+      if (formatted !== item.due) {
+        handleUpdate({ due: formatted });
+      }
     }
-  };
-
-  const handleDateChange = (text: string) => {
-    const cleaned = text.replace(/\D/g, '');
-    let formatted = cleaned;
-    if (cleaned.length > 2) {
-      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-    }
-    if (cleaned.length > 4) {
-      formatted = `${formatted.slice(0, 5)}/${cleaned.slice(4, 8)}`;
-    }
-    setDueDate(formatted);
   };
 
   const handlePaperChange = (pId: string, pTitle: string) => {
@@ -159,12 +193,61 @@ export function TaskDetailModal({
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     try {
-      await workspaceApi.addComment(workspaceId, item.id, { content: newComment.trim() });
+      await workspaceApi.addComment(workspaceId, item.id, { 
+        content: newComment.trim(),
+        author_name: user?.full_name || user?.name || "Người dùng"
+      });
       setNewComment('');
       onItemUpdated(); // will refresh the item and comments
     } catch (err) {
       Alert.alert("Lỗi", "Không thể gửi bình luận");
     }
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    Alert.alert("Xóa bình luận", "Bạn chắc chắn muốn xóa?", [
+      { text: "Hủy", style: "cancel" },
+      { text: "Xóa", style: "destructive", onPress: async () => {
+        try {
+          await workspaceApi.deleteComment(workspaceId, item.id, commentId);
+          onItemUpdated();
+        } catch(e) { Alert.alert("Lỗi", "Không thể xóa"); }
+      }}
+    ]);
+  };
+
+  const handleEditComment = async () => {
+    if (!editingCommentId || !editContent.trim()) return;
+    try {
+      await workspaceApi.editComment(workspaceId, item.id, editingCommentId, editContent.trim());
+      setEditingCommentId(null);
+      setEditContent('');
+      onItemUpdated();
+    } catch(e) { Alert.alert("Lỗi", "Không thể sửa"); }
+  };
+
+  const currentMemberRole = members.find(m => m.id === user?.id || m.id === (user as any)?._id)?.role;
+  const isOwner = currentMemberRole === 'owner';
+
+  const handleRoleChange = (memberId: string, currentRole: string) => {
+    if (currentRole === 'owner') {
+      Alert.alert("Lỗi", "Không thể đổi quyền của Owner");
+      return;
+    }
+    if (!isOwner) {
+      Alert.alert("Từ chối", "Bạn phải là Owner mới được đổi quyền");
+      return;
+    }
+    const newRole = currentRole === 'editor' ? 'viewer' : 'editor';
+    Alert.alert("Đổi quyền", `Chuyển thành ${newRole}?`, [
+      { text: "Hủy", style: "cancel" },
+      { text: "Đổi", onPress: async () => {
+        try {
+          await workspaceApi.updateMember(workspaceId, memberId, newRole);
+          onItemUpdated();
+        } catch (e: any) { Alert.alert("Lỗi", e.message || "Không thể đổi quyền"); }
+      }}
+    ]);
   };
 
   if (!visible) return null;
@@ -178,12 +261,30 @@ export function TaskDetailModal({
               {item.kind === 'task' ? 'Công việc' : item.kind === 'note' ? 'Ghi chú' : 'Thảo luận'}
             </Text>
           </View>
-          <TouchableOpacity style={[styles.exitBtn, { borderColor: theme.border }]} onPress={onClose}>
-            <Text variant="sm" color="danger">Quay lại không gian làm việc</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {assigneeIds.includes(user?.id || (user as any)?._id) && (
+              <TouchableOpacity style={[styles.iconBtn, { backgroundColor: theme.surface2 }]} onPress={handleLeaveTask}>
+                <IconLogOut color={theme.inkMuted} size={18} />
+              </TouchableOpacity>
+            )}
+            {canEdit && (
+              <TouchableOpacity style={[styles.iconBtn, { backgroundColor: '#fee2e2' }]} onPress={handleDeleteItem}>
+                <IconTrash color={theme.danger} size={18} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={[styles.iconBtn, { backgroundColor: theme.surface2 }]} onPress={onClose}>
+              <IconX color={theme.ink} size={18} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <ScrollView style={styles.body} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <ScrollView 
+          style={styles.body} 
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+          refreshControl={
+            onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} /> : undefined
+          }
+        >
           <Text variant="heading" weight="bold" style={{ marginBottom: 16 }}>{item.title}</Text>
           
           <View style={styles.metaStrip}>
@@ -198,13 +299,13 @@ export function TaskDetailModal({
           <View style={styles.section}>
             <Text variant="sm" weight="bold" style={styles.label}>Trạng thái</Text>
             <View style={[styles.segmentControl, { backgroundColor: theme.surface2 }]}>
-              <TouchableOpacity style={[styles.segmentBtn, status === 'backlog' && { backgroundColor: theme.surface, elevation: 2 }]} onPress={() => handleStatusChange('backlog')}>
+              <TouchableOpacity disabled={!canEdit} style={[styles.segmentBtn, status === 'backlog' && { backgroundColor: theme.surface, elevation: 2 }]} onPress={() => handleStatusChange('backlog')}>
                 <Text weight={status === 'backlog' ? 'bold' : 'normal'}>Cần làm</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.segmentBtn, status === 'doing' && { backgroundColor: theme.surface, elevation: 2 }]} onPress={() => handleStatusChange('doing')}>
+              <TouchableOpacity disabled={!canEdit} style={[styles.segmentBtn, status === 'doing' && { backgroundColor: theme.surface, elevation: 2 }]} onPress={() => handleStatusChange('doing')}>
                 <Text weight={status === 'doing' ? 'bold' : 'normal'}>Đang làm</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.segmentBtn, status === 'done' && { backgroundColor: theme.surface, elevation: 2 }]} onPress={() => handleStatusChange('done')}>
+              <TouchableOpacity disabled={!canEdit} style={[styles.segmentBtn, status === 'done' && { backgroundColor: theme.surface, elevation: 2 }]} onPress={() => handleStatusChange('done')}>
                 <Text weight={status === 'done' ? 'bold' : 'normal'}>Đã xong</Text>
               </TouchableOpacity>
             </View>
@@ -217,54 +318,62 @@ export function TaskDetailModal({
               {assigneeIds.map(aId => {
                 const mem = members.find(m => m.id === aId);
                 return (
-                  <TouchableOpacity key={aId} style={[styles.assigneeChip, { backgroundColor: theme.primary }]} onPress={() => handleRemoveAssignee(aId)}>
+                  <TouchableOpacity disabled={!canEdit} key={aId} style={[styles.assigneeChip, { backgroundColor: theme.primary }]} onPress={() => handleRemoveAssignee(aId)}>
                     <View style={styles.avatar}><Text variant="xs" color="ink">{mem?.name?.substring(0, 1).toUpperCase()}</Text></View>
                     <Text variant="xs" color="surface" weight="bold">{mem?.name || aId}</Text>
-                    <Text variant="xs" color="surface" style={{ marginLeft: 4 }}>×</Text>
+                    {canEdit && <Text variant="xs" color="surface" style={{ marginLeft: 4 }}>×</Text>}
                   </TouchableOpacity>
                 );
               })}
               
-              <View style={{ zIndex: 10 }}>
-                <TouchableOpacity 
-                  style={[styles.addAssigneeBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
-                  onPress={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
-                >
-                  <Text variant="xs" color="inkMuted">+ Thêm ▼</Text>
-                </TouchableOpacity>
-                
-                {showAssigneeDropdown && (
-                  <View style={[styles.dropdown, { backgroundColor: theme.surface, borderColor: theme.border, elevation: 5 }]}>
-                    {members.filter(m => !assigneeIds.includes(m.id)).map(m => (
-                      <TouchableOpacity key={m.id} style={styles.dropdownItem} onPress={() => handleAddAssignee(m.id)}>
-                        <Text>{m.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    {members.filter(m => !assigneeIds.includes(m.id)).length === 0 && (
-                      <View style={styles.dropdownItem}><Text color="inkMuted">Không còn ai</Text></View>
-                    )}
-                  </View>
-                )}
-              </View>
+              {canEdit && (
+                <View style={{ zIndex: 10 }}>
+                  <TouchableOpacity 
+                    style={[styles.addAssigneeBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                    onPress={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+                  >
+                    <Text variant="xs" color="inkMuted">+ Thêm ▼</Text>
+                  </TouchableOpacity>
+                  
+                  {showAssigneeDropdown && (
+                    <View style={[styles.dropdown, { backgroundColor: theme.surface, borderColor: theme.border, elevation: 5 }]}>
+                      {members.filter(m => !assigneeIds.includes(m.id)).map(m => (
+                        <TouchableOpacity key={m.id} style={styles.dropdownItem} onPress={() => handleAddAssignee(m.id)}>
+                          <Text>{m.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      {members.filter(m => !assigneeIds.includes(m.id)).length === 0 && (
+                        <View style={styles.dropdownItem}><Text color="inkMuted">Không còn ai</Text></View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           </View>
 
           {/* Deadline */}
           <View style={styles.section}>
             <Text variant="sm" weight="bold" style={styles.label}>Deadline</Text>
-            <View style={[styles.input, { borderColor: theme.border, flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12 }]}>
-              <TextInput
-                style={{ flex: 1, color: theme.ink, padding: 0 }}
-                value={dueDate}
-                onChangeText={handleDateChange}
-                onBlur={handleDateBlur}
-                placeholder="dd/mm/yyyy"
-                placeholderTextColor={theme.inkMuted}
-                keyboardType="numeric"
-                maxLength={10}
-              />
+            <TouchableOpacity 
+              disabled={!canEdit}
+              style={[styles.input, { borderColor: theme.border, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12 }]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={{ flex: 1, color: dueDate ? theme.ink : theme.inkMuted }}>
+                {dueDate ? dueDate.split('-').reverse().join('/') : "Chọn deadline"}
+              </Text>
               <IconCalendar color={theme.ink} size={18} />
-            </View>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={dueDate ? new Date(dueDate) : new Date()}
+                mode="date"
+                display="default"
+                minimumDate={new Date()}
+                onChange={handleDateChange}
+              />
+            )}
           </View>
 
           {/* Paper Linking */}
@@ -281,7 +390,7 @@ export function TaskDetailModal({
 
             {paperTab === 'library' ? (
               <View style={{ zIndex: 9, marginBottom: 16 }}>
-                <TouchableOpacity style={[styles.dropdownBtn, { borderColor: theme.border }]} onPress={() => setShowLibraryDropdown(!showLibraryDropdown)}>
+                <TouchableOpacity disabled={!canEdit} style={[styles.dropdownBtn, { borderColor: theme.border }]} onPress={() => setShowLibraryDropdown(!showLibraryDropdown)}>
                   <Text numberOfLines={1}>{selectedPaperTitle || paperId || "Chọn bài báo từ thư viện..."}</Text>
                 </TouchableOpacity>
                 {showLibraryDropdown && (
@@ -294,26 +403,50 @@ export function TaskDetailModal({
                         <Text numberOfLines={2}>{p.title}</Text>
                       </TouchableOpacity>
                     ))}
+                    {libraryPapers.length === 0 && (
+                      <View style={{ padding: 12 }}><Text color="inkMuted">Thư viện trống</Text></View>
+                    )}
                   </ScrollView>
                 )}
               </View>
             ) : (
               <View style={{ zIndex: 9, marginBottom: 16 }}>
                 <TextInput 
-                  style={[styles.input, { borderColor: theme.border, color: theme.ink }]} 
-                  placeholder="Nhập ID bài báo hoặc tên..."
+                  editable={canEdit}
+                  style={[styles.input, { borderColor: theme.border, color: theme.ink, marginBottom: 8 }]} 
+                  placeholder="Nhập tên bài báo để tìm kiếm..."
                   placeholderTextColor={theme.inkMuted}
                   value={searchQuery}
                   onChangeText={(text) => {
                     setSearchQuery(text);
                     if (text !== selectedPaperTitle) {
-                      setPaperId(text);
+                      setPaperId('');
                     }
                   }}
                   onBlur={() => {
                     if (paperId !== item.paperId) handleUpdate({ paperId });
                   }}
                 />
+                {searchLoading && <Text variant="xs" color="inkMuted" style={{ marginBottom: 8 }}>Đang tìm kiếm...</Text>}
+                {!searchLoading && searchResults.length > 0 && searchQuery !== selectedPaperTitle && (
+                  <ScrollView style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border, maxHeight: 200 }]} nestedScrollEnabled>
+                    {searchResults.map(p => (
+                      <TouchableOpacity 
+                        key={p.id} 
+                        style={[styles.dropdownItem, paperId === p.id && { backgroundColor: theme.surface2 }]} 
+                        onPress={() => {
+                          setPaperId(p.id);
+                          setSearchQuery(p.title);
+                          setSelectedPaperTitle(p.title);
+                          setSearchResults([]);
+                          handleUpdate({ paperId: p.id });
+                        }}
+                      >
+                        <Text numberOfLines={2} weight={paperId === p.id ? "bold" : "normal"}>{p.title}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
               </View>
             )}
           </View>
@@ -322,6 +455,7 @@ export function TaskDetailModal({
           <View style={styles.section}>
             <Text variant="sm" weight="bold" style={styles.label}>Nội dung ghi chú</Text>
             <TextInput
+              editable={canEdit}
               style={[styles.input, { borderColor: theme.border, color: theme.ink, minHeight: 100 }]}
               multiline
               textAlignVertical="top"
@@ -350,7 +484,13 @@ export function TaskDetailModal({
                 <View key={m.id} style={[styles.memberRow, { borderColor: theme.border }]}>
                   <View style={styles.memberAvatar}><Text color="surface" weight="bold">{m.name?.substring(0, 1).toUpperCase()}</Text></View>
                   <Text style={{ flex: 1, marginLeft: 12 }}>{m.name}</Text>
-                  <View style={[styles.roleBadge, { borderColor: theme.border }]}><Text variant="xs">{m.role}</Text></View>
+                  <TouchableOpacity 
+                    style={[styles.roleBadge, { borderColor: theme.border }]}
+                    disabled={!isOwner || m.role === 'owner'}
+                    onPress={() => handleRoleChange(m.id, m.role)}
+                  >
+                    <Text variant="xs">{m.role}</Text>
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
@@ -360,12 +500,43 @@ export function TaskDetailModal({
           <View style={styles.section}>
             <Text variant="sm" weight="bold" style={styles.label}>Discussion</Text>
             <View style={{ gap: 12, marginBottom: 12 }}>
-              {item.comments?.map((c: any) => (
-                <View key={c.id || c.timestamp} style={[styles.commentCard, { backgroundColor: theme.surface2 }]}>
-                  <Text weight="bold" variant="xs">{c.author_name}</Text>
-                  <Text style={{ marginTop: 4 }}>{c.content}</Text>
+              {item.comments?.map((c: any) => {
+                const isAuthor = c.authorId === user?.id || c.author_id === user?.id;
+                const cId = c.id || c.comment_id || c.timestamp;
+                const isEditing = editingCommentId === cId;
+                return (
+                <View key={cId} style={[styles.commentCard, { backgroundColor: theme.surface2 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text weight="bold" variant="xs">{c.authorName || c.author_name || 'Người dùng'}</Text>
+                    <Text variant="xs" color="inkMuted">{c.createdAt || c.created_at}</Text>
+                  </View>
+                  {isEditing ? (
+                    <View style={{ marginTop: 8 }}>
+                      <TextInput
+                        style={[styles.input, { borderColor: theme.border, color: theme.ink, paddingVertical: 4, minHeight: 60 }]}
+                        value={editContent}
+                        onChangeText={setEditContent}
+                        multiline
+                      />
+                      <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, justifyContent: 'flex-end' }}>
+                        <TouchableOpacity onPress={() => setEditingCommentId(null)}><Text color="inkMuted" variant="xs">Hủy</Text></TouchableOpacity>
+                        <TouchableOpacity onPress={handleEditComment}><Text color="primary" variant="xs" weight="bold">Lưu</Text></TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={{ marginTop: 4 }}>{c.content}</Text>
+                      {isAuthor && (
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, justifyContent: 'flex-end' }}>
+                          <TouchableOpacity onPress={() => { setEditingCommentId(cId); setEditContent(c.content); }}><Text color="primary" variant="xs">Sửa</Text></TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteComment(cId)}><Text style={{ color: '#ff4444' }} variant="xs">Xóa</Text></TouchableOpacity>
+                        </View>
+                      )}
+                    </>
+                  )}
                 </View>
-              ))}
+                );
+              })}
             </View>
             <TextInput
               style={[styles.input, { borderColor: theme.border, color: theme.ink, minHeight: 80 }]}
@@ -410,7 +581,10 @@ export function TaskDetailModal({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { 
+    flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -423,11 +597,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
   },
-  exitBtn: {
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: {
     flex: 1,
@@ -525,14 +700,10 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   dropdownMenu: {
-    position: 'absolute',
-    top: 55,
-    left: 0,
-    right: 0,
     borderWidth: 1,
     borderRadius: 8,
     maxHeight: 200,
-    zIndex: 999,
+    marginTop: 4,
   },
   paperCard: {
     borderWidth: 1,

@@ -289,13 +289,13 @@ export function WorkspaceDetail({
         <ul className="comment-list">
           {item.comments.map((comment, idx) => {
             const isEditing = editingCommentId === comment.id;
-            // Only the comment's author may edit or delete their own comment.
+            // Only the comment's author may edit their own comment. Owners can delete any comment.
             const canEditComment = comment.authorId === currentUserId;
-            const canDeleteComment = canEditComment;
+            const canDeleteComment = canEditComment || canManageMembers;
             return (
               <li key={`${item.id}-${idx}`} className="comment-item">
                 <div className="comment-item__meta">
-                  <strong className="comment-item__author">{comment.authorName}</strong>
+                  <strong className="comment-item__author">{comment.authorName || "Người dùng"}</strong>
                   <span className="comment-item__time">{comment.createdAt}</span>
                   {!isEditing && (canEditComment || canDeleteComment) && (
                     <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>
