@@ -1,55 +1,65 @@
-import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { ResearchGapHeatmap } from '../../components/ResearchGapHeatmap';
-import { dashboardApi } from '../../lib/api';
-import type { DashboardData } from '../../data/types';
+import { CorpusGapPanel } from '../../components/CorpusGapPanel';
+import { LiveGapPanel } from '../../components/LiveGapPanel';
+
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function GapScreen() {
   const { theme } = useTheme();
-  const [data, setData] = useState<DashboardData | null>(null);
-
-  useEffect(() => {
-    dashboardApi.overview().then(setData).catch(console.error);
-  }, []);
-
-  if (!data) return null;
+  const [mode, setMode] = useState<"corpus" | "live">("corpus");
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.bg }]} contentContainerStyle={styles.content}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top']}>
       <View style={styles.header}>
-        <Text variant="heading" weight="bold">Khoảng trống nghiên cứu</Text>
+        <Text variant="heading" weight="bold">Research Gap</Text>
         <Text variant="sm" color="inkMuted" style={{ marginTop: 4 }}>
-          Khám phá những vùng có tiềm năng cao nhưng chưa được khai thác nhiều
+          {mode === "corpus" 
+            ? "Phân tích khoảng trống từ corpus nội bộ — quan tâm cao nhưng công bố còn thưa"
+            : "Phân tích live từ OpenAlex / Crossref / arXiv — không cần import trước vào DB"
+          }
         </Text>
+        
+        <View style={[styles.segmentContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <TouchableOpacity 
+            style={[styles.segmentButton, mode === "corpus" && { backgroundColor: theme.primary }]} 
+            onPress={() => setMode("corpus")}
+          >
+            <Text variant="sm" weight="bold" color={mode === "corpus" ? "surface" : "ink"}>Corpus Gap</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.segmentButton, mode === "live" && { backgroundColor: theme.primary }]} 
+            onPress={() => setMode("live")}
+          >
+            <Text variant="sm" weight="bold" color={mode === "live" ? "surface" : "ink"}>Live Gap</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <ResearchGapHeatmap fields={data.gapFields.map(f => f.label)} aspects={data.gapAspects.map(a => a.label)} gaps={data.gaps} />
+      <View style={styles.content}>
+        {mode === "corpus" ? <CorpusGapPanel /> : <LiveGapPanel />}
       </View>
-
-      <View style={{ marginTop: 24 }}>
-        <Text variant="lead" weight="bold" style={{ marginBottom: 16 }}>Gợi ý đề tài</Text>
-        {data.gaps.filter(g => g.gap).slice(0, 3).map((gap, i) => (
-          <View key={i} style={[styles.suggestionCard, { backgroundColor: theme.surface2 }]}>
-            <Text variant="body" weight="bold">{gap.field}</Text>
-            <Text variant="sm" color="inkMuted" style={{ marginTop: 4 }}>Khía cạnh: {gap.aspect}</Text>
-            <View style={[styles.badge, { backgroundColor: theme.warning + '30', marginTop: 8 }]}>
-              <Text variant="xs" color="warning" weight="bold">Mật độ thấp, tiềm năng cao</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 16 },
-  header: { marginBottom: 24 },
-  card: { padding: 16, borderRadius: 12, borderWidth: 1 },
-  suggestionCard: { padding: 16, borderRadius: 12, marginBottom: 12 },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 16 }
+  header: { padding: 16, paddingBottom: 8 },
+  segmentContainer: {
+    flexDirection: 'row',
+    marginTop: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  content: { flex: 1 },
 });
