@@ -189,6 +189,7 @@ export interface FollowAlert {
   paperId: string;
   priority: AlertPriority;
   reason: string;
+  paper?: PaperResult;
 }
 export interface FollowSubject {
   id: string;
@@ -510,6 +511,7 @@ function mapFollowAlert(alert: any): FollowAlert {
     unread: !alert.is_read,
     priority: alert.priority === "normal" ? "medium" : alert.priority ?? "low",
     reason: alert.content ?? alert.title ?? "Paper mới khớp mục theo dõi",
+    paper: alert.papers?.[0] ? mapPaper(alert.papers[0]) : undefined,
   };
 }
 
