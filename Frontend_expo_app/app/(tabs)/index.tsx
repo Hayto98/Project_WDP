@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { Widget } from '../../components/Widget';
 import { IconTrend, IconGap, IconLibrary, IconSparkle, IconRefresh, IconBookmark, IconBell } from '../../components/icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { dashboardApi } from '../../lib/api';
+import { dashboardApi, notificationApi } from '../../lib/api';
 import type { TimeRange, DashboardData } from '../../data/types';
 import { KpiStrip } from '../../components/KpiStrip';
 import { TrendChart } from '../../components/TrendChart';
@@ -23,10 +24,12 @@ const RANGES: { id: TimeRange; label: string }[] = [
 
 export default function OverviewScreen() {
   const { theme } = useTheme();
+  const router = useRouter();
   const [range, setRange] = useState<TimeRange>('12m');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'default' | 'loading' | 'empty' | 'error'>('loading');
   const [data, setData] = useState<DashboardData | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -36,8 +39,12 @@ export default function OverviewScreen() {
     setLoading(true);
     setView('loading');
     try {
-      const result = await dashboardApi.overview();
+      const [result, notifications] = await Promise.all([
+        dashboardApi.overview(),
+        notificationApi.list()
+      ]);
       setData(result);
+      setUnreadCount(notifications.filter(n => n.unread).length);
       setView('default');
     } catch (err) {
       console.warn('Failed to load dashboard:', err);
@@ -88,8 +95,19 @@ export default function OverviewScreen() {
               <Text variant="heading" weight="bold">Tổng quan</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-              <TouchableOpacity onPress={() => Alert.alert('Thông báo', 'Bạn không có thông báo mới.')}>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={{ position: 'relative' }}>
                 <IconBell color={theme.ink} size={20} />
+                {unreadCount > 0 && (
+                  <View style={{
+                    position: 'absolute', top: -5, right: -5, backgroundColor: theme.danger,
+                    borderRadius: 9, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center',
+                    paddingHorizontal: 4, borderWidth: 1, borderColor: theme.bg
+                  }}>
+                    <Text variant="xs" weight="bold" style={{ color: '#fff', fontSize: 10, lineHeight: 12, textAlign: 'center' }}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
               <ThemeToggle />
             </View>

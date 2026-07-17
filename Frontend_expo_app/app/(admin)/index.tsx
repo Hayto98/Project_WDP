@@ -101,19 +101,7 @@ export default function AdminOverviewScreen() {
           </View>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.actionBtn}
-            onPress={() => router.push('/(admin)/feedback')}
-          >
-            <IconBell color={pendingFeedbackCount > 0 ? theme.danger : theme.ink} size={20} />
-            {pendingFeedbackCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: theme.danger }]}>
-                <Text variant="xs" color="surface" weight="bold" style={{ fontSize: 10 }}>
-                  {pendingFeedbackCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+
           <ThemeToggle />
         </View>
       </View>
