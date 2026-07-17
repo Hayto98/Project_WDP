@@ -76,8 +76,8 @@ export default function OverviewScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }]}>
         <Text color="danger">Lỗi khi tải dữ liệu tổng quan</Text>
-        <TouchableOpacity style={{ marginTop: 16, padding: 12, backgroundColor: theme.primary, borderRadius: 8 }} onPress={fetchData}>
-          <Text color="surface">Thử lại</Text>
+        <TouchableOpacity style={{ marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.primary, borderRadius: 999, shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 3 }} onPress={fetchData}>
+          <Text color="surface" weight="bold">Thử lại</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -128,11 +128,11 @@ export default function OverviewScreen() {
                 key={r.id}
                 style={[
                   styles.segBtn, 
-                  range === r.id && { backgroundColor: theme.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }
+                  range === r.id && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }
                 ]}
                 onPress={() => setRange(r.id)}
               >
-                <Text variant="sm" weight={range === r.id ? 'bold' : 'normal'} color={range === r.id ? 'ink' : 'inkMuted'}>
+                <Text variant="sm" weight={range === r.id ? 'bold' : 'normal'} color={range === r.id ? 'surface' : 'inkMuted'}>
                   {r.label}
                 </Text>
               </TouchableOpacity>
@@ -154,6 +154,7 @@ export default function OverviewScreen() {
           title="Xu hướng công bố"
           subtitle="Số bài báo / năm theo lĩnh vực"
           icon={<IconTrend color={theme.primary} />}
+          iconBgColor={theme.primaryWeak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -163,7 +164,8 @@ export default function OverviewScreen() {
         <Widget
           title="Bản đồ khoảng trống"
           subtitle="Mật độ công bố theo lĩnh vực × khía cạnh"
-          icon={<IconGap color={theme.primary} />}
+          icon={<IconGap color={(theme as any).accent1} />}
+          iconBgColor={(theme as any).accent1Weak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -173,7 +175,8 @@ export default function OverviewScreen() {
         <Widget
           title="Top bài báo thịnh hành"
           subtitle="Theo lượt xem 30 ngày qua"
-          icon={<IconLibrary color={theme.primary} />}
+          icon={<IconLibrary color={(theme as any).accent2} />}
+          iconBgColor={(theme as any).accent2Weak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -183,7 +186,8 @@ export default function OverviewScreen() {
         <Widget
           title="Phân tích từ AI"
           subtitle="Tóm tắt & gợi ý hướng nghiên cứu"
-          icon={<IconSparkle color={theme.primary} />}
+          icon={<IconSparkle color={(theme as any).accent3} />}
+          iconBgColor={(theme as any).accent3Weak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -192,7 +196,8 @@ export default function OverviewScreen() {
 
         <Widget
           title="Không gian của bạn"
-          icon={<IconBookmark color={theme.primary} />}
+          icon={<IconBookmark color={(theme as any).accent4} />}
+          iconBgColor={(theme as any).accent4Weak}
           status={railFirstRun ? 'empty' : status === 'loading' ? 'loading' : 'ready'}
           onRetry={() => setView('default')}
           emptyMessage="Bạn chưa theo dõi chủ đề nào"
@@ -227,13 +232,13 @@ const styles = StyleSheet.create({
   },
   seg: {
     flexDirection: 'row',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 4,
   },
   segBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   actions: {
     flexDirection: 'row',

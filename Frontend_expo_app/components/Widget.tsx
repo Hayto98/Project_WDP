@@ -8,6 +8,8 @@ export interface WidgetProps {
   title: string;
   subtitle?: string;
   icon?: React.ReactNode;
+  iconColor?: string;
+  iconBgColor?: string;
   status: 'ready' | 'loading' | 'error' | 'empty';
   onRetry?: () => void;
   emptyMessage?: string;
@@ -15,14 +17,14 @@ export interface WidgetProps {
   children: React.ReactNode;
 }
 
-export function Widget({ title, subtitle, icon, status, onRetry, emptyMessage, emptyAction, children }: WidgetProps) {
+export function Widget({ title, subtitle, icon, iconColor, iconBgColor, status, onRetry, emptyMessage, emptyAction, children }: WidgetProps) {
   const { theme } = useTheme();
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 3 }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <View style={styles.headerTitleRow}>
-          {icon && <View style={[styles.iconWrapper, { backgroundColor: theme.primaryWeak }]}>{icon}</View>}
+          {icon && <View style={[styles.iconWrapper, { backgroundColor: iconBgColor || theme.primaryWeak }]}>{icon}</View>}
           <View style={styles.titleStack}>
             <Text variant="lead" weight="bold">{title}</Text>
             {subtitle && <Text variant="sm" color="inkMuted">{subtitle}</Text>}
@@ -63,9 +65,8 @@ export function Widget({ title, subtitle, icon, status, onRetry, emptyMessage, e
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    overflow: 'hidden',
     marginBottom: 16,
   },
   header: {
