@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { IconAlert, IconBell, IconRefresh, IconSearch, IconTelescope, IconUser } from "../components/icons";
+import { IconAlert, IconRefresh, IconSearch, IconTelescope, IconUser } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import {
   type AdminJob,
@@ -539,26 +539,7 @@ export function AdminPage({ theme, toggle }: Props) {
             </p>
           </div>
           <div className="topbar__controls">
-            <button
-              className={`btn btn--ghost admin-feedback-alert ${pendingFeedbackCount > 0 ? "is-hot" : ""}`}
-              type="button"
-              onClick={() => void openFeedbackInbox()}
-              aria-label={
-                pendingFeedbackCount > 0
-                  ? `Có ${pendingFeedbackCount} phản hồi đang chờ`
-                  : "Mở hộp phản hồi"
-              }
-              title={
-                pendingFeedbackCount > 0
-                  ? `Có ${pendingFeedbackCount} tin nhắn phản hồi đang chờ`
-                  : "Phản hồi người dùng"
-              }
-            >
-              <IconBell width={15} height={15} />
-              {pendingFeedbackCount > 0
-                ? `Phản hồi mới (${pendingFeedbackCount})`
-                : "Phản hồi"}
-            </button>
+
             <button className="btn btn--ghost" type="button" onClick={() => setTab("logs")}>
               <IconAlert width={15} height={15} /> Xem audit log
             </button>

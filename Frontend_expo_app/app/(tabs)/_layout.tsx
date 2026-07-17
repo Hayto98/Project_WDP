@@ -102,6 +102,14 @@ export default function TabLayout() {
           headerShown: false
         }}
       />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
+          title: 'Hộp thư',
+          headerShown: false
+        }}
+      />
     </Tabs>
   );
 }

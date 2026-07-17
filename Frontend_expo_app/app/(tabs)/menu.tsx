@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Alert } from 'react-native';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { IconBell, IconGap, IconBookmark, IconLibrary, IconTelescope, IconUser } from '../../components/icons';
@@ -8,17 +8,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
+import { notificationApi } from '../../lib/api';
 
 const MENU_ITEMS = [
   { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(tabs)/workspace' },
   { id: 'follow', title: 'Theo dõi', icon: IconBookmark, href: '/(tabs)/follow' },
   { id: 'gap', title: 'Research Gap', icon: IconGap, href: '/(tabs)/gap' },
+  { id: 'notifications', title: 'Hộp thư', icon: IconBell, href: '/(tabs)/notifications' },
 ];
 
 export default function MenuTab() {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    notificationApi.list().then(items => {
+      if (alive) setUnreadCount(items.filter(n => n.unread).length);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   const userName = user?.full_name || user?.name || '';
 
@@ -62,6 +73,13 @@ export default function MenuTab() {
                   <item.icon color={theme.primary} size={18} />
                 </View>
                 <Text style={{ flex: 1, marginLeft: 12 }}>{item.title}</Text>
+                {item.id === 'notifications' && unreadCount > 0 && (
+                  <View style={{ backgroundColor: theme.danger, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6, marginLeft: 8 }}>
+                    <Text variant="xs" weight="bold" style={{ color: '#fff', fontSize: 11, lineHeight: 13, textAlign: 'center' }}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
