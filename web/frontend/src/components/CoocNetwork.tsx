@@ -41,7 +41,13 @@ export function CoocNetwork({ nodes, edges, selected, topics }: Props) {
     return found?.token && found.token !== "" ? found.token : "--primary";
   };
 
-  const shown = useMemo(() => nodes.filter((n) => selected.has(n.topic)), [nodes, selected]);
+  const shown = useMemo(() => {
+    const map = new Map<string, typeof nodes[0]>();
+    for (const n of nodes) {
+      if (selected.has(n.topic)) map.set(n.id, n);
+    }
+    return Array.from(map.values());
+  }, [nodes, selected]);
   const ids = useMemo(() => new Set(shown.map((n) => n.id)), [shown]);
   const shownEdges = useMemo(
     () => edges.filter((e) => ids.has(e.a) && ids.has(e.b)),

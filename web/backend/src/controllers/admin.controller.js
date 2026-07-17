@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const DataSource = require('../models/DataSource');
 const CrawlerJob = require('../models/CrawlerJob');
@@ -96,6 +97,44 @@ async function updateUser(req, res) {
       .select('-password_hash');
     if (!user) return ApiResponse.notFound(res);
     return ApiResponse.success(res, user);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, 500);
+  }
+}
+
+async function createUser(req, res) {
+  try {
+    const { full_name, email, password, roles, status } = req.body;
+    const normalizedEmail = email.toLowerCase();
+    
+    const existing = await User.findOne({ email: normalizedEmail }).lean();
+    if (existing) {
+      return ApiResponse.error(res, 'Email already registered', 409);
+    }
+    
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+    
+    const user = await User.create({
+      full_name,
+      email: normalizedEmail,
+      password_hash,
+      roles,
+      status: status || 'Active',
+    });
+    
+    const userResponse = {
+      _id: user._id,
+      full_name: user.full_name,
+      email: user.email,
+      roles: user.roles,
+      status: user.status,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+      saved_papers_count: 0
+    };
+    
+    return ApiResponse.created(res, userResponse);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
   }
@@ -299,7 +338,7 @@ async function broadcastNotification(req, res) {
 }
 
 module.exports = {
-  getUsers, updateUser,
+  getUsers, updateUser, createUser,
   getDataSources, updateDataSource, checkDataSourceApis,
   getJobs, createJob, runJob,
   refreshReports,
