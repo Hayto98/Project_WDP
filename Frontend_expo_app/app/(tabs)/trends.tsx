@@ -117,16 +117,16 @@ export default function TrendsScreen() {
           
           <View style={[styles.modeToggle, { backgroundColor: theme.surface2 }]}>
             <TouchableOpacity 
-              style={[styles.modeBtn, mode === 'corpus' && { backgroundColor: theme.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }]} 
+              style={[styles.modeBtn, mode === 'corpus' && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }]} 
               onPress={() => setMode('corpus')}
             >
-              <Text variant="xs" weight={mode === 'corpus' ? 'bold' : 'normal'} color={mode === 'corpus' ? 'ink' : 'inkMuted'}>Corpus</Text>
+              <Text variant="xs" weight={mode === 'corpus' ? 'bold' : 'normal'} color={mode === 'corpus' ? 'surface' : 'inkMuted'}>Corpus</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.modeBtn, mode === 'live' && { backgroundColor: theme.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }]} 
+              style={[styles.modeBtn, mode === 'live' && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }]} 
               onPress={() => setMode('live')}
             >
-              <Text variant="xs" weight={mode === 'live' ? 'bold' : 'normal'} color={mode === 'live' ? 'ink' : 'inkMuted'}>Live</Text>
+              <Text variant="xs" weight={mode === 'live' ? 'bold' : 'normal'} color={mode === 'live' ? 'surface' : 'inkMuted'}>Live</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -141,10 +141,10 @@ export default function TrendsScreen() {
                 {RANGES.map(r => (
                   <TouchableOpacity
                     key={r.id}
-                    style={[styles.segBtn, range === r.id && { backgroundColor: theme.surface }]}
+                    style={[styles.segBtn, range === r.id && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }]}
                     onPress={() => setRange(r.id)}
                   >
-                    <Text variant="xs" weight={range === r.id ? 'bold' : 'normal'} color={range === r.id ? 'ink' : 'inkMuted'}>
+                    <Text variant="xs" weight={range === r.id ? 'bold' : 'normal'} color={range === r.id ? 'surface' : 'inkMuted'}>
                       {r.label}
                     </Text>
                   </TouchableOpacity>
@@ -154,10 +154,10 @@ export default function TrendsScreen() {
                 {GRANS.map(g => (
                   <TouchableOpacity
                     key={g.id}
-                    style={[styles.segBtn, gran === g.id && { backgroundColor: theme.surface }]}
+                    style={[styles.segBtn, gran === g.id && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }]}
                     onPress={() => setGran(g.id)}
                   >
-                    <Text variant="xs" weight={gran === g.id ? 'bold' : 'normal'} color={gran === g.id ? 'ink' : 'inkMuted'}>
+                    <Text variant="xs" weight={gran === g.id ? 'bold' : 'normal'} color={gran === g.id ? 'surface' : 'inkMuted'}>
                       {g.label}
                     </Text>
                   </TouchableOpacity>
@@ -203,17 +203,17 @@ export default function TrendsScreen() {
             </View>
 
             {/* Summary Stats */}
-            <View style={[styles.sumGrid, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.sumGrid, { backgroundColor: (theme as any).accent2Weak }]}>
               <View style={styles.sumStat}>
-                <Text variant="xs" color="inkMuted">Chủ đề</Text>
-                <Text variant="title" weight="bold">{selected.size}<Text variant="sm" color="inkMuted"> / {topics.length}</Text></Text>
+                <Text variant="xs" color="ink" style={{ opacity: 0.7 }}>Chủ đề</Text>
+                <Text variant="title" weight="bold" color="ink">{selected.size}<Text variant="sm" color="ink" style={{ opacity: 0.7 }}> / {topics.length}</Text></Text>
               </View>
               <View style={styles.sumStat}>
-                <Text variant="xs" color="inkMuted">Tổng công bố</Text>
-                <Text variant="title" weight="bold">{formatCompact(totalPublications)}</Text>
+                <Text variant="xs" color="ink" style={{ opacity: 0.7 }}>Tổng công bố</Text>
+                <Text variant="title" weight="bold" color="ink">{formatCompact(totalPublications)}</Text>
               </View>
               <View style={styles.sumStat}>
-                <Text variant="xs" color="inkMuted">Tăng trưởng TB</Text>
+                <Text variant="xs" color="ink" style={{ opacity: 0.7 }}>Tăng trưởng TB</Text>
                 <Text variant="title" weight="bold" color={avgGrowth > 0 ? 'success' : avgGrowth < 0 ? 'danger' : 'ink'}>
                   {formatPercent(Math.round(avgGrowth * 100))}
                 </Text>
@@ -225,6 +225,7 @@ export default function TrendsScreen() {
               title="So sánh xu hướng"
               subtitle="Số công bố theo thời gian"
               icon={<IconTrend color={theme.primary} />}
+              iconBgColor={theme.primaryWeak}
               status={loading ? 'loading' : selected.size === 0 ? 'empty' : 'ready'}
               emptyMessage="Chọn ít nhất một chủ đề"
             >
@@ -234,7 +235,8 @@ export default function TrendsScreen() {
             <Widget
               title="Tốc độ tăng trưởng"
               subtitle="CAGR sắp xếp giảm dần"
-              icon={<IconSparkle color={theme.primary} />}
+              icon={<IconSparkle color={(theme as any).accent3} />}
+              iconBgColor={(theme as any).accent3Weak}
               status={loading ? 'loading' : selected.size === 0 ? 'empty' : 'ready'}
               emptyMessage="Chọn ít nhất một chủ đề"
             >
@@ -262,7 +264,8 @@ export default function TrendsScreen() {
             <Widget
               title="Mạng đồng xuất hiện"
               subtitle="Từ khóa thường xuất hiện cùng nhau"
-              icon={<IconGap color={theme.primary} />}
+              icon={<IconGap color={(theme as any).accent1} />}
+              iconBgColor={(theme as any).accent1Weak}
               status={loading ? 'loading' : selected.size === 0 ? 'empty' : 'ready'}
             >
               <CoocNetwork nodes={networkNodes} edges={networkEdges} selected={selected} topics={topics} />
@@ -306,13 +309,13 @@ const styles = StyleSheet.create({
   },
   seg: {
     flexDirection: 'row',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 4,
   },
   segBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   topicBar: {
     marginBottom: 20,
@@ -341,9 +344,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 16,
     marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   sumStat: {
     flex: 1,

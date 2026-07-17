@@ -11,10 +11,10 @@ import { Text } from '../../components/Text';
 import { notificationApi } from '../../lib/api';
 
 const MENU_ITEMS = [
-  { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(tabs)/workspace' },
-  { id: 'follow', title: 'Theo dõi', icon: IconBookmark, href: '/(tabs)/follow' },
-  { id: 'gap', title: 'Research Gap', icon: IconGap, href: '/(tabs)/gap' },
-  { id: 'notifications', title: 'Hộp thư', icon: IconBell, href: '/(tabs)/notifications' },
+  { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(tabs)/workspace', colorKey: 'accent4' },
+  { id: 'follow', title: 'Theo dõi', icon: IconBookmark, href: '/(tabs)/follow', colorKey: 'accent1' },
+  { id: 'gap', title: 'Research Gap', icon: IconGap, href: '/(tabs)/gap', colorKey: 'accent2' },
+  { id: 'notifications', title: 'Hộp thư', icon: IconBell, href: '/(tabs)/notifications', colorKey: 'accent3' },
 ];
 
 export default function MenuTab() {
@@ -69,8 +69,8 @@ export default function MenuTab() {
                 ]}
                 onPress={() => router.push(item.href as any)}
               >
-                <View style={[styles.iconBox, { backgroundColor: theme.surface2 }]}>
-                  <item.icon color={theme.primary} size={18} />
+                <View style={[styles.iconBox, { backgroundColor: (theme as any)[item.colorKey + 'Weak'] || theme.surface2 }]}>
+                  <item.icon color={(theme as any)[item.colorKey] || theme.primary} size={20} />
                 </View>
                 <Text style={{ flex: 1, marginLeft: 12 }}>{item.title}</Text>
                 {item.id === 'notifications' && unreadCount > 0 && (
@@ -129,6 +129,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   avatar: {
     width: 56,
@@ -152,6 +157,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   menuItem: {
     flexDirection: 'row',
@@ -159,9 +169,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },

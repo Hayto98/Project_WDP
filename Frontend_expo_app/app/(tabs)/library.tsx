@@ -281,17 +281,17 @@ export default function LibraryScreen() {
 
       {/* Stats Row */}
       <View style={styles.statsRow}>
-        <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text variant="xs" color="inkMuted">Bài đã lưu</Text>
-          <Text variant="heading" weight="bold">{stats.saved}</Text>
+        <View style={[styles.statBox, { backgroundColor: (theme as any).accent1Weak, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 }]}>
+          <Text variant="xs" color="ink" style={{ opacity: 0.7 }}>Bài đã lưu</Text>
+          <Text variant="heading" weight="bold" color="ink">{stats.saved}</Text>
         </View>
-        <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text variant="xs" color="inkMuted">Đã đọc</Text>
-          <Text variant="heading" weight="bold">{stats.read}</Text>
+        <View style={[styles.statBox, { backgroundColor: (theme as any).accent4Weak, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 }]}>
+          <Text variant="xs" color="ink" style={{ opacity: 0.7 }}>Đã đọc</Text>
+          <Text variant="heading" weight="bold" color="ink">{stats.read}</Text>
         </View>
-        <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text variant="xs" color="inkMuted">Ghi chú</Text>
-          <Text variant="heading" weight="bold">{stats.notes}</Text>
+        <View style={[styles.statBox, { backgroundColor: (theme as any).accent2Weak, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 }]}>
+          <Text variant="xs" color="ink" style={{ opacity: 0.7 }}>Ghi chú</Text>
+          <Text variant="heading" weight="bold" color="ink">{stats.notes}</Text>
         </View>
       </View>
 
@@ -301,7 +301,7 @@ export default function LibraryScreen() {
           <TouchableOpacity
             style={[
               styles.collectionChip,
-              { backgroundColor: activeCollection === "all" ? theme.primary : theme.surface, borderColor: activeCollection === "all" ? theme.primary : theme.border }
+              activeCollection === "all" ? { backgroundColor: theme.primary, borderColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 } : { backgroundColor: theme.surface, borderColor: theme.border }
             ]}
             onPress={() => setActiveCollection("all")}
           >
@@ -312,7 +312,7 @@ export default function LibraryScreen() {
               key={col.id}
               style={[
                 styles.collectionChip,
-                { backgroundColor: activeCollection === col.id ? theme.primary : theme.surface, borderColor: activeCollection === col.id ? theme.primary : theme.border }
+                activeCollection === col.id ? { backgroundColor: theme.primary, borderColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 } : { backgroundColor: theme.surface, borderColor: theme.border }
               ]}
               onPress={() => setActiveCollection(col.id)}
             >
@@ -559,14 +559,13 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1,
     padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: 12,
     alignItems: 'center',
   },
   collectionChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 999,
     borderWidth: 1,
   },
   filtersContainer: {
@@ -577,8 +576,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 8,
+    height: 44,
+    borderRadius: 12,
     borderWidth: 1,
   },
   searchInput: {
@@ -587,9 +586,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   statusChip: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 999,
     borderWidth: 1,
   },
   center: {
@@ -599,8 +598,13 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',

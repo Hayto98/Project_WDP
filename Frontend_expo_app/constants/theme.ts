@@ -18,6 +18,15 @@ export const lightTheme = {
   success: "hsl(155, 60%, 58%)",
   warning: "hsl(70, 70%, 62%)",
   danger: "hsl(27, 70%, 55%)",
+
+  accent1: "hsl(275, 60%, 58%)",
+  accent1Weak: "hsl(275, 50%, 95%)",
+  accent2: "hsl(40, 90%, 55%)",
+  accent2Weak: "hsl(40, 50%, 95%)",
+  accent3: "hsl(330, 70%, 60%)",
+  accent3Weak: "hsl(330, 50%, 95%)",
+  accent4: "hsl(150, 60%, 50%)",
+  accent4Weak: "hsl(150, 50%, 95%)",
 };
 
 export const darkTheme = {
@@ -40,4 +49,13 @@ export const darkTheme = {
   success: "hsl(155, 60%, 72%)",
   warning: "hsl(80, 60%, 78%)",
   danger: "hsl(27, 60%, 68%)",
+
+  accent1: "hsl(275, 70%, 75%)",
+  accent1Weak: "hsl(275, 40%, 30%)",
+  accent2: "hsl(40, 80%, 70%)",
+  accent2Weak: "hsl(40, 40%, 30%)",
+  accent3: "hsl(330, 80%, 75%)",
+  accent3Weak: "hsl(330, 40%, 30%)",
+  accent4: "hsl(150, 70%, 70%)",
+  accent4Weak: "hsl(150, 40%, 30%)",
 };

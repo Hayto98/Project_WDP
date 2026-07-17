@@ -8,24 +8,26 @@ export function ThemeToggle() {
 
   return (
     <TouchableOpacity
-      style={[styles.button, { backgroundColor: theme.surface2, borderColor: theme.border }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.surface2, borderColor: theme.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }
+      ]}
       onPress={toggleTheme}
       accessibilityLabel={themeType === 'light' ? 'Chuyển sang giao diện tối' : 'Chuyển sang giao diện sáng'}
     >
       {themeType === 'light' ? (
-        <IconMoon color={theme.ink} size={18} />
+        <IconMoon color={theme.ink} size={20} />
       ) : (
-        <IconSun color={theme.ink} size={18} />
+        <IconSun color={theme.ink} size={20} />
       )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  container: {
+    padding: 8,
+    borderRadius: 999,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',

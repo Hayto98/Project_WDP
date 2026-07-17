@@ -30,15 +30,19 @@ export function KpiStrip({ kpis, loading }: Props) {
 
   return (
     <View style={[styles.container, { flexDirection: 'row', gap: 8 }]}>
-      {kpis.map((k) => {
+      {kpis.map((k, index) => {
         const isUp = k.deltaKind === 'up';
         const isDown = k.deltaKind === 'down';
         const color = isUp ? theme.success : isDown ? theme.danger : theme.inkMuted;
+        
+        // Pick a colorful weak background based on index
+        const bgColors = [(theme as any).accent1Weak, (theme as any).accent2Weak, (theme as any).accent4Weak, theme.primaryWeak];
+        const cardBg = bgColors[index % bgColors.length];
 
         return (
-          <View key={k.id} style={[styles.kpiCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Text variant="xs" color="inkMuted" numberOfLines={2}>{k.label}</Text>
-            <Text variant="title" weight="bold" style={{ marginVertical: 4 }}>
+          <View key={k.id} style={[styles.kpiCard, { backgroundColor: cardBg, borderColor: 'transparent', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 }]}>
+            <Text variant="xs" color="ink" style={{ opacity: 0.7 }} numberOfLines={2}>{k.label}</Text>
+            <Text variant="title" weight="bold" color="ink" style={{ marginVertical: 4 }}>
               {k.format === 'percent' ? formatPercent(k.value) : formatInt(k.value)}
             </Text>
             <View style={styles.hintRow}>
@@ -60,8 +64,8 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
   },
   hintRow: {
