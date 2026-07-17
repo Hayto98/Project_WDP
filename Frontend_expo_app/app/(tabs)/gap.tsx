@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { ThemeToggle } from '../../components/ThemeToggle';
+import { IconBell } from '../../components/icons';
+
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { CorpusGapPanel } from '../../components/CorpusGapPanel';

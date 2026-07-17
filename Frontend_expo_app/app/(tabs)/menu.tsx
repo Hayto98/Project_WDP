@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Image, Alert } from 'react-native';
+import { ThemeToggle } from '../../components/ThemeToggle';
+import { IconBell, IconGap, IconBookmark, IconLibrary, IconTelescope, IconUser } from '../../components/icons';
+
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconGap, IconBookmark, IconLibrary, IconTelescope, IconUser } from '../../components/icons';
 
 const MENU_ITEMS = [
   { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(tabs)/workspace' },

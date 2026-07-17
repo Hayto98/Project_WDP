@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
+import { ThemeToggle } from '../../components/ThemeToggle';
+import { IconBell } from '../../components/icons';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
@@ -176,8 +179,17 @@ export default function FeedbackScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <Text variant="lead" weight="bold">Hộp chat phản hồi</Text>
-        <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>{feedbacks.length} hội thoại</Text>
+        <View style={{ width: '100%' }}>
+  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+    <View style={{ flex: 1, paddingRight: 16 }}>
+      <Text variant="lead" weight="bold">Hộp chat phản hồi</Text>
+    </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+<ThemeToggle />
+  </View>
+  </View>
+  <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>{feedbacks.length} hội thoại</Text>
+</View>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {feedbacks.map(f => {
