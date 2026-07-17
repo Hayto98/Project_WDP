@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { IconAlert, IconBell, IconRefresh, IconSearch, IconTelescope } from "../components/icons";
+import { IconAlert, IconRefresh, IconSearch, IconTelescope, IconUser } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import {
   type AdminJob,
@@ -15,9 +15,10 @@ import {
 } from "../data/adminSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { adminApi, authApi, feedbackApi, getCurrentUser } from "../lib/api";
+import { adminApi, authApi, feedbackApi, getCurrentUser, userApi } from "../lib/api";
+import type { FormEvent } from "react";
 
-type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "broadcast" | "reading" | "logs";
+type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "broadcast" | "reading" | "logs" | "account";
 type AdminReadAction = "refresh" | "export" | "threshold" | "raw";
 type FeedbackStatus = "Pending" | "Reviewed" | "Resolved";
 
@@ -77,6 +78,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "broadcast", label: "Tín hiệu hệ thống" },
   { id: "reading", label: "Thống kê lượt đọc" },
   { id: "logs", label: "Audit log" },
+  { id: "account", label: "Tài khoản" },
 ];
 
 const JOB_STATUS_LABEL: Record<JobStatus, string> = {
@@ -133,7 +135,67 @@ export function AdminPage({ theme, toggle }: Props) {
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
   const [checkingSources, setCheckingSources] = useState(false);
-  const currentUser = getCurrentUser();
+  const [userFilters, setUserFilters] = useState({
+    q: "",
+    role: "",
+    status: "",
+    active_from: "",
+    active_to: "",
+    min_saved: "",
+    max_saved: "",
+  });
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const [profileName, setProfileName] = useState(() => getCurrentUser()?.full_name ?? "");
+  const [profileEmail, setProfileEmail] = useState(() => getCurrentUser()?.email ?? "");
+  const [profileNotice, setProfileNotice] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordNotice, setPasswordNotice] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+
+  const submitProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setProfileNotice("");
+    setProfileBusy(true);
+    try {
+      const nextUser = await userApi.updateProfile({
+        full_name: profileName.trim(),
+        email: profileEmail.trim(),
+      });
+      setCurrentUser(nextUser);
+      setProfileName(nextUser.full_name);
+      setProfileEmail(nextUser.email);
+      setProfileNotice("Đã cập nhật thông tin tài khoản.");
+    } catch (err) {
+      setProfileNotice(err instanceof Error ? err.message : "Không cập nhật được tài khoản.");
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
+  const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordNotice("");
+    if (newPassword !== confirmPassword) {
+      setPasswordNotice("Mật khẩu mới chưa khớp.");
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      const result = await authApi.changePassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordNotice(result.message || "Đã cập nhật mật khẩu thành công.");
+    } catch (err) {
+      setPasswordNotice(err instanceof Error ? err.message : "Không cập nhật được mật khẩu.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
 
   const refreshPendingFeedbackCount = async () => {
     try {
@@ -142,6 +204,39 @@ export function AdminPage({ theme, toggle }: Props) {
     } catch {
       // Keep last known count if pending endpoint is unavailable.
     }
+  };
+
+  const handleSearchUsers = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSearchingUsers(true);
+    try {
+      // Clean up empty filters
+      const queryParams: any = {};
+      Object.entries(userFilters).forEach(([key, value]) => {
+        if (value !== "") queryParams[key] = value;
+      });
+      const results = await adminApi.users(queryParams);
+      setUsers(results);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  const handleResetFilters = () => {
+    const defaultFilters = {
+      q: "",
+      role: "",
+      status: "",
+      active_from: "",
+      active_to: "",
+      min_saved: "",
+      max_saved: "",
+    };
+    setUserFilters(defaultFilters);
+    setSearchingUsers(true);
+    adminApi.users({}).then(setUsers).catch(console.error).finally(() => setSearchingUsers(false));
   };
 
   useEffect(() => {
@@ -444,26 +539,7 @@ export function AdminPage({ theme, toggle }: Props) {
             </p>
           </div>
           <div className="topbar__controls">
-            <button
-              className={`btn btn--ghost admin-feedback-alert ${pendingFeedbackCount > 0 ? "is-hot" : ""}`}
-              type="button"
-              onClick={() => void openFeedbackInbox()}
-              aria-label={
-                pendingFeedbackCount > 0
-                  ? `Có ${pendingFeedbackCount} phản hồi đang chờ`
-                  : "Mở hộp phản hồi"
-              }
-              title={
-                pendingFeedbackCount > 0
-                  ? `Có ${pendingFeedbackCount} tin nhắn phản hồi đang chờ`
-                  : "Phản hồi người dùng"
-              }
-            >
-              <IconBell width={15} height={15} />
-              {pendingFeedbackCount > 0
-                ? `Phản hồi mới (${pendingFeedbackCount})`
-                : "Phản hồi"}
-            </button>
+
             <button className="btn btn--ghost" type="button" onClick={() => setTab("logs")}>
               <IconAlert width={15} height={15} /> Xem audit log
             </button>
@@ -521,6 +597,98 @@ export function AdminPage({ theme, toggle }: Props) {
           </div>
         )}
 
+        {tab === "account" && (
+          <section className="account-grid" style={{ paddingTop: '24px' }}>
+              <article className="account-panel">
+                <header className="account-panel__head">
+                  <span className="account-panel__icon" aria-hidden>
+                    <IconUser width={18} height={18} />
+                  </span>
+                  <span>
+                    <h2>Thông tin cá nhân</h2>
+                    <small>{currentUser?.email ?? "Chưa xác định email"}</small>
+                  </span>
+                </header>
+                <dl className="account-profile">
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{currentUser?.email ?? "Chưa xác định email"}</dd>
+                  </div>
+                  <div>
+                    <dt>Vai trò</dt>
+                    <dd>{currentUser?.roles.join(", ") ?? "Admin"}</dd>
+                  </div>
+                  <div>
+                    <dt>Trạng thái</dt>
+                    <dd>{currentUser?.status ?? "Active"}</dd>
+                  </div>
+                </dl>
+                <form className="account-form" onSubmit={submitProfile}>
+                  <label>
+                    <span>Họ tên</span>
+                    <input
+                      type="text"
+                      value={profileName}
+                      onChange={(event) => setProfileName(event.target.value)}
+                      minLength={2}
+                      maxLength={100}
+                      required
+                    />
+                  </label>
+                  <button className="btn btn--primary" type="submit" disabled={profileBusy}>
+                    {profileBusy ? "Đang lưu..." : "Lưu thông tin"}
+                  </button>
+                </form>
+                {profileNotice && <p className="invite-notice account-notice" role="status">{profileNotice}</p>}
+              </article>
+
+              <article className="account-panel">
+                <header className="account-panel__head">
+                  <span>
+                    <h2>Đổi mật khẩu</h2>
+                    <small>Yêu cầu nhập mật khẩu hiện tại trước khi cập nhật</small>
+                  </span>
+                </header>
+                <form className="account-form" onSubmit={submitPassword}>
+                  <label>
+                    <span>Mật khẩu hiện tại</span>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>Mật khẩu mới</span>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>Nhập lại mật khẩu mới</span>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                  <button className="btn btn--primary" type="submit" disabled={passwordBusy}>
+                    {passwordBusy ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
+                  </button>
+                </form>
+                {passwordNotice && <p className="invite-notice account-notice" role="status">{passwordNotice}</p>}
+              </article>
+            </section>
+        )}
+
         {tab === "jobs" && (
           <section className="admin-panel">
             <PanelHead title="Batch jobs thu thập dữ liệu" meta="OpenAlex, Crossref, arXiv, Semantic Scholar và IEEE" />
@@ -557,26 +725,89 @@ export function AdminPage({ theme, toggle }: Props) {
 
         {tab === "users" && (
           <section className="admin-panel">
-            <PanelHead title="Quản lý người dùng" meta="Role Student/Admin, trạng thái tài khoản và hoạt động gần đây" />
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Người dùng</th>
-                    <th>Role</th>
-                    <th>Trạng thái</th>
-                    <th>Hoạt động</th>
-                    <th>Paper lưu</th>
-                    <th>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <UserRow key={user.id} user={user} onToggleLock={toggleUserLock} />
-                  ))}
-                </tbody>
-              </table>
+            <div className="admin-log-head" style={{ marginBottom: 16 }}>
+              <PanelHead title="Quản lý người dùng" meta="Role Student/Admin, trạng thái tài khoản và hoạt động gần đây" />
             </div>
+
+            <form onSubmit={handleSearchUsers} className="admin-user-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '24px', padding: '16px', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Tìm kiếm</label>
+                <div className="admin-log-search" style={{ width: '100%', margin: 0 }}>
+                  <IconSearch width={15} height={15} />
+                  <input
+                    value={userFilters.q}
+                    onChange={(e) => setUserFilters({ ...userFilters, q: e.target.value })}
+                    placeholder="Tên, email..."
+                  />
+                </div>
+              </div>
+              
+              <div style={{ flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Role</label>
+                <select className="form-input" style={{ padding: '8px' }} value={userFilters.role} onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}>
+                  <option value="">Tất cả</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Student">Student</option>
+                </select>
+              </div>
+
+              <div style={{ flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Trạng thái</label>
+                <select className="form-input" style={{ padding: '8px' }} value={userFilters.status} onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}>
+                  <option value="">Tất cả</option>
+                  <option value="Active">Đang hoạt động</option>
+                  <option value="Inactive">Chờ duyệt</option>
+                  <option value="Banned">Đã khóa</option>
+                </select>
+              </div>
+
+              <div style={{ flex: '1 1 130px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Từ ngày</label>
+                <input type="date" className="form-input" style={{ padding: '7px' }} value={userFilters.active_from} onChange={(e) => setUserFilters({ ...userFilters, active_from: e.target.value })} />
+              </div>
+              <div style={{ flex: '1 1 130px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Đến ngày</label>
+                <input type="date" className="form-input" style={{ padding: '7px' }} value={userFilters.active_to} onChange={(e) => setUserFilters({ ...userFilters, active_to: e.target.value })} />
+              </div>
+
+              <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Paper (từ)</label>
+                <input type="number" min="0" className="form-input" style={{ padding: '8px' }} placeholder="Min" value={userFilters.min_saved} onChange={(e) => setUserFilters({ ...userFilters, min_saved: e.target.value })} />
+              </div>
+              <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Paper (đến)</label>
+                <input type="number" min="0" className="form-input" style={{ padding: '8px' }} placeholder="Max" value={userFilters.max_saved} onChange={(e) => setUserFilters({ ...userFilters, max_saved: e.target.value })} />
+              </div>
+
+              <div style={{ flex: '1 1 100%', display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                <button type="button" className="btn btn--ghost" onClick={handleResetFilters}>Xóa bộ lọc</button>
+                <button type="submit" className="btn btn--primary">Lọc kết quả</button>
+              </div>
+            </form>
+
+            {searchingUsers ? (
+              <p style={{ padding: 16 }}>Đang tìm kiếm...</p>
+            ) : (
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Người dùng</th>
+                      <th>Role</th>
+                      <th>Trạng thái</th>
+                      <th>Hoạt động</th>
+                      <th>Paper lưu</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => (
+                      <UserRow key={user.id} user={user} onToggleLock={toggleUserLock} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 

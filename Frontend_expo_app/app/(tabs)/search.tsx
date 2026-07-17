@@ -244,10 +244,10 @@ export default function SearchScreen() {
           {SCOPES.map(s => (
             <TouchableOpacity 
               key={s.id} 
-              style={[styles.scopeBtn, scope === s.id && { backgroundColor: theme.primaryWeak }]}
+              style={[styles.scopeBtn, scope === s.id && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }]}
               onPress={() => { setScope(s.id); setPage(1); }}
             >
-              <Text variant="xs" color={scope === s.id ? 'primary' : 'inkMuted'} weight={scope === s.id ? 'bold' : 'normal'}>
+              <Text variant="xs" color={scope === s.id ? 'surface' : 'inkMuted'} weight={scope === s.id ? 'bold' : 'normal'}>
                 {s.label}
               </Text>
             </TouchableOpacity>
@@ -584,7 +584,7 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 32,
-    borderRadius: 12,
+    borderRadius: 16,
     marginTop: 16,
   },
   chipRow: {
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
     marginRight: 8,
@@ -622,9 +622,14 @@ const styles = StyleSheet.create({
   },
   resultCard: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   tags: {
     flexDirection: 'row',
@@ -634,7 +639,7 @@ const styles = StyleSheet.create({
   tag: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 6,
     marginRight: 6,
     marginBottom: 6,
   },

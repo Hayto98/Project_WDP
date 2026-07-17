@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { Widget } from '../../components/Widget';
-import { IconTrend, IconGap, IconLibrary, IconSparkle, IconRefresh, IconBookmark } from '../../components/icons';
+import { IconTrend, IconGap, IconLibrary, IconSparkle, IconRefresh, IconBookmark, IconBell } from '../../components/icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { dashboardApi } from '../../lib/api';
+import { dashboardApi, notificationApi } from '../../lib/api';
 import type { TimeRange, DashboardData } from '../../data/types';
 import { KpiStrip } from '../../components/KpiStrip';
 import { TrendChart } from '../../components/TrendChart';
@@ -23,10 +24,12 @@ const RANGES: { id: TimeRange; label: string }[] = [
 
 export default function OverviewScreen() {
   const { theme } = useTheme();
+  const router = useRouter();
   const [range, setRange] = useState<TimeRange>('12m');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'default' | 'loading' | 'empty' | 'error'>('loading');
   const [data, setData] = useState<DashboardData | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -36,8 +39,12 @@ export default function OverviewScreen() {
     setLoading(true);
     setView('loading');
     try {
-      const result = await dashboardApi.overview();
+      const [result, notifications] = await Promise.all([
+        dashboardApi.overview(),
+        notificationApi.list()
+      ]);
       setData(result);
+      setUnreadCount(notifications.filter(n => n.unread).length);
       setView('default');
     } catch (err) {
       console.warn('Failed to load dashboard:', err);
@@ -69,8 +76,8 @@ export default function OverviewScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.bg, justifyContent: 'center', alignItems: 'center' }]}>
         <Text color="danger">Lỗi khi tải dữ liệu tổng quan</Text>
-        <TouchableOpacity style={{ marginTop: 16, padding: 12, backgroundColor: theme.primary, borderRadius: 8 }} onPress={fetchData}>
-          <Text color="surface">Thử lại</Text>
+        <TouchableOpacity style={{ marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.primary, borderRadius: 999, shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 3 }} onPress={fetchData}>
+          <Text color="surface" weight="bold">Thử lại</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -83,15 +90,34 @@ export default function OverviewScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text variant="heading" weight="bold">Tổng quan</Text>
-            <Text variant="sm" color="inkMuted" style={{ marginTop: 4 }}>
-              Bức tranh xu hướng nghiên cứu & khoảng trống tiềm năng
-            </Text>
-            <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>
-              Cập nhật {data.updatedAt}
-            </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <Text variant="heading" weight="bold">Tổng quan</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={{ position: 'relative' }}>
+                <IconBell color={theme.ink} size={20} />
+                {unreadCount > 0 && (
+                  <View style={{
+                    position: 'absolute', top: -5, right: -5, backgroundColor: theme.danger,
+                    borderRadius: 9, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center',
+                    paddingHorizontal: 4, borderWidth: 1, borderColor: theme.bg
+                  }}>
+                    <Text variant="xs" weight="bold" style={{ color: '#fff', fontSize: 10, lineHeight: 12, textAlign: 'center' }}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <ThemeToggle />
+            </View>
           </View>
+          <Text variant="sm" color="inkMuted" style={{ marginTop: 4 }}>
+            Bức tranh xu hướng nghiên cứu & khoảng trống tiềm năng
+          </Text>
+          <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>
+            Cập nhật {data.updatedAt}
+          </Text>
         </View>
 
         {/* Controls */}
@@ -102,11 +128,11 @@ export default function OverviewScreen() {
                 key={r.id}
                 style={[
                   styles.segBtn, 
-                  range === r.id && { backgroundColor: theme.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }
+                  range === r.id && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }
                 ]}
                 onPress={() => setRange(r.id)}
               >
-                <Text variant="sm" weight={range === r.id ? 'bold' : 'normal'} color={range === r.id ? 'ink' : 'inkMuted'}>
+                <Text variant="sm" weight={range === r.id ? 'bold' : 'normal'} color={range === r.id ? 'surface' : 'inkMuted'}>
                   {r.label}
                 </Text>
               </TouchableOpacity>
@@ -117,7 +143,6 @@ export default function OverviewScreen() {
             <TouchableOpacity style={styles.iconBtn} onPress={handleRefresh}>
               <IconRefresh color={theme.ink} />
             </TouchableOpacity>
-            <ThemeToggle />
           </View>
         </View>
 
@@ -129,6 +154,7 @@ export default function OverviewScreen() {
           title="Xu hướng công bố"
           subtitle="Số bài báo / năm theo lĩnh vực"
           icon={<IconTrend color={theme.primary} />}
+          iconBgColor={theme.primaryWeak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -138,7 +164,8 @@ export default function OverviewScreen() {
         <Widget
           title="Bản đồ khoảng trống"
           subtitle="Mật độ công bố theo lĩnh vực × khía cạnh"
-          icon={<IconGap color={theme.primary} />}
+          icon={<IconGap color={(theme as any).accent1} />}
+          iconBgColor={(theme as any).accent1Weak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -148,7 +175,8 @@ export default function OverviewScreen() {
         <Widget
           title="Top bài báo thịnh hành"
           subtitle="Theo lượt xem 30 ngày qua"
-          icon={<IconLibrary color={theme.primary} />}
+          icon={<IconLibrary color={(theme as any).accent2} />}
+          iconBgColor={(theme as any).accent2Weak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -158,7 +186,8 @@ export default function OverviewScreen() {
         <Widget
           title="Phân tích từ AI"
           subtitle="Tóm tắt & gợi ý hướng nghiên cứu"
-          icon={<IconSparkle color={theme.primary} />}
+          icon={<IconSparkle color={(theme as any).accent3} />}
+          iconBgColor={(theme as any).accent3Weak}
           status={status}
           onRetry={() => setView('default')}
         >
@@ -167,7 +196,8 @@ export default function OverviewScreen() {
 
         <Widget
           title="Không gian của bạn"
-          icon={<IconBookmark color={theme.primary} />}
+          icon={<IconBookmark color={(theme as any).accent4} />}
+          iconBgColor={(theme as any).accent4Weak}
           status={railFirstRun ? 'empty' : status === 'loading' ? 'loading' : 'ready'}
           onRetry={() => setView('default')}
           emptyMessage="Bạn chưa theo dõi chủ đề nào"
@@ -202,13 +232,13 @@ const styles = StyleSheet.create({
   },
   seg: {
     flexDirection: 'row',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 4,
   },
   segBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   actions: {
     flexDirection: 'row',

@@ -16,14 +16,69 @@ const { broadcastSystemSignal } = require('../services/notification.service');
 async function getUsers(req, res) {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const filter = {};
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.role) filter.roles = req.query.role;
+    const { q, status, role, active_from, active_to, min_saved, max_saved } = req.query;
 
-    const [users, total] = await Promise.all([
-      User.find(filter).select('-password_hash').skip(skip).limit(limit).sort({ created_at: -1 }).lean(),
-      User.countDocuments(filter),
+    const match = {};
+    if (status) match.status = status;
+    if (role) match.roles = role;
+    if (q) {
+      match.$or = [
+        { full_name: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+      ];
+    }
+    
+    if (active_from || active_to) {
+      match.updated_at = {};
+      if (active_from) match.updated_at.$gte = new Date(active_from);
+      if (active_to) match.updated_at.$lte = new Date(active_to);
+    }
+
+    const pipeline = [
+      { $match: match },
+      {
+        $lookup: {
+          from: 'usercollections',
+          localField: '_id',
+          foreignField: 'user_id',
+          as: 'collections',
+        },
+      },
+      {
+        $addFields: {
+          saved_papers_count: {
+            $sum: {
+              $map: {
+                input: '$collections',
+                as: 'col',
+                in: { $size: { $ifNull: ['$$col.saved_papers', []] } },
+              },
+            },
+          },
+        },
+      },
+      { $project: { collections: 0, password_hash: 0 } },
+    ];
+
+    if (min_saved !== undefined || max_saved !== undefined) {
+      const savedMatch = {};
+      if (min_saved !== undefined) savedMatch.$gte = Number(min_saved);
+      if (max_saved !== undefined) savedMatch.$lte = Number(max_saved);
+      pipeline.push({ $match: { saved_papers_count: savedMatch } });
+    }
+
+    const result = await User.aggregate([
+      ...pipeline,
+      {
+        $facet: {
+          data: [{ $sort: { created_at: -1 } }, { $skip: skip }, { $limit: limit }],
+          totalCount: [{ $count: 'count' }],
+        },
+      },
     ]);
+
+    const users = result[0].data;
+    const total = result[0].totalCount[0] ? result[0].totalCount[0].count : 0;
 
     return ApiResponse.paginated(res, users, page, limit, total);
   } catch (err) {
@@ -152,10 +207,33 @@ async function getAuditLogs(req, res) {
     if (req.query.severity) filter['details.severity'] = req.query.severity;
     if (req.query.actor) filter['details.actor'] = { $regex: req.query.actor, $options: 'i' };
 
-    const [logs, total] = await Promise.all([
-      SystemLog.find(filter).sort({ timestamp: -1 }).skip(skip).limit(limit).lean(),
+    const [rawLogs, total] = await Promise.all([
+      SystemLog.find(filter)
+        .populate('meta.user_id', 'full_name email')
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       SystemLog.countDocuments(filter),
     ]);
+
+    const logs = rawLogs.map(log => {
+      // Map meta.user_id to actor if details.actor is missing
+      if (!log.details) log.details = {};
+      if (!log.details.actor) {
+        if (log.meta && log.meta.user_id) {
+          log.details.actor = log.meta.user_id.full_name || log.meta.user_id.email;
+        } else if (log.details.email) {
+          log.details.actor = log.details.email;
+        } else {
+          log.details.actor = 'System';
+        }
+      }
+      if (!log.details.action) {
+        log.details.action = log.meta ? log.meta.action_type : 'System Event';
+      }
+      return log;
+    });
 
     return ApiResponse.paginated(res, logs, page, limit, total);
   } catch (err) {

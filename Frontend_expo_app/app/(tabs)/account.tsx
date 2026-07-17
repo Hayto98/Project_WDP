@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { Widget } from '../../components/Widget';
-import { IconArrowLeft, IconSend } from '../../components/icons';
-import { userApi, authApi, feedbackApi } from '../../lib/api';
+import { IconArrowLeft, IconSend, IconBell } from '../../components/icons';
+import { ThemeToggle } from '../../components/ThemeToggle';
+import { userApi, authApi, feedbackApi, notificationApi } from '../../lib/api';
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -34,10 +35,19 @@ export default function AccountScreen() {
   const [replyContent, setReplyContent] = useState("");
   const [feedbackNotice, setFeedbackNotice] = useState("");
   const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     loadFeedbacks();
+    loadUnreadCount();
   }, []);
+
+  const loadUnreadCount = async () => {
+    try {
+      const items = await notificationApi.list();
+      setUnreadCount(items.filter(n => n.unread).length);
+    } catch(e) {}
+  };
 
   const loadFeedbacks = async () => {
     setFeedbackNotice("");
@@ -150,7 +160,24 @@ export default function AccountScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <IconArrowLeft color={activeTheme.ink} size={24} />
         </TouchableOpacity>
-        <Text variant="heading" weight="bold">Tài khoản</Text>
+        <Text variant="heading" weight="bold" style={{ flex: 1 }}>Tài khoản</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={{ position: 'relative' }}>
+            <IconBell color={activeTheme.ink} size={20} />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: -5, right: -5, backgroundColor: activeTheme.danger,
+                borderRadius: 9, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center',
+                paddingHorizontal: 4, borderWidth: 1, borderColor: activeTheme.bg
+              }}>
+                <Text variant="xs" weight="bold" style={{ color: '#fff', fontSize: 10, lineHeight: 12, textAlign: 'center' }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <ThemeToggle />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -236,7 +263,7 @@ export default function AccountScreen() {
         <Widget title="Chat phản hồi với Admin" subtitle="Gửi góp ý và xem lại toàn bộ lịch sử hội thoại" status="ready">
           
           <View style={styles.formGroup}>
-            <Text variant="sm" weight="bold" color="inkMuted" style={{ marginBottom: 4 }}>Bắt đầu / tiếp tục hội thoại</Text>
+            <Text variant="sm" weight="bold" color="inkMuted" style={{ marginBottom: 4 }}>Tạo cuộc hội thoại mới</Text>
             <View style={styles.row}>
               <TextInput
                 style={[styles.input, { flex: 1, borderColor: activeTheme.border, color: activeTheme.ink, backgroundColor: activeTheme.surface }]}
@@ -269,7 +296,7 @@ export default function AccountScreen() {
                       style={[
                         styles.threadChip, 
                         { borderColor: activeTheme.border, backgroundColor: activeTheme.surface2 },
-                        isSelected && { borderColor: activeTheme.primary, backgroundColor: activeTheme.primary + '20' }
+                        isSelected && { borderColor: activeTheme.primary, backgroundColor: activeTheme.primary.replace('hsl(', 'hsla(').replace(')', ', 0.15)') }
                       ]}
                       onPress={() => setSelectedFeedbackId(id)}
                     >
@@ -289,13 +316,22 @@ export default function AccountScreen() {
                 <View style={[styles.chatBox, { borderColor: activeTheme.border, backgroundColor: activeTheme.surface2 }]}>
                   {messages.map((msg: any, i: number) => {
                     const isAdmin = msg.sender_role === 'Admin';
+                    const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
                     return (
                       <View key={i} style={[styles.msgWrapper, isAdmin ? styles.msgAdminWrapper : styles.msgUserWrapper]}>
-                        <View style={[
-                          styles.msgBubble, 
-                          isAdmin ? { backgroundColor: activeTheme.surface, borderColor: activeTheme.border, borderWidth: 1 } : { backgroundColor: activeTheme.primary }
-                        ]}>
-                          <Text variant="sm" color={isAdmin ? 'ink' : 'surface'}>{msg.content}</Text>
+                        <View style={{ flexShrink: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, justifyContent: isAdmin ? 'flex-start' : 'flex-end', paddingHorizontal: 4 }}>
+                            <Text variant="xs" weight="bold" color="inkMuted">{msg.sender_name || (isAdmin ? 'Admin' : 'Bạn')}</Text>
+                            {timeStr ? <Text variant="xs" color="inkMuted" style={{ fontSize: 10 }}>{timeStr}</Text> : null}
+                          </View>
+                          <View style={[
+                            styles.msgBubble, 
+                            isAdmin 
+                              ? { backgroundColor: activeTheme.surface, borderColor: activeTheme.border, borderWidth: 1, borderTopLeftRadius: 4 } 
+                              : { backgroundColor: activeTheme.primary, borderTopRightRadius: 4 }
+                          ]}>
+                            <Text variant="sm" color={isAdmin ? 'ink' : 'surface'}>{msg.content}</Text>
+                          </View>
                         </View>
                       </View>
                     );
@@ -304,14 +340,14 @@ export default function AccountScreen() {
                   {/* Reply Input */}
                   <View style={[styles.row, { marginTop: 12 }]}>
                     <TextInput
-                      style={[styles.input, { flex: 1, borderColor: activeTheme.border, color: activeTheme.ink, backgroundColor: activeTheme.surface, height: 40, paddingVertical: 8 }]}
+                      style={[styles.input, { flex: 1, borderColor: activeTheme.border, color: activeTheme.ink, backgroundColor: activeTheme.surface, height: 40, paddingVertical: 8, borderRadius: 20, paddingHorizontal: 16 }]}
                       placeholder="Viết phản hồi..."
                       placeholderTextColor={activeTheme.inkMuted}
                       value={replyContent}
                       onChangeText={setReplyContent}
                     />
                     <TouchableOpacity 
-                      style={[styles.sendBtn, { backgroundColor: activeTheme.primary, marginLeft: 8, width: 40, height: 40, paddingHorizontal: 0 }]}
+                      style={[styles.sendBtn, { backgroundColor: activeTheme.primary, marginLeft: 8, width: 40, height: 40, borderRadius: 20, paddingHorizontal: 0 }]}
                       onPress={replyInThread}
                       disabled={feedbackBusy}
                     >

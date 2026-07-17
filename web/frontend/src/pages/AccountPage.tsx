@@ -222,6 +222,10 @@ export function AccountPage({ theme, toggle }: Props) {
               <dd>{currentUser?.full_name ?? "Người dùng"}</dd>
             </div>
             <div>
+              <dt>Email</dt>
+              <dd>{currentUser?.email ?? "Chưa xác định email"}</dd>
+            </div>
+            <div>
               <dt>Vai trò</dt>
               <dd>{currentUser?.roles.join(", ") ?? "Student"}</dd>
             </div>
@@ -239,16 +243,6 @@ export function AccountPage({ theme, toggle }: Props) {
                 onChange={(event) => setProfileName(event.target.value)}
                 minLength={2}
                 maxLength={100}
-                required
-              />
-            </label>
-            <label>
-              <span>Email</span>
-              <input
-                type="email"
-                value={profileEmail}
-                onChange={(event) => setProfileEmail(event.target.value)}
-                maxLength={255}
                 required
               />
             </label>

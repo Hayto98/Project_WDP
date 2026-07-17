@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Platform, StatusBar, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
+import { ThemeToggle } from '../../components/ThemeToggle';
+import { IconBell, IconArrowLeft, IconPlus, IconGrid, IconTrash, IconSettings } from '../../components/icons';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconArrowLeft, IconPlus, IconGrid, IconTrash, IconSettings } from '../../components/icons';
+
 import { useAuth } from '../../context/AuthContext';
 import { workspaceApi } from '../../lib/api';
 import { type Workspace, type WorkspaceMember, type WorkspaceItem, type CollaborationInvite, API_BASE_URL, formatWhen } from '../../lib/api';

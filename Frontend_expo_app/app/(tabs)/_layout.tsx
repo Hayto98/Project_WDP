@@ -1,8 +1,11 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
+import { View, TouchableOpacity, Alert } from 'react-native';
 
 import { useTheme } from '../../context/ThemeContext';
+import { IconBell } from '../../components/icons';
+import { ThemeToggle } from '../../components/ThemeToggle';
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
@@ -16,6 +19,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.inkMuted,
@@ -34,6 +38,7 @@ export default function TabLayout() {
         options={{
           title: 'Tổng quan',
           tabBarIcon: ({ color }) => <TabBarIcon name="bar-chart" color={color} />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -60,8 +65,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="menu"
         options={{
-          title: 'Menu',
+          title: 'Khác',
           tabBarIcon: ({ color }) => <TabBarIcon name="bars" color={color} />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -94,6 +100,14 @@ export default function TabLayout() {
         name="account"
         options={{
           href: null,
+          headerShown: false
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
+          title: 'Hộp thư',
           headerShown: false
         }}
       />
