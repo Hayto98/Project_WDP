@@ -927,8 +927,9 @@ export const adminApi = {
   async stats(): Promise<{ totalPapers: number; totalUsers: number; activeJobs: number; dataSources: number }> {
     return request("/admin/stats");
   },
-  async users(): Promise<AdminUser[]> {
-    const { data } = await requestWithMeta<any[]>("/admin/users?limit=100");
+  async users(query?: { q?: string; role?: string; status?: string; active_from?: string; active_to?: string; min_saved?: number; max_saved?: number }): Promise<AdminUser[]> {
+    const qs = toSearchParams({ limit: 100, ...query });
+    const { data } = await requestWithMeta<any[]>(`/admin/users${qs}`);
     return data.map((user) => ({
       id: asId(user._id),
       name: user.full_name ?? user.email,
