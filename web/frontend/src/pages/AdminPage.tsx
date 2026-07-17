@@ -133,6 +133,16 @@ export function AdminPage({ theme, toggle }: Props) {
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
   const [checkingSources, setCheckingSources] = useState(false);
+  const [userFilters, setUserFilters] = useState({
+    q: "",
+    role: "",
+    status: "",
+    active_from: "",
+    active_to: "",
+    min_saved: "",
+    max_saved: "",
+  });
+  const [searchingUsers, setSearchingUsers] = useState(false);
   const currentUser = getCurrentUser();
 
   const refreshPendingFeedbackCount = async () => {
@@ -142,6 +152,39 @@ export function AdminPage({ theme, toggle }: Props) {
     } catch {
       // Keep last known count if pending endpoint is unavailable.
     }
+  };
+
+  const handleSearchUsers = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSearchingUsers(true);
+    try {
+      // Clean up empty filters
+      const queryParams: any = {};
+      Object.entries(userFilters).forEach(([key, value]) => {
+        if (value !== "") queryParams[key] = value;
+      });
+      const results = await adminApi.users(queryParams);
+      setUsers(results);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  const handleResetFilters = () => {
+    const defaultFilters = {
+      q: "",
+      role: "",
+      status: "",
+      active_from: "",
+      active_to: "",
+      min_saved: "",
+      max_saved: "",
+    };
+    setUserFilters(defaultFilters);
+    setSearchingUsers(true);
+    adminApi.users({}).then(setUsers).catch(console.error).finally(() => setSearchingUsers(false));
   };
 
   useEffect(() => {
@@ -557,26 +600,89 @@ export function AdminPage({ theme, toggle }: Props) {
 
         {tab === "users" && (
           <section className="admin-panel">
-            <PanelHead title="Quản lý người dùng" meta="Role Student/Admin, trạng thái tài khoản và hoạt động gần đây" />
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Người dùng</th>
-                    <th>Role</th>
-                    <th>Trạng thái</th>
-                    <th>Hoạt động</th>
-                    <th>Paper lưu</th>
-                    <th>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <UserRow key={user.id} user={user} onToggleLock={toggleUserLock} />
-                  ))}
-                </tbody>
-              </table>
+            <div className="admin-log-head" style={{ marginBottom: 16 }}>
+              <PanelHead title="Quản lý người dùng" meta="Role Student/Admin, trạng thái tài khoản và hoạt động gần đây" />
             </div>
+
+            <form onSubmit={handleSearchUsers} className="admin-user-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '24px', padding: '16px', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Tìm kiếm</label>
+                <div className="admin-log-search" style={{ width: '100%', margin: 0 }}>
+                  <IconSearch width={15} height={15} />
+                  <input
+                    value={userFilters.q}
+                    onChange={(e) => setUserFilters({ ...userFilters, q: e.target.value })}
+                    placeholder="Tên, email..."
+                  />
+                </div>
+              </div>
+              
+              <div style={{ flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Role</label>
+                <select className="form-input" style={{ padding: '8px' }} value={userFilters.role} onChange={(e) => setUserFilters({ ...userFilters, role: e.target.value })}>
+                  <option value="">Tất cả</option>
+                  <option value="Admin">Admin</option>
+                  <option value="Student">Student</option>
+                </select>
+              </div>
+
+              <div style={{ flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Trạng thái</label>
+                <select className="form-input" style={{ padding: '8px' }} value={userFilters.status} onChange={(e) => setUserFilters({ ...userFilters, status: e.target.value })}>
+                  <option value="">Tất cả</option>
+                  <option value="Active">Đang hoạt động</option>
+                  <option value="Inactive">Chờ duyệt</option>
+                  <option value="Banned">Đã khóa</option>
+                </select>
+              </div>
+
+              <div style={{ flex: '1 1 130px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Từ ngày</label>
+                <input type="date" className="form-input" style={{ padding: '7px' }} value={userFilters.active_from} onChange={(e) => setUserFilters({ ...userFilters, active_from: e.target.value })} />
+              </div>
+              <div style={{ flex: '1 1 130px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Đến ngày</label>
+                <input type="date" className="form-input" style={{ padding: '7px' }} value={userFilters.active_to} onChange={(e) => setUserFilters({ ...userFilters, active_to: e.target.value })} />
+              </div>
+
+              <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Paper (từ)</label>
+                <input type="number" min="0" className="form-input" style={{ padding: '8px' }} placeholder="Min" value={userFilters.min_saved} onChange={(e) => setUserFilters({ ...userFilters, min_saved: e.target.value })} />
+              </div>
+              <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Paper (đến)</label>
+                <input type="number" min="0" className="form-input" style={{ padding: '8px' }} placeholder="Max" value={userFilters.max_saved} onChange={(e) => setUserFilters({ ...userFilters, max_saved: e.target.value })} />
+              </div>
+
+              <div style={{ flex: '1 1 100%', display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                <button type="button" className="btn btn--ghost" onClick={handleResetFilters}>Xóa bộ lọc</button>
+                <button type="submit" className="btn btn--primary">Lọc kết quả</button>
+              </div>
+            </form>
+
+            {searchingUsers ? (
+              <p style={{ padding: 16 }}>Đang tìm kiếm...</p>
+            ) : (
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Người dùng</th>
+                      <th>Role</th>
+                      <th>Trạng thái</th>
+                      <th>Hoạt động</th>
+                      <th>Paper lưu</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => (
+                      <UserRow key={user.id} user={user} onToggleLock={toggleUserLock} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 
