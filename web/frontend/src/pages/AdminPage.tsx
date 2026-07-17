@@ -145,6 +145,20 @@ export function AdminPage({ theme, toggle }: Props) {
     max_saved: "",
   });
   const [searchingUsers, setSearchingUsers] = useState(false);
+  
+  // User Creation State
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [newUser, setNewUser] = useState({
+    full_name: "",
+    email: "",
+    password: "",
+    role: "Student",
+    status: "Active"
+  });
+  const [createUserNotice, setCreateUserNotice] = useState("");
+  const [createUserBusy, setCreateUserBusy] = useState(false);
+
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
   const [profileName, setProfileName] = useState(() => getCurrentUser()?.full_name ?? "");
   const [profileEmail, setProfileEmail] = useState(() => getCurrentUser()?.email ?? "");
@@ -221,6 +235,33 @@ export function AdminPage({ theme, toggle }: Props) {
       console.error(err);
     } finally {
       setSearchingUsers(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateUserNotice("");
+    setCreateUserBusy(true);
+    try {
+      const created = await adminApi.createUser({
+        full_name: newUser.full_name,
+        email: newUser.email,
+        password: newUser.password,
+        roles: [newUser.role],
+        status: newUser.status,
+      });
+      setUsers((current) => [created, ...current]);
+      setCreateUserNotice("Tạo người dùng thành công.");
+      setTimeout(() => {
+        setShowCreateUser(false);
+        setNewUser({ full_name: "", email: "", password: "", role: "Student", status: "Active" });
+        setCreateUserNotice("");
+        setShowPassword(false);
+      }, 1500);
+    } catch (err) {
+      setCreateUserNotice(err instanceof Error ? err.message : "Lỗi tạo người dùng");
+    } finally {
+      setCreateUserBusy(false);
     }
   };
 
@@ -725,8 +766,19 @@ export function AdminPage({ theme, toggle }: Props) {
 
         {tab === "users" && (
           <section className="admin-panel">
-            <div className="admin-log-head" style={{ marginBottom: 16 }}>
+            <div className="admin-log-head" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <PanelHead title="Quản lý người dùng" meta="Role Student/Admin, trạng thái tài khoản và hoạt động gần đây" />
+              <button 
+                className="btn btn--primary" 
+                type="button" 
+                onClick={() => {
+                  setNewUser({ full_name: "", email: "", password: "", role: "Student", status: "Active" });
+                  setCreateUserNotice("");
+                  setShowCreateUser(true);
+                }}
+              >
+                + Tạo người dùng
+              </button>
             </div>
 
             <form onSubmit={handleSearchUsers} className="admin-user-filters" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '24px', padding: '16px', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)' }}>
@@ -806,6 +858,154 @@ export function AdminPage({ theme, toggle }: Props) {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            
+            {showCreateUser && (
+              <div 
+                className="modal-backdrop" 
+                onClick={() => setShowCreateUser(false)}
+                style={{
+                  position: 'fixed',
+                  top: 0, left: 0, right: 0, bottom: 0,
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  zIndex: 9999,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backdropFilter: 'blur(4px)'
+                }}
+              >
+                <div 
+                  className="modal" 
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    background: 'var(--surface)',
+                    padding: '24px',
+                    borderRadius: '12px',
+                    width: '450px',
+                    maxWidth: '90vw',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    border: '1px solid var(--border)'
+                  }}
+                >
+                  <header className="modal__head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Tạo người dùng mới</h3>
+                    <button 
+                      className="modal__close" 
+                      onClick={() => setShowCreateUser(false)}
+                      style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}
+                    >
+                      &times;
+                    </button>
+                  </header>
+                  <form className="account-form" onSubmit={handleCreateUser}>
+                    <label>
+                      <span style={{ display: 'block', marginBottom: '6px', fontSize: '0.875rem', fontWeight: 500 }}>Họ và tên</span>
+                      <input 
+                        type="text" 
+                        className="form-input"
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: '16px', background: 'var(--bg)' }}
+                        required 
+                        value={newUser.full_name} 
+                        onChange={(e) => setNewUser({...newUser, full_name: e.target.value})} 
+                        placeholder="Nguyễn Văn A"
+                      />
+                    </label>
+                    <label>
+                      <span style={{ display: 'block', marginBottom: '6px', fontSize: '0.875rem', fontWeight: 500 }}>Email</span>
+                      <input 
+                        type="email" 
+                        className="form-input"
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: '16px', background: 'var(--bg)' }}
+                        required 
+                        value={newUser.email} 
+                        onChange={(e) => setNewUser({...newUser, email: e.target.value})} 
+                        placeholder="email@example.com"
+                      />
+                    </label>
+                    <label>
+                      <span style={{ display: 'block', marginBottom: '6px', fontSize: '0.875rem', fontWeight: 500 }}>Mật khẩu</span>
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type={showPassword ? "text" : "password"} 
+                          className="form-input"
+                          style={{ width: '100%', padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: '16px', background: 'var(--bg)' }}
+                          required 
+                          minLength={6}
+                          value={newUser.password} 
+                          onChange={(e) => setNewUser({...newUser, password: e.target.value})} 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          style={{
+                            position: 'absolute',
+                            right: '10px',
+                            top: '10px',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-muted)',
+                            padding: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            {showPassword ? (
+                              <>
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                              </>
+                            ) : (
+                              <>
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                              </>
+                            )}
+                          </svg>
+                        </button>
+                      </div>
+                    </label>
+                    <div style={{ display: 'flex', gap: 16, marginBottom: '16px' }}>
+                      <label style={{ flex: 1 }}>
+                        <span style={{ display: 'block', marginBottom: '6px', fontSize: '0.875rem', fontWeight: 500 }}>Vai trò</span>
+                        <select 
+                          className="form-input" 
+                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                          value={newUser.role} 
+                          onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                        >
+                          <option value="Student">Student</option>
+                          <option value="Admin">Admin</option>
+                        </select>
+                      </label>
+                      <label style={{ flex: 1 }}>
+                        <span style={{ display: 'block', marginBottom: '6px', fontSize: '0.875rem', fontWeight: 500 }}>Trạng thái ban đầu</span>
+                        <select 
+                          className="form-input" 
+                          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)' }}
+                          value={newUser.status} 
+                          onChange={(e) => setNewUser({...newUser, status: e.target.value})}
+                        >
+                          <option value="Active">Đang hoạt động</option>
+                        </select>
+                      </label>
+                    </div>
+                    {createUserNotice && <p className="invite-notice account-notice" role="status" style={{ marginBottom: '16px', padding: '10px', borderRadius: '6px', background: 'var(--surface-hover)' }}>{createUserNotice}</p>}
+                    <footer className="modal__foot" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                      <button className="btn btn--ghost" type="button" onClick={() => setShowCreateUser(false)}>
+                        Hủy
+                      </button>
+                      <button className="btn btn--primary" type="submit" disabled={createUserBusy}>
+                        {createUserBusy ? "Đang xử lý..." : "Lưu người dùng"}
+                      </button>
+                    </footer>
+                  </form>
+                </div>
               </div>
             )}
           </section>

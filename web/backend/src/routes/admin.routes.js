@@ -3,7 +3,7 @@ const ctrl = require('../controllers/admin.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { rbac } = require('../middleware/rbac.middleware');
 const { validate } = require('../middleware/validate.middleware');
-const { updateUserSchema, createJobSchema, updateDataSourceSchema, broadcastNotificationSchema } = require('../validators/admin.validator');
+const { updateUserSchema, createUserSchema, createJobSchema, updateDataSourceSchema, broadcastNotificationSchema } = require('../validators/admin.validator');
 
 const router = Router();
 router.use(authenticate);
@@ -31,6 +31,20 @@ router.use(rbac('Admin'));
  *         description: List of users
  */
 router.get('/users', ctrl.getUsers);
+
+/**
+ * @swagger
+ * /api/v1/admin/users:
+ *   post:
+ *     summary: Create a new user
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       201:
+ *         description: User created
+ */
+router.post('/users', validate(createUserSchema), ctrl.createUser);
 
 /**
  * @swagger

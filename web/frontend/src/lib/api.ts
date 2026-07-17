@@ -940,6 +940,21 @@ export const adminApi = {
       savedPapers: user.saved_papers_count ?? 0,
     }));
   },
+  async createUser(payload: { full_name: string; email: string; password?: string; roles: string[]; status: string }): Promise<AdminUser> {
+    const user = await request<any>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return {
+      id: asId(user._id),
+      name: user.full_name ?? user.email,
+      email: user.email,
+      role: user.roles?.includes("Admin") ? "Admin" : "Student",
+      status: user.status === "Banned" ? "locked" : user.status === "Inactive" ? "pending" : "active",
+      lastActive: formatWhen(user.updated_at ?? user.created_at),
+      savedPapers: user.saved_papers_count ?? 0,
+    };
+  },
   async jobs(): Promise<AdminJob[]> {
     const rows = await request<any[]>("/admin/jobs");
     return rows.map(mapAdminJob);
