@@ -3569,12 +3569,40 @@ mark.hl {
   background: var(--surface-2);
 }
 
+@keyframes cooc-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+.cooc__edge--active {
+  stroke-dasharray: 8 6;
+  animation: cooc-flow 0.9s linear infinite;
+  stroke-opacity: 0.85;
+}
+.cooc__edge {
+  stroke-opacity: var(--cooc-edge-opacity);
+}
+
 /* co-occurrence network */
 .cooc {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 216px;
+  grid-template-columns: minmax(0, 1fr) 232px;
   gap: var(--s-4);
-  align-items: center;
+  align-items: start;
+
+  /* Theme tokens for Light Mode */
+  --cooc-node-bg: oklch(0.93 0.005 228);
+  --cooc-node-stroke: oklch(0.75 0.01 235);
+  --cooc-edge: oklch(0.4 0.01 235);
+  --cooc-edge-opacity: 0.16;
+}
+
+[data-theme="dark"] .cooc {
+  /* Theme tokens for Dark Mode */
+  --cooc-node-bg: oklch(0.8 0.01 235);
+  --cooc-node-stroke: oklch(0.5 0.014 250);
+  --cooc-edge: oklch(0.72 0.014 235);
+  --cooc-edge-opacity: 0.12;
 }
 .cooc__canvas {
   min-width: 0;
@@ -3582,75 +3610,234 @@ mark.hl {
 .cooc__node {
   cursor: pointer;
   outline: none;
-  transition: opacity var(--dur-1) var(--ease-out);
+  transition: opacity 180ms var(--ease-out);
 }
 .cooc__node circle {
-  transition: fill-opacity var(--dur-1) var(--ease-out), stroke-width var(--dur-1) var(--ease-out);
+  transition: fill-opacity 180ms var(--ease-out), stroke-width 180ms var(--ease-out), r 180ms var(--ease-out);
 }
 .cooc__node:focus-visible circle {
-  stroke: var(--primary);
-  stroke-width: 3;
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 .cooc__label {
   font-size: 11px;
-  font-family: var(--font-sans, inherit);
+  font-family: var(--font-ui);
   pointer-events: none;
+  paint-order: stroke fill;
+  stroke: var(--surface);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  transition: font-size 180ms var(--ease-out), font-weight 180ms var(--ease-out);
 }
+
+/* ——— Readout panel ——— */
 .cooc__readout {
   align-self: stretch;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: var(--s-3) var(--s-4);
-  background: var(--surface-2);
+  gap: 0;
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  min-height: 150px;
+  border-radius: var(--r-lg);
+  min-height: 200px;
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+.cooc__readout::-webkit-scrollbar {
+  width: 4px;
+}
+.cooc__readout::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cooc__readout::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+}
+
+/* Readout header */
+.cooc__ro-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+  border-bottom: 1px solid var(--border);
+}
+.cooc__ro-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  opacity: 0.9;
 }
 .cooc__ro-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13.5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.cooc__ro-sub {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 1px;
+}
+.cooc__ro-freq {
   font-weight: 600;
   color: var(--ink);
 }
-.cooc__ro-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
+
+/* Frequency bar */
+.cooc__ro-freq-bar-wrap {
+  height: 3px;
+  background: var(--border);
+  margin: 0;
 }
-.cooc__ro-sub {
-  font-size: 12px;
+.cooc__ro-freq-bar-fill {
+  height: 100%;
+  border-radius: 0 2px 2px 0;
+  transition: width var(--dur-3) var(--ease-out);
+  opacity: 0.8;
+}
+
+/* Stats row */
+.cooc__ro-stats {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.cooc__ro-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 1px;
+}
+.cooc__ro-stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.cooc__ro-stat-lbl {
+  font-size: 10px;
   color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
+.cooc__ro-stat-div {
+  width: 1px;
+  height: 30px;
+  background: var(--border);
+}
+
+/* Divider */
+.cooc__ro-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+/* Section label */
+.cooc__ro-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 14px 4px;
+}
+
+/* Link list */
 .cooc__ro-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-top: 2px;
+  gap: 0;
+  padding: 0 0 8px;
 }
-.cooc__ro-list li {
-  display: flex;
+.cooc__ro-item {
+  display: grid;
+  grid-template-columns: 8px 1fr 40px 28px;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
-  font-size: 12.5px;
+  gap: 7px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.cooc__ro-item:hover {
+  background: var(--surface-hover);
+}
+.cooc__ro-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cooc__ro-item-label {
+  font-size: 12px;
   color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cooc__ro-w {
-  font-size: 9px;
-  letter-spacing: 1px;
-  color: var(--primary);
+.cooc__ro-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: var(--r-full);
+  overflow: hidden;
 }
-.cooc__ro-wt {
-  color: var(--border-strong);
+.cooc__ro-bar-fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  transition: width var(--dur-2) var(--ease-out);
 }
-.cooc__ro-empty {
+.cooc__ro-item-weight {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Idle state */
+.cooc__ro-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 16px;
+  gap: 8px;
+  flex: 1;
+  min-height: 200px;
+}
+.cooc__ro-idle-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--ink-muted);
+  opacity: 0.5;
+  margin-bottom: 2px;
+}
+.cooc__ro-idle-title {
   font-size: 12.5px;
-  line-height: 1.55;
+  font-weight: 600;
   color: var(--ink-muted);
 }
+.cooc__ro-idle-sub {
+  font-size: 11px;
+  color: var(--ink-muted);
+  opacity: 0.7;
+  line-height: 1.55;
+}
+
 .cooc__hint {
   display: grid;
   place-items: center;
@@ -3660,6 +3847,8 @@ mark.hl {
   color: var(--ink-muted);
   padding: var(--s-5);
 }
+
+
 
 /* =========================================================================
    Research Gap page
