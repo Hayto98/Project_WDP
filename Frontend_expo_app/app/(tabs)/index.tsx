@@ -143,7 +143,6 @@ export default function OverviewScreen() {
             <TouchableOpacity style={styles.iconBtn} onPress={handleRefresh}>
               <IconRefresh color={theme.ink} />
             </TouchableOpacity>
-            <ThemeToggle />
           </View>
         </View>
 
