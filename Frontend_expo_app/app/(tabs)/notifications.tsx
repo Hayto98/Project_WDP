@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Alert } from 'react-native';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
@@ -53,27 +53,33 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchNotifications = async () => {
+    try {
+      const items = await notificationApi.list();
+      setNotifications(items);
+    } catch (e) {
+      console.error(e);
+      setNotifications([]);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    notificationApi
-      .list()
-      .then((items) => {
-        if (!alive) return;
-        setNotifications(items);
-        setLoading(false);
-      })
-      .catch((e) => {
-        console.error(e);
-        if (alive) {
-          setNotifications([]);
-          setLoading(false);
-        }
-      });
+    fetchNotifications().finally(() => {
+      if (alive) setLoading(false);
+    });
     return () => {
       alive = false;
     };
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
   }, []);
 
   const filtered = useMemo(() => {
@@ -133,7 +139,12 @@ export default function NotificationsScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} tintColor={theme.primary} />
+        }
+      >
         
         {/* Summary */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.summaryScroll} contentContainerStyle={{ gap: 12 }}>
@@ -257,33 +268,45 @@ export default function NotificationsScreen() {
                         )}
                       </View>
 
-                      <View style={styles.actionRow}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, flexDirection: 'row', alignItems: 'center' }} style={{ marginTop: 8 }}>
                         {item.targetHref ? (
                           <TouchableOpacity 
-                            style={[styles.actionBtn, { backgroundColor: theme.primary }]}
+                            style={[styles.actionBtn, { backgroundColor: theme.primary, justifyContent: 'center' }]}
                             onPress={() => {
-                              // Basic handling of targetHref
                               if (item.targetHref.startsWith('http')) {
                                 Linking.openURL(item.targetHref);
                               } else {
-                                Alert.alert("Liên kết", "Tính năng này sẽ chuyển đến: " + item.targetHref);
+                                let route = item.targetHref.replace(/^#/, '');
+                                if (route === 'overview') route = '';
+                                
+                                const [baseRoute] = route.split('?');
+                                const tabRoutes = ['workspace', 'follow', 'gap', 'account', 'notifications', 'library', 'search', 'trends', 'menu'];
+                                
+                                if (baseRoute === 'notifications') {
+                                  markRead(item.id, false);
+                                  setExpandedId(null);
+                                } else if (baseRoute === '' || tabRoutes.includes(baseRoute)) {
+                                  router.push(`/(tabs)/${route}` as any);
+                                } else {
+                                  router.push(`/${route}` as any);
+                                }
                               }
                             }}
                           >
-                            <Text variant="sm" weight="bold" style={{ color: '#fff' }}>{item.targetLabel || 'Xem chi tiết'}</Text>
+                            <Text variant="sm" weight="bold" style={{ color: '#fff', textAlign: 'center' }}>{item.targetLabel || 'Xem chi tiết'}</Text>
                             <View style={{ marginLeft: 6 }}>
                               <IconExternal size={14} color="#fff" />
                             </View>
                           </TouchableOpacity>
-                        ) : <View />}
+                        ) : null}
                         
                         <TouchableOpacity 
-                          style={[styles.markBtn, { borderColor: theme.border }]}
+                          style={[styles.markBtn, { borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }]}
                           onPress={() => markRead(item.id, !item.unread)}
                         >
-                          <Text variant="sm" color="inkMuted">{item.unread ? "Đánh dấu đã đọc" : "Đánh dấu chưa đọc"}</Text>
+                          <Text variant="sm" color="inkMuted" style={{ textAlign: 'center' }}>{item.unread ? "Đánh dấu đã đọc" : "Đánh dấu chưa đọc"}</Text>
                         </TouchableOpacity>
-                      </View>
+                      </ScrollView>
                     </View>
                   )}
                 </View>
