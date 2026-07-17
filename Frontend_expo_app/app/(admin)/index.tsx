@@ -115,9 +115,6 @@ export default function AdminOverviewScreen() {
             )}
           </TouchableOpacity>
           <ThemeToggle />
-          <TouchableOpacity onPress={logout} style={{ marginLeft: 12 }}>
-            <Text variant="xs" color="danger" weight="bold">Thoát</Text>
-          </TouchableOpacity>
         </View>
       </View>
 

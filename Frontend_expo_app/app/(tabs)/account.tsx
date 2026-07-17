@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { Widget } from '../../components/Widget';
-import { IconArrowLeft, IconSend } from '../../components/icons';
+import { IconArrowLeft, IconSend, IconBell } from '../../components/icons';
+import { ThemeToggle } from '../../components/ThemeToggle';
 import { userApi, authApi, feedbackApi } from '../../lib/api';
 
 export default function AccountScreen() {
@@ -150,7 +151,13 @@ export default function AccountScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <IconArrowLeft color={activeTheme.ink} size={24} />
         </TouchableOpacity>
-        <Text variant="heading" weight="bold">Tài khoản</Text>
+        <Text variant="heading" weight="bold" style={{ flex: 1 }}>Tài khoản</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <TouchableOpacity onPress={() => Alert.alert('Thông báo', 'Bạn không có thông báo mới.')}>
+            <IconBell color={activeTheme.ink} size={20} />
+          </TouchableOpacity>
+          <ThemeToggle />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>

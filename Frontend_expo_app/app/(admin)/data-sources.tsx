@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { ThemeToggle } from '../../components/ThemeToggle';
+import { IconBell, IconRefresh } from '../../components/icons';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconRefresh } from '../../components/icons';
+
 import { adminApi } from '../../lib/api';
 import type { DataSource } from '../../lib/api';
 
@@ -58,10 +61,15 @@ export default function DataSourcesScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <View style={{ flex: 1 }}>
-          <Text variant="lead" weight="bold">Cấu hình nguồn dữ liệu</Text>
-          <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>Bật/tắt nguồn học thuật và theo dõi độ ổn định</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <View style={{ flex: 1, paddingRight: 16 }}>
+            <Text variant="lead" weight="bold">Cấu hình nguồn dữ liệu</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+<ThemeToggle />
+          </View>
         </View>
+        <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>Bật/tắt nguồn học thuật và theo dõi độ ổn định</Text>
         <TouchableOpacity 
           style={[styles.checkBtn, { backgroundColor: theme.primary }]}
           onPress={handleCheckApi}

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { Widget } from '../../components/Widget';
-import { IconTrend, IconGap, IconLibrary, IconSparkle, IconRefresh, IconBookmark } from '../../components/icons';
+import { IconTrend, IconGap, IconLibrary, IconSparkle, IconRefresh, IconBookmark, IconBell } from '../../components/icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { dashboardApi } from '../../lib/api';
 import type { TimeRange, DashboardData } from '../../data/types';
@@ -83,15 +83,23 @@ export default function OverviewScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text variant="heading" weight="bold">Tổng quan</Text>
-            <Text variant="sm" color="inkMuted" style={{ marginTop: 4 }}>
-              Bức tranh xu hướng nghiên cứu & khoảng trống tiềm năng
-            </Text>
-            <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>
-              Cập nhật {data.updatedAt}
-            </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <Text variant="heading" weight="bold">Tổng quan</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+              <TouchableOpacity onPress={() => Alert.alert('Thông báo', 'Bạn không có thông báo mới.')}>
+                <IconBell color={theme.ink} size={20} />
+              </TouchableOpacity>
+              <ThemeToggle />
+            </View>
           </View>
+          <Text variant="sm" color="inkMuted" style={{ marginTop: 4 }}>
+            Bức tranh xu hướng nghiên cứu & khoảng trống tiềm năng
+          </Text>
+          <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>
+            Cập nhật {data.updatedAt}
+          </Text>
         </View>
 
         {/* Controls */}
