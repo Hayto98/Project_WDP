@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking, Modal, TouchableWithoutFeedback } from 'react-native';
+import { ThemeToggle } from '../../components/ThemeToggle';
+import { IconBell, IconChevron, IconPlus, IconSearch, IconBookmark, IconExternal, IconQuote, IconEdit } from '../../components/icons';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
-import { IconChevron, IconPlus, IconSearch, IconBell, IconBookmark, IconExternal, IconQuote, IconEdit } from '../../components/icons';
+
 import { KpiStrip } from '../../components/KpiStrip';
 import { Widget } from '../../components/Widget';
 import { followApi, libraryApi, aiApi } from '../../lib/api';

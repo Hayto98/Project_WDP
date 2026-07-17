@@ -207,10 +207,33 @@ async function getAuditLogs(req, res) {
     if (req.query.severity) filter['details.severity'] = req.query.severity;
     if (req.query.actor) filter['details.actor'] = { $regex: req.query.actor, $options: 'i' };
 
-    const [logs, total] = await Promise.all([
-      SystemLog.find(filter).sort({ timestamp: -1 }).skip(skip).limit(limit).lean(),
+    const [rawLogs, total] = await Promise.all([
+      SystemLog.find(filter)
+        .populate('meta.user_id', 'full_name email')
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
       SystemLog.countDocuments(filter),
     ]);
+
+    const logs = rawLogs.map(log => {
+      // Map meta.user_id to actor if details.actor is missing
+      if (!log.details) log.details = {};
+      if (!log.details.actor) {
+        if (log.meta && log.meta.user_id) {
+          log.details.actor = log.meta.user_id.full_name || log.meta.user_id.email;
+        } else if (log.details.email) {
+          log.details.actor = log.details.email;
+        } else {
+          log.details.actor = 'System';
+        }
+      }
+      if (!log.details.action) {
+        log.details.action = log.meta ? log.meta.action_type : 'System Event';
+      }
+      return log;
+    });
 
     return ApiResponse.paginated(res, logs, page, limit, total);
   } catch (err) {

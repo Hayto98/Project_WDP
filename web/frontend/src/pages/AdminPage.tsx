@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { IconAlert, IconBell, IconRefresh, IconSearch, IconTelescope } from "../components/icons";
+import { IconAlert, IconBell, IconRefresh, IconSearch, IconTelescope, IconUser } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import {
   type AdminJob,
@@ -15,9 +15,10 @@ import {
 } from "../data/adminSample";
 import type { Theme } from "../hooks/useTheme";
 import { formatInt } from "../lib/format";
-import { adminApi, authApi, feedbackApi, getCurrentUser } from "../lib/api";
+import { adminApi, authApi, feedbackApi, getCurrentUser, userApi } from "../lib/api";
+import type { FormEvent } from "react";
 
-type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "broadcast" | "reading" | "logs";
+type AdminTab = "overview" | "jobs" | "sources" | "users" | "feedback" | "broadcast" | "reading" | "logs" | "account";
 type AdminReadAction = "refresh" | "export" | "threshold" | "raw";
 type FeedbackStatus = "Pending" | "Reviewed" | "Resolved";
 
@@ -77,6 +78,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "broadcast", label: "Tín hiệu hệ thống" },
   { id: "reading", label: "Thống kê lượt đọc" },
   { id: "logs", label: "Audit log" },
+  { id: "account", label: "Tài khoản" },
 ];
 
 const JOB_STATUS_LABEL: Record<JobStatus, string> = {
@@ -143,7 +145,57 @@ export function AdminPage({ theme, toggle }: Props) {
     max_saved: "",
   });
   const [searchingUsers, setSearchingUsers] = useState(false);
-  const currentUser = getCurrentUser();
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const [profileName, setProfileName] = useState(() => getCurrentUser()?.full_name ?? "");
+  const [profileEmail, setProfileEmail] = useState(() => getCurrentUser()?.email ?? "");
+  const [profileNotice, setProfileNotice] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordNotice, setPasswordNotice] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+
+  const submitProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setProfileNotice("");
+    setProfileBusy(true);
+    try {
+      const nextUser = await userApi.updateProfile({
+        full_name: profileName.trim(),
+        email: profileEmail.trim(),
+      });
+      setCurrentUser(nextUser);
+      setProfileName(nextUser.full_name);
+      setProfileEmail(nextUser.email);
+      setProfileNotice("Đã cập nhật thông tin tài khoản.");
+    } catch (err) {
+      setProfileNotice(err instanceof Error ? err.message : "Không cập nhật được tài khoản.");
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
+  const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordNotice("");
+    if (newPassword !== confirmPassword) {
+      setPasswordNotice("Mật khẩu mới chưa khớp.");
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      const result = await authApi.changePassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordNotice(result.message || "Đã cập nhật mật khẩu thành công.");
+    } catch (err) {
+      setPasswordNotice(err instanceof Error ? err.message : "Không cập nhật được mật khẩu.");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
 
   const refreshPendingFeedbackCount = async () => {
     try {
@@ -562,6 +614,98 @@ export function AdminPage({ theme, toggle }: Props) {
               </p>
             </section>
           </div>
+        )}
+
+        {tab === "account" && (
+          <section className="account-grid" style={{ paddingTop: '24px' }}>
+              <article className="account-panel">
+                <header className="account-panel__head">
+                  <span className="account-panel__icon" aria-hidden>
+                    <IconUser width={18} height={18} />
+                  </span>
+                  <span>
+                    <h2>Thông tin cá nhân</h2>
+                    <small>{currentUser?.email ?? "Chưa xác định email"}</small>
+                  </span>
+                </header>
+                <dl className="account-profile">
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{currentUser?.email ?? "Chưa xác định email"}</dd>
+                  </div>
+                  <div>
+                    <dt>Vai trò</dt>
+                    <dd>{currentUser?.roles.join(", ") ?? "Admin"}</dd>
+                  </div>
+                  <div>
+                    <dt>Trạng thái</dt>
+                    <dd>{currentUser?.status ?? "Active"}</dd>
+                  </div>
+                </dl>
+                <form className="account-form" onSubmit={submitProfile}>
+                  <label>
+                    <span>Họ tên</span>
+                    <input
+                      type="text"
+                      value={profileName}
+                      onChange={(event) => setProfileName(event.target.value)}
+                      minLength={2}
+                      maxLength={100}
+                      required
+                    />
+                  </label>
+                  <button className="btn btn--primary" type="submit" disabled={profileBusy}>
+                    {profileBusy ? "Đang lưu..." : "Lưu thông tin"}
+                  </button>
+                </form>
+                {profileNotice && <p className="invite-notice account-notice" role="status">{profileNotice}</p>}
+              </article>
+
+              <article className="account-panel">
+                <header className="account-panel__head">
+                  <span>
+                    <h2>Đổi mật khẩu</h2>
+                    <small>Yêu cầu nhập mật khẩu hiện tại trước khi cập nhật</small>
+                  </span>
+                </header>
+                <form className="account-form" onSubmit={submitPassword}>
+                  <label>
+                    <span>Mật khẩu hiện tại</span>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>Mật khẩu mới</span>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>Nhập lại mật khẩu mới</span>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                  <button className="btn btn--primary" type="submit" disabled={passwordBusy}>
+                    {passwordBusy ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
+                  </button>
+                </form>
+                {passwordNotice && <p className="invite-notice account-notice" role="status">{passwordNotice}</p>}
+              </article>
+            </section>
         )}
 
         {tab === "jobs" && (
