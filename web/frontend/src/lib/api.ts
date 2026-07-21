@@ -640,7 +640,7 @@ function withTrendTokens(series: TrendSeries[]) {
   const tokens = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6"];
   return series.map((item, index) => ({
     ...item,
-    token: item.token ?? tokens[index % tokens.length],
+    token: item.token || tokens[index % tokens.length],
   }));
 }
 

@@ -16,7 +16,7 @@ interface Props {
 const VB = { w: 440, h: 360 };
 const CX = VB.w / 2;
 const CY = VB.h / 2;
-const R = 115; // Clean circular radius for perfect label positioning without cuts
+const R = 100; // Reduced radius to give more room for beautiful curved text layout
 
 // Helper to slugify keys/labels for robust matching between nodes and topics
 const slugify = (str: string) =>
@@ -135,25 +135,30 @@ export function CoocNetwork({ nodes, edges, selected, topics }: Props) {
               const startPos = e.a === active ? pa : pb;
               const endPos = e.a === active ? pb : pa;
 
-              // Calculate active midpoint and control point
+              // Calculate midpoints and control points for elegant curves
               const mx = (startPos.x + endPos.x) / 2;
               const my = (startPos.y + endPos.y) / 2;
-              const cx = mx * 0.85 + CX * 0.15;
-              const cy = my * 0.85 + CY * 0.15;
+              
+              // Active edges have a softer curve
+              const cxActive = mx * 0.85 + CX * 0.15;
+              const cyActive = my * 0.85 + CY * 0.15;
+              
+              // Inactive edges curve deeper towards the center to create a "dreamcatcher" web effect
+              const cxInactive = mx * 0.65 + CX * 0.35;
+              const cyInactive = my * 0.65 + CY * 0.35;
 
               const activeTopicToken = activeNode ? getTopicToken(activeNode.topic) : "--border-strong";
-
               return (
                 <path
                   key={`${e.a}-${e.b}`}
                   d={isActive
-                    ? `M ${startPos.x} ${startPos.y} Q ${cx} ${cy} ${endPos.x} ${endPos.y}`
-                    : `M ${pa.x} ${pa.y} L ${pb.x} ${pb.y}`
+                    ? `M ${startPos.x} ${startPos.y} Q ${cxActive} ${cyActive} ${endPos.x} ${endPos.y}`
+                    : `M ${pa.x} ${pa.y} Q ${cxInactive} ${cyInactive} ${pb.x} ${pb.y}`
                   }
                   fill="none"
-                  stroke={isActive ? `var(${activeTopicToken})` : "var(--cooc-edge)"}
-                  strokeWidth={isActive ? 1.8 + e.weight * 0.35 : 0.6}
-                  strokeOpacity={dim ? 0 : undefined}
+                  stroke={isActive ? `var(${activeTopicToken})` : "var(--primary)"}
+                  strokeWidth={isActive ? 1.8 + e.weight * 0.35 : 0.6 + e.weight * 0.1}
+                  strokeOpacity={isActive ? 1 : dim ? 0 : 0.5}
                   className={isActive ? "cooc__edge--active" : "cooc__edge"}
                   strokeLinecap="round"
                 />
@@ -201,15 +206,23 @@ export function CoocNetwork({ nodes, edges, selected, topics }: Props) {
                       strokeWidth="1"
                     />
                   )}
-                  {/* Main Circle */}
+                  {/* Base Surface masking circle (hides edges underneath) */}
                   <circle
                     cx={p.x}
                     cy={p.y}
                     r={r}
-                    fill={isActive ? `var(${token})` : "var(--cooc-node-bg)"}
-                    fillOpacity={isActive ? 1 : 0.8}
-                    stroke={isActive ? `var(${token})` : "var(--cooc-node-stroke)"}
-                    strokeWidth={isActive ? 2 : 1.2}
+                    fill="var(--surface)"
+                  />
+                  {/* Main Colored Circle */}
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={r}
+                    fill={`var(${token})`}
+                    fillOpacity={isActive ? 1 : 0.25}
+                    stroke={`var(${token})`}
+                    strokeWidth={isActive ? 2.5 : 1.5}
+                    strokeOpacity={isActive ? 1 : 0.8}
                     filter={isActive ? "url(#cooc-glow)" : undefined}
                   />
                   {/* Specular highlight dot for premium glass bead effect */}
@@ -228,7 +241,7 @@ export function CoocNetwork({ nodes, edges, selected, topics }: Props) {
                     dy="0.32em"
                     textAnchor={rightSide ? "start" : "end"}
                     className="cooc__label"
-                    fill={inFocus ? "var(--ink)" : "var(--ink-muted)"}
+                    fill={inFocus ? (isActive ? `var(${token})` : "var(--ink)") : "var(--ink-muted)"}
                     fontWeight={isActive ? 600 : 400}
                   >
                     {n.label}
