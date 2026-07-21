@@ -70,20 +70,29 @@ async function countUnreadNotifications(userId) {
 async function createNotification(userId, type, title, content, extra = {}) {
   if (!userId) return null;
   try {
-    return await Notification.create({
-      user_id: userId,
-      notification_type: type,
-      title,
-      content: content || '',
-      priority: extra.priority || 'normal',
-      source: extra.source || 'Hệ thống',
-      actor: extra.actor || 'Research Corpus',
-      target_label: extra.targetLabel || '',
-      target_href: extra.targetHref || '',
-      meta: extra.meta || [],
-      follow_id: extra.followId || null,
-      related_paper_ids: extra.relatedPaperIds || [],
-    });
+      const notif = await Notification.create({
+        user_id: userId,
+        notification_type: type,
+        title,
+        content: content || '',
+        priority: extra.priority || 'normal',
+        source: extra.source || 'Hệ thống',
+        actor: extra.actor || 'Research Corpus',
+        target_label: extra.targetLabel || '',
+        target_href: extra.targetHref || '',
+        meta: extra.meta || [],
+        follow_id: extra.followId || null,
+        related_paper_ids: extra.relatedPaperIds || [],
+      });
+      
+      try {
+        const socketUtil = require('../utils/socket');
+        socketUtil.getIO().to(userId.toString()).emit('new_notification', notif);
+      } catch (e) {
+        // Socket might not be initialized during seed or tests
+      }
+      
+      return notif;
   } catch (err) {
     console.warn('⚠️  Notification creation failed:', err.message);
     return null;
@@ -101,6 +110,7 @@ function notifyInviteReceived(userId, invite) {
       actor: invite.invitee_name || invite.invitee_email,
       targetLabel: 'Xem lời mời',
       targetHref: '#workspace',
+      meta: [invite._id.toString()],
     },
   );
 }
@@ -221,6 +231,14 @@ async function broadcastSystemSignal({ title, content, priority = 'high', actorN
   }
 
   await Notification.insertMany(docs, { ordered: false });
+  
+  try {
+    const socketUtil = require('../utils/socket');
+    socketUtil.getIO().emit('new_notification');
+  } catch (e) {
+    // Socket might not be initialized
+  }
+
   return { sent: docs.length };
 }
 

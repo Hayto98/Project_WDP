@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { notificationApi } from '../../lib/api';
+import { useNotifications } from '../../context/NotificationContext';
 
 const MENU_ITEMS = [
   { id: 'workspace', title: 'Workspace', icon: IconLibrary, href: '/(tabs)/workspace', colorKey: 'accent4' },
@@ -21,15 +22,7 @@ export default function MenuTab() {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
   const router = useRouter();
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    notificationApi.list().then(items => {
-      if (alive) setUnreadCount(items.filter(n => n.unread).length);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+  const { unreadCount } = useNotifications();
 
   const userName = user?.full_name || user?.name || '';
 

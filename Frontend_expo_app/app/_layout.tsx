@@ -53,12 +53,16 @@ function RootLayoutNav() {
   );
 }
 
+import { NotificationProvider } from '../context/NotificationContext';
+
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <ThemeProvider>
-        <RootLayoutNav />
-      </ThemeProvider>
+      <NotificationProvider>
+        <ThemeProvider>
+          <RootLayoutNav />
+        </ThemeProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

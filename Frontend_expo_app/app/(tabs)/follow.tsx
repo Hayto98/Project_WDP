@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking, Modal, TouchableWithoutFeedback } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking, Modal, TouchableWithoutFeedback, RefreshControl } from 'react-native';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { IconBell, IconChevron, IconPlus, IconSearch, IconBookmark, IconExternal, IconQuote, IconEdit } from '../../components/icons';
 
@@ -105,9 +105,17 @@ export default function FollowScreen() {
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -260,7 +268,11 @@ export default function FollowScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scroll} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
+      >
         
         <View style={{ marginBottom: 16 }}>
           <KpiStrip kpis={kpis} loading={loading} />

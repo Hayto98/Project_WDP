@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Alert, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
@@ -16,6 +16,8 @@ import { TrendingPapers } from '../../components/TrendingPapers';
 import { AiInsights } from '../../components/AiInsights';
 import { FollowedRail } from '../../components/FollowedRail';
 
+import { useNotifications } from '../../context/NotificationContext';
+
 const RANGES: { id: TimeRange; label: string }[] = [
   { id: '12m', label: '12 tháng' },
   { id: '24m', label: '24 tháng' },
@@ -25,11 +27,12 @@ const RANGES: { id: TimeRange; label: string }[] = [
 export default function OverviewScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const { unreadCount } = useNotifications();
   const [range, setRange] = useState<TimeRange>('12m');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'default' | 'loading' | 'empty' | 'error'>('loading');
   const [data, setData] = useState<DashboardData | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -39,12 +42,8 @@ export default function OverviewScreen() {
     setLoading(true);
     setView('loading');
     try {
-      const [result, notifications] = await Promise.all([
-        dashboardApi.overview(),
-        notificationApi.list()
-      ]);
+      const result = await dashboardApi.overview();
       setData(result);
-      setUnreadCount(notifications.filter(n => n.unread).length);
       setView('default');
     } catch (err) {
       console.warn('Failed to load dashboard:', err);
@@ -54,8 +53,10 @@ export default function OverviewScreen() {
     }
   };
 
-  const handleRefresh = () => {
-    fetchData();
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
   };
 
   const status = view === 'loading' || loading
@@ -87,7 +88,11 @@ export default function OverviewScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>

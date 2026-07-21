@@ -120,11 +120,19 @@ async function createInvite(userId, payload) {
 
   const sender = await User.findById(userId).select('full_name').lean();
 
+  let inviteeUserId = payload.invitee_user_id;
+  if (!inviteeUserId && payload.invitee_email) {
+    const existingUser = await User.findOne({ email: payload.invitee_email.toLowerCase() }).select('_id').lean();
+    if (existingUser) {
+      inviteeUserId = existingUser._id;
+    }
+  }
+
   const invite = await CollaborationInvite.create({
     workspace_id: payload.workspace_id,
     invitee_email: payload.invitee_email,
     invitee_name: payload.invitee_name,
-    invitee_user_id: payload.invitee_user_id || null,
+    invitee_user_id: inviteeUserId || null,
     direction: payload.direction || 'outgoing',
     topic: payload.topic,
     message: payload.message,
@@ -188,6 +196,14 @@ async function respondToInvite(userId, inviteId, status) {
       );
     }
   }
+
+  // Remove the notification from the inbox
+  const Notification = require('../models/Notification');
+  await Notification.deleteMany({
+    user_id: userId,
+    notification_type: 'invite',
+    'meta.0': inviteId.toString()
+  });
 
   return invite;
 }

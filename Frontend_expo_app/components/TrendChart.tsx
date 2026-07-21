@@ -14,6 +14,7 @@ interface Props {
 export function TrendChart({ data, series }: Props) {
   const { theme } = useTheme();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [chartWidth, setChartWidth] = useState<number>(0);
 
   const toggle = (key: string) => {
     setHidden(prev => {
@@ -47,7 +48,7 @@ export function TrendChart({ data, series }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
       {/* Legend */}
       <View style={styles.legend}>
         {series.map((s, idx) => {
@@ -74,37 +75,39 @@ export function TrendChart({ data, series }: Props) {
       </View>
 
       {/* Chart */}
-      <LineChart
-        data={chartData}
-        width={Dimensions.get('window').width - 64} // from padding
-        height={220}
-        yAxisSuffix=""
-        yAxisInterval={1}
-        chartConfig={{
-          backgroundColor: theme.surface,
-          backgroundGradientFrom: theme.surface,
-          backgroundGradientTo: theme.surface,
-          decimalPlaces: 0,
-          color: (opacity = 1) => theme.borderStrong,
-          labelColor: (opacity = 1) => theme.inkMuted,
-          style: {
-            borderRadius: 16,
-          },
-          propsForDots: {
-            r: "4",
-          },
-          propsForBackgroundLines: {
-            strokeDasharray: "0" // solid background lines
-          }
-        }}
-        bezier
-        style={{
-          marginVertical: 8,
-          borderRadius: 8,
-          marginLeft: -10,
-        }}
-        formatYLabel={(y) => formatCompact(Number(y))}
-      />
+      {chartWidth > 0 && (
+        <LineChart
+          data={chartData}
+          width={chartWidth}
+          height={220}
+          yAxisSuffix=""
+          yAxisInterval={1}
+          chartConfig={{
+            backgroundColor: theme.surface,
+            backgroundGradientFrom: theme.surface,
+            backgroundGradientTo: theme.surface,
+            decimalPlaces: 0,
+            color: (opacity = 1) => theme.borderStrong,
+            labelColor: (opacity = 1) => theme.inkMuted,
+            style: {
+              borderRadius: 16,
+            },
+            propsForDots: {
+              r: "4",
+            },
+            propsForBackgroundLines: {
+              strokeDasharray: "0" // solid background lines
+            }
+          }}
+          bezier
+          style={{
+            marginVertical: 8,
+            borderRadius: 8,
+            marginLeft: -10,
+          }}
+          formatYLabel={(y) => formatCompact(Number(y))}
+        />
+      )}
     </View>
   );
 }
