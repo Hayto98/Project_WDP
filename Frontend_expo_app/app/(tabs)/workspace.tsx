@@ -67,7 +67,12 @@ export default function WorkspaceScreen() {
   }, []);
 
   const loadWorkspaceDetails = async (id: string) => {
-    if (!id) return;
+    if (!id) {
+      setMembers([]);
+      setItems([]);
+      setSelectedItem(null);
+      return;
+    }
     try {
       const mem = await workspaceApi.workspaceMembers(id);
       setMembers(mem);
@@ -355,7 +360,7 @@ export default function WorkspaceScreen() {
       <View style={{ flex: 1 }}>
         {mode === 'board' && <WorkspaceBoard items={items} onItemPress={setSelectedItem} refreshing={refreshingData} onRefresh={handleRefresh} />}
         {mode === 'members' && <WorkspaceMembers members={members} refreshing={refreshingData} onRefresh={handleRefresh} />}
-        {mode === 'invites' && <WorkspaceInvites invites={invites} activeWorkspaceId={activeWorkspaceId} onRefresh={handleRefresh} />}
+        {mode === 'invites' && <WorkspaceInvites invites={invites} activeWorkspaceId={activeWorkspaceId} refreshing={refreshingData} onRefresh={handleRefresh} />}
         {mode === 'papers' && <WorkspacePapers items={items} workspaceName={activeWorkspace?.name || "Workspace"} refreshing={refreshingData} onRefresh={handleRefresh} />}
       </View>
 

@@ -27,8 +27,17 @@ const broadcastNotificationSchema = Joi.object({
   priority: Joi.string().valid('high', 'normal', 'low').default('high'),
 });
 
+const createUserSchema = Joi.object({
+  full_name: Joi.string().trim().min(2).max(100).required(),
+  email: Joi.string().trim().email().required(),
+  password: Joi.string().min(6).required(),
+  roles: Joi.array().items(Joi.string().valid('Student', 'Admin')).min(1).max(2).required(),
+  status: Joi.string().valid('Active', 'Inactive', 'Banned').default('Active'),
+});
+
 module.exports = {
   updateUserSchema,
+  createUserSchema,
   createJobSchema,
   updateDataSourceSchema,
   broadcastNotificationSchema,

@@ -107,10 +107,16 @@ export function TrendsPage({ theme, toggle }: Props) {
   }, [range, gran, remotePoints, loadError]);
 
   const topics = useMemo<TrendSeries[]>(() => {
-    if (remoteSeries?.length) return remoteSeries;
-    if (remotePoints?.length) return analyticsApi.seriesFromPoints(remotePoints);
-    if (USE_SAMPLE_FALLBACK && !loadError) return TREND_TOPICS;
-    return [];
+    let base: TrendSeries[] = [];
+    if (remoteSeries?.length) base = remoteSeries;
+    else if (remotePoints?.length) base = analyticsApi.seriesFromPoints(remotePoints);
+    else if (USE_SAMPLE_FALLBACK && !loadError) base = TREND_TOPICS;
+    
+    const map = new Map<string, TrendSeries>();
+    for (const t of base) {
+      if (!map.has(t.key)) map.set(t.key, t);
+    }
+    return Array.from(map.values());
   }, [remoteSeries, remotePoints, loadError]);
 
   useEffect(() => {
