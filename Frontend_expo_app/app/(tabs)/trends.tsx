@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { Widget } from '../../components/Widget';
@@ -40,15 +40,16 @@ export default function TrendsScreen() {
   const [networkNodes, setNetworkNodes] = useState<CoocNode[]>([]);
   const [networkEdges, setNetworkEdges] = useState<CoocEdge[]>([]);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    Promise.all([
-      analyticsApi.trends(range, gran),
-      analyticsApi.growth(range, gran),
-      analyticsApi.cooccurrence(),
-    ]).then(([trendPayload, growthData, networkData]) => {
-      if (!alive) return;
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    try {
+      const [trendPayload, growthData, networkData] = await Promise.all([
+        analyticsApi.trends(range, gran),
+        analyticsApi.growth(range, gran),
+        analyticsApi.cooccurrence(),
+      ]);
       setPoints(trendPayload.points);
       setTopics(trendPayload.series);
       
@@ -58,13 +59,22 @@ export default function TrendsScreen() {
       setGrowth(growthData.filter((g: any) => newSelected.has(g.key)));
       setNetworkNodes(networkData.nodes);
       setNetworkEdges(networkData.edges);
-    }).catch(err => {
+    } catch (err) {
       console.error(err);
-    }).finally(() => {
-      if (alive) setLoading(false);
-    });
-    return () => { alive = false; };
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, [range, gran]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData(true);
+  };
 
   const activeSeries = useMemo(() => topics.filter((t) => selected.has(t.key)), [selected, topics]);
 
@@ -100,7 +110,11 @@ export default function TrendsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>

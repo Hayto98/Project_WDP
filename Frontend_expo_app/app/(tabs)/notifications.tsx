@@ -1,12 +1,14 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { ThemeToggle } from '../../components/ThemeToggle';
-import { notificationApi } from '../../lib/api';
+import { notificationApi, workspaceApi } from '../../lib/api';
 import type { NotificationItem } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { IconAlert, IconBell, IconExternal, IconFilter, IconGrid, IconLibrary, IconTrend, IconArrowLeft, IconChevron } from '../../components/icons';
 
 type NotificationKind = "task" | "invite" | "comment" | "paper" | "trend" | "system";
@@ -48,39 +50,18 @@ function iconForKind(kind: string) {
 export default function NotificationsScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const { user } = useAuth();
+  const { notifications, loading, fetchNotifications, markAsReadLocally, markAllAsReadLocally } = useNotifications();
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [filter, setFilter] = useState<InboxFilter>("all");
-  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  const fetchNotifications = async () => {
-    try {
-      const items = await notificationApi.list();
-      setNotifications(items);
-    } catch (e) {
-      console.error(e);
-      setNotifications([]);
-    }
-  };
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    fetchNotifications().finally(() => {
-      if (alive) setLoading(false);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchNotifications();
     setRefreshing(false);
-  }, []);
+  }, [fetchNotifications]);
 
   const filtered = useMemo(() => {
     return notifications.filter((item) => {
@@ -97,12 +78,12 @@ export default function NotificationsScreen() {
   const systemCount = notifications.filter((item) => item.kind === "system").length;
 
   const markRead = (id: string, unread: boolean) => {
-    setNotifications((current) => current.map((item) => (item.id === id ? { ...item, unread } : item)));
+    markAsReadLocally(id);
     if (!unread) notificationApi.markRead(id).catch(() => undefined);
   };
 
   const markAllRead = () => {
-    setNotifications((current) => current.map((item) => ({ ...item, unread: false })));
+    markAllAsReadLocally();
     notificationApi.markAllRead().catch(() => undefined);
   };
 
@@ -307,6 +288,41 @@ export default function NotificationsScreen() {
                           <Text variant="sm" color="inkMuted" style={{ textAlign: 'center' }}>{item.unread ? "Đánh dấu đã đọc" : "Đánh dấu chưa đọc"}</Text>
                         </TouchableOpacity>
                       </ScrollView>
+
+                      {item.kind === 'invite' && item.meta && item.meta.length > 0 && item.meta[0] !== 'Responded' && (
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border }}>
+                          <TouchableOpacity 
+                            style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: theme.primary, alignItems: 'center' }}
+                            onPress={async () => {
+                              try {
+                                const inviteId = item.meta[0];
+                                await workspaceApi.respondInvite(inviteId, 'accepted');
+                                Alert.alert("Thành công", "Đã chấp nhận lời mời!");
+                                fetchNotifications();
+                              } catch (e: any) {
+                                Alert.alert("Lỗi", e.message || "Không thể chấp nhận lời mời");
+                              }
+                            }}
+                          >
+                            <Text color="surface" weight="bold">Chấp nhận</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={{ flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.border, alignItems: 'center' }}
+                            onPress={async () => {
+                              try {
+                                const inviteId = item.meta[0];
+                                await workspaceApi.respondInvite(inviteId, 'declined');
+                                Alert.alert("Thành công", "Đã từ chối lời mời!");
+                                fetchNotifications();
+                              } catch (e: any) {
+                                Alert.alert("Lỗi", e.message || "Không thể từ chối lời mời");
+                              }
+                            }}
+                          >
+                            <Text color="inkMuted" weight="bold">Từ chối</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>

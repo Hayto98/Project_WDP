@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../Text';
 import { type CollaborationInvite } from '../../lib/api';
 import { workspaceApi } from '../../lib/api';
 
-export function WorkspaceInvites({ invites, activeWorkspaceId, onRefresh }: { invites: CollaborationInvite[], activeWorkspaceId: string, onRefresh: () => void }) {
+export function WorkspaceInvites({ invites, activeWorkspaceId, onRefresh, refreshing = false }: { invites: CollaborationInvite[], activeWorkspaceId: string, onRefresh: () => void, refreshing?: boolean }) {
   const { theme } = useTheme();
   const [email, setEmail] = useState("");
   const [topic, setTopic] = useState("");
@@ -36,7 +36,13 @@ export function WorkspaceInvites({ invites, activeWorkspaceId, onRefresh }: { in
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+      }
+    >
       <View style={[styles.inviteBox, { backgroundColor: theme.surface }]}>
         <Text variant="title" weight="bold" style={{ marginBottom: 4 }}>Gửi email mời cộng tác</Text>
         <Text variant="sm" color="inkMuted" style={{ marginBottom: 24, lineHeight: 20 }}>

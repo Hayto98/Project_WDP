@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, TextInput, TouchableOpacity, Modal, Alert, Linking, FlatList, ActivityIndicator } from 'react-native';
+import { View, ScrollView, StyleSheet, TextInput, TouchableOpacity, Modal, Alert, Linking, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { Text } from '../../components/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,31 +41,36 @@ export default function LibraryScreen() {
     }
   }, [activeCollection, collections]);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    try {
+      const [nextCollections, nextItems] = await Promise.all([
+        libraryApi.collections(),
+        libraryApi.papers()
+      ]);
+      setCollections(nextCollections);
+      setItems(nextItems);
+    } catch (err: any) {
+      console.error("Lỗi", "Không thể tải thư viện: " + err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
-      let alive = true;
-      const fetchData = async () => {
-        try {
-          const [nextCollections, nextItems] = await Promise.all([
-            libraryApi.collections(),
-            libraryApi.papers()
-          ]);
-          if (alive) {
-            setCollections(nextCollections);
-            setItems(nextItems);
-            setLoading(false);
-          }
-        } catch (err: any) {
-          if (alive) {
-            console.error("Lỗi", "Không thể tải thư viện: " + err.message);
-            setLoading(false);
-          }
-        }
-      };
       fetchData();
-      return () => { alive = false; };
+      return () => {};
     }, [])
   );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchData(true);
+  };
 
   const stats = useMemo(() => {
     let readCount = 0;
@@ -413,6 +418,7 @@ export default function LibraryScreen() {
           keyExtractor={item => item.id}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, gap: 12 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
         />
       )}
 
