@@ -64,6 +64,12 @@ export function TrendsPage({ theme, toggle }: Props) {
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
+  const [topicPage, setTopicPage] = useState(1);
+  const TOPICS_PER_PAGE = 50;
+
+  const [growthPage, setGrowthPage] = useState(1);
+  const GROWTH_PER_PAGE = 10;
+
   const loadCorpus = useCallback(() => {
     setReloadKey((key) => key + 1);
   }, []);
@@ -122,8 +128,10 @@ export function TrendsPage({ theme, toggle }: Props) {
   useEffect(() => {
     if (!topics.length) {
       setSelected(new Set());
+      setTopicPage(1);
       return;
     }
+    setTopicPage(1);
     setSelected((prev) => {
       const nextKeys = topics.map((topic) => topic.key);
       const retained = nextKeys.filter((key) => prev.has(key));
@@ -164,6 +172,13 @@ export function TrendsPage({ theme, toggle }: Props) {
     ? growth.reduce((a, g) => a + g.cagr, 0) / growth.length
     : 0;
 
+  useEffect(() => {
+    setGrowthPage(1);
+  }, [selected]);
+
+  const totalGrowthPages = Math.ceil(growth.length / GROWTH_PER_PAGE);
+  const currentGrowth = growth.slice((growthPage - 1) * GROWTH_PER_PAGE, growthPage * GROWTH_PER_PAGE);
+
   const corpusEmpty = !loading && !loadError && points.length === 0 && topics.length === 0;
   const noTopicSelected = !loading && !loadError && !corpusEmpty && selected.size === 0;
 
@@ -192,6 +207,9 @@ export function TrendsPage({ theme, toggle }: Props) {
     });
 
   const allOn = topics.length > 0 && selected.size === topics.length;
+
+  const totalTopicPages = Math.ceil(topics.length / TOPICS_PER_PAGE);
+  const currentTopics = topics.slice((topicPage - 1) * TOPICS_PER_PAGE, topicPage * TOPICS_PER_PAGE);
 
   const networkNodes = remoteNetwork?.nodes ?? (USE_SAMPLE_FALLBACK && !loadError ? COOC_NODES : []);
   const networkEdges = remoteNetwork?.edges ?? (USE_SAMPLE_FALLBACK && !loadError ? COOC_EDGES : []);
@@ -270,7 +288,7 @@ export function TrendsPage({ theme, toggle }: Props) {
               {topics.length === 0 && !loading ? (
                 <span className="topicbar__empty">Chưa có chủ đề từ corpus</span>
               ) : (
-                topics.map((t) => {
+                currentTopics.map((t) => {
                   const on = selected.has(t.key);
                   return (
                     <button
@@ -287,16 +305,41 @@ export function TrendsPage({ theme, toggle }: Props) {
                 })
               )}
             </div>
-            <button
-              className="topicbar__all"
-              type="button"
-              disabled={!topics.length}
-              onClick={() =>
-                setSelected(allOn ? new Set() : new Set(topics.map((t) => t.key)))
-              }
-            >
-              {allOn ? "Bỏ chọn tất cả" : "Chọn tất cả"}
-            </button>
+            
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: totalTopicPages > 1 ? "4px" : "0" }}>
+              {totalTopicPages > 1 ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", color: "var(--ink-muted)" }}>
+                  <button
+                    className="btn btn--ghost"
+                    style={{ padding: "4px 10px", minHeight: "auto", height: "auto" }}
+                    onClick={() => setTopicPage(p => Math.max(1, p - 1))}
+                    disabled={topicPage === 1}
+                  >
+                    &larr; Trang trước
+                  </button>
+                  <span>{topicPage} / {totalTopicPages}</span>
+                  <button
+                    className="btn btn--ghost"
+                    style={{ padding: "4px 10px", minHeight: "auto", height: "auto" }}
+                    onClick={() => setTopicPage(p => Math.min(totalTopicPages, p + 1))}
+                    disabled={topicPage === totalTopicPages}
+                  >
+                    Trang sau &rarr;
+                  </button>
+                </div>
+              ) : <div />}
+              
+              <button
+                className="topicbar__all"
+                type="button"
+                disabled={!topics.length}
+                onClick={() =>
+                  setSelected(allOn ? new Set() : new Set(topics.map((t) => t.key)))
+                }
+              >
+                {allOn ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+              </button>
+            </div>
           </div>
 
           <div className="trendsum">
@@ -333,7 +376,7 @@ export function TrendsPage({ theme, toggle }: Props) {
               emptyMessage={corpusEmpty ? emptyMessage : "Chưa có chủ đề nào được chọn"}
             >
               <ul className="growth">
-                {growth.map((g) => (
+                {currentGrowth.map((g) => (
                   <li className="growth__row" key={g.key}>
                     <span className="growth__dot" style={{ background: `var(${g.token})` }} />
                     <div className="growth__meta">
@@ -353,6 +396,27 @@ export function TrendsPage({ theme, toggle }: Props) {
                   </li>
                 ))}
               </ul>
+              {totalGrowthPages > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginTop: "16px", fontSize: "13px", color: "var(--ink-muted)" }}>
+                  <button
+                    className="btn btn--ghost"
+                    style={{ padding: "4px 10px", minHeight: "auto", height: "auto" }}
+                    onClick={() => setGrowthPage(p => Math.max(1, p - 1))}
+                    disabled={growthPage === 1}
+                  >
+                    &larr; Trang trước
+                  </button>
+                  <span>{growthPage} / {totalGrowthPages}</span>
+                  <button
+                    className="btn btn--ghost"
+                    style={{ padding: "4px 10px", minHeight: "auto", height: "auto" }}
+                    onClick={() => setGrowthPage(p => Math.min(totalGrowthPages, p + 1))}
+                    disabled={growthPage === totalGrowthPages}
+                  >
+                    Trang sau &rarr;
+                  </button>
+                </div>
+              )}
             </Widget>
 
             <Widget
