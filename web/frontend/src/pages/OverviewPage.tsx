@@ -178,8 +178,8 @@ export function OverviewPage({ theme, toggle }: Props) {
 
           <Widget
             className="w-gap"
-            title="Bản đồ khoảng trống nghiên cứu"
-            subtitle="Mật độ công bố theo lĩnh vực × khía cạnh"
+            title="Cơ hội nghiên cứu nổi bật"
+            subtitle="Các tổ hợp có mật độ công bố thấp cần ưu tiên xem xét"
             icon={<IconGap />}
             status={status}
             onRetry={() => setView("default")}

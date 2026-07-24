@@ -66,4 +66,39 @@ test.describe("production smoke", () => {
     await expect(page.getByRole("button", { name: /Kiểm tra API nguồn/i })).toBeVisible();
     await expect(page.locator("body")).toContainText(/OpenAlex|Crossref|Semantic Scholar|IEEE|Exa/i);
   });
+
+  test("research opportunity maps show explicit statuses and responsive groups", async ({ page }) => {
+    await login(page, student.email, student.password);
+    await expect(page.getByRole("heading", { name: /Tổng quan|Overview/i })).toBeVisible();
+
+    const overviewMap = page.getByLabel("Cơ hội nghiên cứu nổi bật", { exact: true });
+    await expect(overviewMap).toBeVisible();
+    await expect(overviewMap).toContainText(/khoảng trống nổi bật/i);
+    await expect(overviewMap.locator(".opportunity-summary__item").first()).toContainText(/Điểm/i);
+
+    await page.goto("/#gap");
+    await expect(page.getByRole("heading", { name: "Research Gap" })).toBeVisible();
+
+    const detailMap = page.getByLabel("Bản đồ cơ hội nghiên cứu theo lĩnh vực và khía cạnh", { exact: true });
+    await expect(detailMap).toBeVisible();
+    await expect(detailMap).toContainText(/Điểm = Quan tâm × Độ khan hiếm/i);
+    await expect(detailMap.locator(".opportunity-priority__item").first()).toContainText(/Quan tâm|Khan hiếm/);
+    await detailMap.getByRole("tab", { name: /Toàn bộ bản đồ/i }).click();
+    await expect(detailMap).toContainText("Thiếu dữ liệu");
+
+    const detailCell = detailMap.locator(".opportunity-map__cell").first();
+    await expect(detailCell).toHaveAttribute("aria-label", /mật độ/i);
+    await detailCell.click();
+    await expect(detailCell).toHaveAttribute("aria-pressed", "true");
+    await expect(detailMap.locator(".opportunity-map__selection")).toContainText(/Mật độ|Quan tâm/);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(detailMap.locator(".opportunity-map__cell-aspect").first()).toBeVisible();
+    const dimensions = await detailMap.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1);
+    await expect(detailMap.locator(".opportunity-map__field").first()).toBeVisible();
+  });
 });
