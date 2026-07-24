@@ -187,21 +187,15 @@ export function SearchPage({ theme, toggle }: Props) {
     };
   }, [hasSearched, searchNonce, submitted, scope, andTermsParam, orTermsParam, notTermsParam, sources, types, yearFrom, yearTo, sort, page]);
 
-  const queryTokens = useMemo(
-    () => submitted.toLowerCase().split(/\s+/).filter(Boolean),
-    [submitted],
-  );
   const highlightTerms = useMemo(() => {
-    const phrase = submitted.trim();
+    const phrase = submitted.trim().replace(/^"+|"+$/g, "").trim();
+    // Multi-word queries highlight only the full phrase — never split tokens,
+    // so "machine learning" does not light up lone "learning".
     const terms = [
-      // Prefer full phrase highlight over individual tokens.
-      ...(phrase.includes(" ") ? [phrase] : []),
-      ...queryTokens,
-      ...andTerms.map((c) => c.term),
-      ...orTerms.map((c) => c.term),
-    ]
-      .map((term) => term.trim())
-      .filter(Boolean);
+      ...(phrase ? [phrase] : []),
+      ...andTerms.map((c) => c.term.trim()),
+      ...orTerms.map((c) => c.term.trim()),
+    ].filter(Boolean);
     return [...new Set(terms)].sort((a, b) => b.length - a.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submitted, conditions]);

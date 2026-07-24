@@ -15,11 +15,33 @@ async function searchPapers(query, userId = null) {
   const filter = { status: { $ne: 'Archived' } };
   const andClauses = [];
   let usesTextSearch = false;
-  const regexFor = (value) => new RegExp(String(value).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-  const searchableFields = ['title', 'abstract', 'keywords', 'research_fields', 'authors.name'];
-  const textLikeClause = (term) => ({
-    $or: searchableFields.map((field) => ({ [field]: regexFor(term) })),
+  const escapeRegex = (value) => String(value).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Contiguous phrase: "machine learning" must appear in order, not as separate tokens.
+  const phraseParts = (value) =>
+    String(value)
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(escapeRegex);
+  const phrasePattern = (value) => {
+    const parts = phraseParts(value);
+    if (!parts.length) return null;
+    if (parts.length === 1) return parts[0];
+    return `\\b${parts.join('\\s+')}\\b`;
+  };
+  const phraseRegex = (value) => {
+    const pattern = phrasePattern(value);
+    return pattern ? new RegExp(pattern, 'i') : null;
+  };
+  const regexFor = (value) => phraseRegex(value) || new RegExp('a^'); // never-match fallback
+  // Main query matches content the user can see — not research_fields alone
+  // (e.g. field "Quantum Machine Learning" must not pull titles that only say "Learning").
+  const contentFields = ['title', 'abstract', 'keywords', 'authors.name'];
+  const searchableFields = [...contentFields, 'research_fields'];
+  const textLikeClause = (term, fields = searchableFields) => ({
+    $or: fields.map((field) => ({ [field]: regexFor(term) })),
   });
+  let phraseQuery = '';
   const fieldAliases = {
     'Large Language Models': [
       'large language model', 'llm', 'language model', 'generative ai',
@@ -64,7 +86,7 @@ async function searchPapers(query, userId = null) {
   // Full-text / scoped search
   if (query.q) {
     // Strip wrapping quotes; multi-word queries must match as a contiguous phrase
-    // so "genetic algorithm" does not match papers that only contain "algorithm".
+    // so "machine learning" does not match papers that only contain "learning".
     const cleanedQuery = String(query.q).trim().replace(/^"+|"+$/g, '').trim();
     const isMultiWord = /\s/.test(cleanedQuery);
 
@@ -73,9 +95,11 @@ async function searchPapers(query, userId = null) {
     } else if (query.scope === 'author') {
       andClauses.push({ 'authors.name': regexFor(cleanedQuery) });
     } else if (isMultiWord) {
-      andClauses.push(textLikeClause(cleanedQuery));
+      phraseQuery = cleanedQuery;
+      andClauses.push(textLikeClause(cleanedQuery, contentFields));
     } else {
-      filter.$text = { $search: cleanedQuery };
+      // Quoted phrase form forces Mongo text index to treat the token as one term unit.
+      filter.$text = { $search: `"${cleanedQuery.replace(/"/g, '')}"` };
       usesTextSearch = true;
     }
   }
@@ -84,9 +108,19 @@ async function searchPapers(query, userId = null) {
   const orTerms = query.orTerms ? query.orTerms.split(',').map((t) => t.trim()).filter(Boolean) : [];
   const notTerms = query.notTerms ? query.notTerms.split(',').map((t) => t.trim()).filter(Boolean) : [];
 
-  for (const term of andTerms) andClauses.push(textLikeClause(term));
-  if (orTerms.length) andClauses.push({ $or: orTerms.map(textLikeClause) });
-  for (const term of notTerms) andClauses.push({ $nor: [textLikeClause(term)] });
+  for (const term of andTerms) {
+    andClauses.push(textLikeClause(term, /\s/.test(term) ? contentFields : searchableFields));
+  }
+  if (orTerms.length) {
+    andClauses.push({
+      $or: orTerms.map((term) => textLikeClause(term, /\s/.test(term) ? contentFields : searchableFields)),
+    });
+  }
+  for (const term of notTerms) {
+    andClauses.push({
+      $nor: [textLikeClause(term, /\s/.test(term) ? contentFields : searchableFields)],
+    });
+  }
 
   // Field filters
   if (query.fields) {
@@ -145,11 +179,40 @@ async function searchPapers(query, userId = null) {
   }
 
   const projection = usesTextSearch ? { score: { $meta: 'textScore' } } : {};
+  const preferTitlePhrase =
+    Boolean(phraseQuery) &&
+    (query.sort === 'relevance' || !query.sort);
 
-  const [rawPapers, total] = await Promise.all([
-    Paper.find(filter, projection).sort(sort).skip(skip).limit(limit).lean(),
-    Paper.countDocuments(filter),
-  ]);
+  let rawPapers;
+  let total;
+  if (preferTitlePhrase) {
+    const titlePattern = phrasePattern(phraseQuery);
+    const pipeline = [
+      { $match: filter },
+      {
+        $addFields: {
+          _titleHit: titlePattern
+            ? { $regexMatch: { input: { $ifNull: ['$title', ''] }, regex: titlePattern, options: 'i' } }
+            : false,
+        },
+      },
+      { $sort: { _titleHit: -1, publication_year: -1, _id: 1 } },
+      {
+        $facet: {
+          items: [{ $skip: skip }, { $limit: limit }, { $project: { _titleHit: 0 } }],
+          count: [{ $count: 'total' }],
+        },
+      },
+    ];
+    const [facet] = await Paper.aggregate(pipeline);
+    rawPapers = facet?.items || [];
+    total = facet?.count?.[0]?.total || 0;
+  } else {
+    [rawPapers, total] = await Promise.all([
+      Paper.find(filter, projection).sort(sort).skip(skip).limit(limit).lean(),
+      Paper.countDocuments(filter),
+    ]);
+  }
   const papers = await ensureAbstracts(rawPapers);
 
   logAction('Search', userId, null, {
