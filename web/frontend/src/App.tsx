@@ -14,6 +14,12 @@ const GapPage = lazy(() => import("./pages/GapPage").then((m) => ({ default: m.G
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
 const LibraryPage = lazy(() => import("./pages/LibraryPage").then((m) => ({ default: m.LibraryPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const ForgotPasswordPage = lazy(() =>
+  import("./pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import("./pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })),
+);
 const NotificationPage = lazy(() => import("./pages/NotificationPage").then((m) => ({ default: m.NotificationPage })));
 const OverviewPage = lazy(() => import("./pages/OverviewPage").then((m) => ({ default: m.OverviewPage })));
 const PaperDetailPage = lazy(() => import("./pages/PaperDetailPage").then((m) => ({ default: m.PaperDetailPage })));
@@ -22,9 +28,12 @@ const SearchPage = lazy(() => import("./pages/SearchPage").then((m) => ({ defaul
 const TrendsPage = lazy(() => import("./pages/TrendsPage").then((m) => ({ default: m.TrendsPage })));
 const WorkspacePage = lazy(() => import("./pages/WorkspacePage").then((m) => ({ default: m.WorkspacePage })));
 
+const AUTH_PUBLIC_ROUTES = new Set(["login", "register", "forgot-password", "reset-password"]);
+
 export default function App() {
   const { theme, toggle } = useTheme();
   const route = useHashRoute("home");
+  const routePath = route.split("?")[0];
   const paperRoute = parsePaperRoute(route);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => getCurrentUser());
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
@@ -54,19 +63,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin && route !== "admin" && route !== "login" && route !== "register") {
+    if (isAdmin && routePath !== "admin" && !AUTH_PUBLIC_ROUTES.has(routePath)) {
       window.location.hash = "admin";
     }
-    if (route === "admin" && !isAdmin) {
+    if (routePath === "admin" && !isAdmin) {
       window.location.hash = currentUser ? "overview" : "login";
     }
-  }, [currentUser, isAdmin, route]);
+  }, [currentUser, isAdmin, routePath]);
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
   }, [route]);
 
-  if (isAdmin && route !== "login" && route !== "register") {
+  if (isAdmin && !AUTH_PUBLIC_ROUTES.has(routePath)) {
     return (
       <RouteSuspense>
         <AdminPage theme={theme} toggle={toggle} />
@@ -74,24 +83,39 @@ export default function App() {
     );
   }
 
-  if (route === "admin") {
+  if (routePath === "admin") {
     return (
       <RouteSuspense>
         {currentUser ? <OverviewPage theme={theme} toggle={toggle} /> : <LoginPage />}
       </RouteSuspense>
     );
   }
-  if (route === "login") {
+  if (routePath === "login") {
     return (
       <RouteSuspense>
         <LoginPage />
       </RouteSuspense>
     );
   }
-  if (route === "register") {
+  if (routePath === "register") {
     return (
       <RouteSuspense>
         <RegisterPage />
+      </RouteSuspense>
+    );
+  }
+  if (routePath === "forgot-password") {
+    return (
+      <RouteSuspense>
+        <ForgotPasswordPage />
+      </RouteSuspense>
+    );
+  }
+  if (routePath === "reset-password") {
+    const token = new URLSearchParams(route.includes("?") ? route.split("?")[1] : "").get("token") || "";
+    return (
+      <RouteSuspense>
+        <ResetPasswordPage token={token} />
       </RouteSuspense>
     );
   }

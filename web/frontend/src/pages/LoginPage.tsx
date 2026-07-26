@@ -52,7 +52,12 @@ export function LoginPage() {
           </div>
 
           <div className="auth-input-group">
-            <label className="auth-label">Mật khẩu</label>
+            <div className="auth-label-row">
+              <label className="auth-label">Mật khẩu</label>
+              <a href="#forgot-password" className="auth-forgot-link">
+                Quên mật khẩu?
+              </a>
+            </div>
             <div style={{ position: "relative" }}>
               <input 
                 type={showPassword ? "text" : "password"}
@@ -66,20 +71,7 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: "absolute",
-                  right: "10px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "#64748b",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 0
-                }}
+                className="auth-password-toggle"
                 aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
               >
                 {showPassword ? <IconEyeOff width={20} height={20} /> : <IconEye width={20} height={20} />}

@@ -8,6 +8,8 @@ const {
   loginSchema,
   refreshTokenSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } = require('../validators/auth.validator');
 
 const router = Router();
@@ -156,6 +158,63 @@ router.post('/logout', authenticate, ctrl.logout);
  *         description: Unauthorized
  */
 router.put('/change-password', authenticate, validate(changePasswordSchema), ctrl.changePassword);
+
+/**
+ * @swagger
+ * /api/v1/auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Generic success message (does not reveal whether the email exists)
+ *       400:
+ *         description: Validation error
+ *       503:
+ *         description: Email service unavailable
+ */
+router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), ctrl.forgotPassword);
+
+/**
+ * @swagger
+ * /api/v1/auth/reset-password:
+ *   post:
+ *     summary: Reset password with email token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               token:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid or expired token
+ */
+router.post('/reset-password', authLimiter, validate(resetPasswordSchema), ctrl.resetPassword);
 
 /**
  * @swagger

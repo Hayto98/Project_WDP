@@ -128,7 +128,14 @@ async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
   if (!res.ok || !payload.success) {
-    if (res.status === 401 && !init._isRetry && path !== "/auth/refresh" && path !== "/auth/login") {
+    if (
+      res.status === 401 &&
+      !init._isRetry &&
+      path !== "/auth/refresh" &&
+      path !== "/auth/login" &&
+      path !== "/auth/forgot-password" &&
+      path !== "/auth/reset-password"
+    ) {
       const nextToken = await refreshAuthTokens().catch(() => null);
       if (nextToken) {
         return request<T>(path, { ...init, _isRetry: true });
@@ -384,6 +391,18 @@ export const authApi = {
     return request<{ message?: string }>("/auth/change-password", {
       method: "PUT",
       body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+  async forgotPassword(email: string) {
+    return request<{ message?: string; resetUrl?: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+  async resetPassword(token: string, newPassword: string) {
+    return request<{ message?: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
     });
   },
 };
