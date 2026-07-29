@@ -5,7 +5,13 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const connectDB = require('./config/database');
-const { port, corsOrigin, nodeEnv, redisEnabled } = require('./config/env');
+const {
+  port,
+  corsOrigin,
+  frontendUrl,
+  nodeEnv,
+  redisEnabled,
+} = require('./config/env');
 const { apiLimiter } = require('./middleware/rateLimiter.middleware');
 const { logAction } = require('./utils/systemLogger');
 const swaggerUi = require('swagger-ui-express');
@@ -33,10 +39,16 @@ const app = express();
 /* ── Global Middleware ── */
 app.use(helmet());
 
-const allowedOrigins = corsOrigin.split(',').map(o => o.trim());
+const allowedOrigins = [...new Set(
+  [corsOrigin, frontendUrl]
+    .flatMap(value => value.split(','))
+    .map(origin => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+)];
 const corsOptions = {
   origin: function(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    const normalizedOrigin = origin?.replace(/\/$/, '');
+    if (!origin || allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
