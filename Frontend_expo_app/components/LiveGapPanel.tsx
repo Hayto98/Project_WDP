@@ -5,10 +5,7 @@ import { Text } from './Text';
 import { analyticsApi, aiApi } from '../lib/api';
 import { formatInt } from '../lib/format';
 
-const isFabric = (global as any)._IS_FABRIC === true;
-if (Platform.OS === 'android' && !isFabric && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+
 
 const LIVE_SOURCES = ["OpenAlex", "Crossref", "arXiv"];
 

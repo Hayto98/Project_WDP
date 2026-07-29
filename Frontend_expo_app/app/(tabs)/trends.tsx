@@ -26,6 +26,8 @@ const GRANS: { id: Granularity; label: string }[] = [
   { id: "quarter", label: "Quý" },
 ];
 
+const TOPICS_PER_PAGE = 30;
+
 export default function TrendsScreen() {
   const { theme } = useTheme();
   const [mode, setMode] = useState<'corpus' | 'live'>('corpus');
@@ -33,6 +35,8 @@ export default function TrendsScreen() {
   const [range, setRange] = useState<TrendRange>("5y");
   const [gran, setGran] = useState<Granularity>("year");
   const [loading, setLoading] = useState(true);
+  const [topicPage, setTopicPage] = useState(1);
+  const [growthPage, setGrowthPage] = useState(1);
 
   const [points, setPoints] = useState<TrendPoint[]>([]);
   const [topics, setTopics] = useState<TrendSeries[]>([]);
@@ -59,6 +63,9 @@ export default function TrendsScreen() {
       setGrowth(growthData.filter((g: any) => newSelected.has(g.key)));
       setNetworkNodes(networkData.nodes);
       setNetworkEdges(networkData.edges);
+      
+      setTopicPage(1);
+      setGrowthPage(1);
     } catch (err) {
       console.error(err);
     } finally {
@@ -95,7 +102,7 @@ export default function TrendsScreen() {
   const avgGrowth = growth.length ? growth.reduce((a, g) => a + g.cagr, 0) / growth.length : 0;
 
   const sortedGrowth = useMemo(() => {
-    return [...growth].sort((a, b) => b.cagr - a.cagr).slice(0, 10);
+    return [...growth].sort((a, b) => b.cagr - a.cagr);
   }, [growth]);
 
   const toggleTopic = (key: string) => {
@@ -106,7 +113,14 @@ export default function TrendsScreen() {
     });
   };
 
-  const allOn = selected.size > 0 && selected.size === topics.length;
+  const allOn = topics.length > 0 && selected.size === topics.length;
+
+  const totalTopicPages = Math.ceil(topics.length / TOPICS_PER_PAGE) || 1;
+  const currentTopics = topics.slice((topicPage - 1) * TOPICS_PER_PAGE, topicPage * TOPICS_PER_PAGE);
+
+  const GROWTH_PER_PAGE = 10;
+  const totalGrowthPages = Math.ceil(sortedGrowth.length / GROWTH_PER_PAGE) || 1;
+  const currentGrowth = sortedGrowth.slice((growthPage - 1) * GROWTH_PER_PAGE, growthPage * GROWTH_PER_PAGE);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
@@ -181,39 +195,74 @@ export default function TrendsScreen() {
 
             {/* Topic Selector */}
             <View style={styles.topicBar}>
-              <Text variant="xs" color="inkMuted" style={{ marginBottom: 8, fontStyle: 'italic' }}>
-                * Hiển thị Top 50 chủ đề hot nhất dựa trên tổng số lượng công bố
-              </Text>
-              <ScrollView style={{ height: 160 }} nestedScrollEnabled>
-                <View style={styles.topicChips}>
-                  {topics.slice(0, 50).map(t => {
-                    const on = selected.has(t.key);
-                    let colorStr = theme.primary;
-                    if (t.token === '--c1') colorStr = theme.primary;
-                    if (t.token === '--c2') colorStr = '#8a2be2';
-                    if (t.token === '--c3') colorStr = theme.warning;
-                    if (t.token === '--c4') colorStr = '#ff1493';
-                    if (t.token === '--c5') colorStr = theme.success;
-                    if (t.token === '--c6') colorStr = '#ffa500';
+              <View style={styles.topicChips}>
+                {currentTopics.map(t => {
+                  const on = selected.has(t.key);
+                  
+                  let colorStr = theme.primary;
+                  let bgStr = theme.primary;
+                  switch (t.token) {
+                    case '--c1': colorStr = '#0d9488'; bgStr = 'rgba(13, 148, 136, 0.15)'; break; // teal
+                    case '--c2': colorStr = '#6366f1'; bgStr = 'rgba(99, 102, 241, 0.15)'; break; // indigo
+                    case '--c3': colorStr = '#d97706'; bgStr = 'rgba(217, 119, 6, 0.15)'; break; // amber
+                    case '--c4': colorStr = '#db2777'; bgStr = 'rgba(219, 39, 119, 0.15)'; break; // pink
+                    case '--c5': colorStr = '#ea580c'; bgStr = 'rgba(234, 88, 12, 0.15)'; break; // orange
+                    case '--c6': colorStr = '#059669'; bgStr = 'rgba(5, 150, 105, 0.15)'; break; // emerald
+                    default:
+                      // fallback for theme.primary which might be #4cb3d4
+                      if (colorStr.startsWith('#') && colorStr.length === 7) {
+                        const r = parseInt(colorStr.slice(1, 3), 16);
+                        const g = parseInt(colorStr.slice(3, 5), 16);
+                        const b = parseInt(colorStr.slice(5, 7), 16);
+                        bgStr = `rgba(${r}, ${g}, ${b}, 0.15)`;
+                      } else {
+                        bgStr = colorStr; // fallback if it's not standard hex
+                      }
+                  }
 
-                    return (
-                      <TouchableOpacity
-                        key={t.key}
-                        style={[styles.topicChip, { borderColor: theme.border }, on && { backgroundColor: colorStr + '20', borderColor: colorStr }]}
-                        onPress={() => toggleTopic(t.key)}
-                      >
-                        <View style={[styles.topicDot, { backgroundColor: colorStr }]} />
-                        <Text variant="xs" weight={on ? 'bold' : 'normal'} color={on ? 'ink' : 'inkMuted'}>{t.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  return (
+                    <TouchableOpacity
+                      key={t.key}
+                      style={[
+                        styles.topicChip, 
+                        { borderColor: on ? colorStr : theme.border, backgroundColor: on ? bgStr : 'transparent' }
+                      ]}
+                      onPress={() => toggleTopic(t.key)}
+                    >
+                      <View style={[styles.topicDot, { backgroundColor: on ? colorStr : theme.border }]} />
+                      <Text variant="xs" weight={on ? 'bold' : 'normal'} color={on ? 'ink' : 'inkMuted'}>{t.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TouchableOpacity 
+                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: theme.border, opacity: topicPage === 1 ? 0.5 : 1 }}
+                    disabled={topicPage === 1}
+                    onPress={() => setTopicPage(p => Math.max(1, p - 1))}
+                  >
+                    <Text variant="xs" weight="bold">← Trước</Text>
+                  </TouchableOpacity>
+                  <Text variant="xs" color="inkMuted" style={{ marginHorizontal: 12 }}>
+                    {topicPage} / {totalTopicPages}
+                  </Text>
+                  <TouchableOpacity 
+                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: theme.border, opacity: topicPage === totalTopicPages ? 0.5 : 1 }}
+                    disabled={topicPage === totalTopicPages}
+                    onPress={() => setTopicPage(p => Math.min(totalTopicPages, p + 1))}
+                  >
+                    <Text variant="xs" weight="bold">Sau →</Text>
+                  </TouchableOpacity>
                 </View>
-              </ScrollView>
-              <TouchableOpacity onPress={() => setSelected(allOn ? new Set() : new Set(topics.map((t) => t.key)))}>
-                <Text variant="xs" color="primary" weight="bold" style={{ marginTop: 8 }}>
-                  {allOn ? "Bỏ chọn tất cả" : "Chọn tất cả"}
-                </Text>
-              </TouchableOpacity>
+                
+                <TouchableOpacity onPress={() => setSelected(allOn ? new Set() : new Set(topics.map((t) => t.key)))}>
+                  <Text variant="xs" color="primary" weight="bold">
+                    {allOn ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Summary Stats */}
@@ -254,25 +303,60 @@ export default function TrendsScreen() {
               status={loading ? 'loading' : selected.size === 0 ? 'empty' : 'ready'}
               emptyMessage="Chọn ít nhất một chủ đề"
             >
-              {sortedGrowth.map(g => (
-                <View key={g.key} style={[styles.growthRow, { borderBottomColor: theme.border }]}>
-                  <View style={styles.growthMeta}>
-                    <Text variant="sm" weight="bold">{g.label}</Text>
-                    <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>{formatInt(g.latest)} công bố</Text>
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Sparkline values={g.trend} token={g.token} />
-                  </View>
-                  <View style={styles.growthFigs}>
-                    <Text variant="sm" weight="bold" color={g.status === 'emerging' ? 'success' : g.status === 'declining' ? 'danger' : 'ink'}>
-                      {formatPercent(Math.round(g.cagr * 100))}
-                    </Text>
-                    <View style={[styles.badge, { backgroundColor: theme.surface2, marginTop: 4 }]}>
-                      <Text variant="xs" color="inkMuted">{g.status === 'emerging' ? 'Nổi lên' : g.status === 'declining' ? 'Suy giảm' : 'Ổn định'}</Text>
+              {currentGrowth.map(g => {
+                let dotColor = theme.primary;
+                switch (g.token) {
+                  case '--c1': dotColor = '#0d9488'; break;
+                  case '--c2': dotColor = '#6366f1'; break;
+                  case '--c3': dotColor = '#d97706'; break;
+                  case '--c4': dotColor = '#db2777'; break;
+                  case '--c5': dotColor = '#ea580c'; break;
+                  case '--c6': dotColor = '#059669'; break;
+                }
+
+                return (
+                  <View key={g.key} style={[styles.growthRow, { borderBottomColor: theme.border }]}>
+                    <View style={[styles.growthMeta, { flexDirection: 'row', alignItems: 'flex-start' }]}>
+                      <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: dotColor, marginTop: 5, marginRight: 8 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text variant="sm" weight="bold">{g.label}</Text>
+                        <Text variant="xs" color="inkMuted" style={{ marginTop: 2 }}>{formatInt(g.latest)} công bố</Text>
+                      </View>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      <Sparkline values={g.trend} token={g.token} />
+                    </View>
+                    <View style={styles.growthFigs}>
+                      <Text variant="sm" weight="bold" color={g.status === 'emerging' ? 'success' : g.status === 'declining' ? 'danger' : 'ink'}>
+                        {g.cagr > 0 ? '^ +' : g.cagr < 0 ? '↓ ' : ''}{Math.abs(Math.round(g.cagr * 100))}%
+                      </Text>
+                      <View style={[styles.badge, { backgroundColor: g.status === 'emerging' ? (theme as any).accent4Weak : theme.surface2, marginTop: 4 }]}>
+                        <Text variant="xs" color={g.status === 'emerging' ? 'success' : 'inkMuted'}>{g.status === 'emerging' ? 'Nổi lên' : g.status === 'declining' ? 'Suy giảm' : 'Ổn định'}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16 }}>
+                <TouchableOpacity 
+                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: theme.border, opacity: growthPage === 1 ? 0.5 : 1 }}
+                  disabled={growthPage === 1}
+                  onPress={() => setGrowthPage(p => Math.max(1, p - 1))}
+                >
+                  <Text variant="xs" weight="bold">← Trang trước</Text>
+                </TouchableOpacity>
+                <Text variant="xs" color="inkMuted" style={{ marginHorizontal: 16 }}>
+                  {growthPage} / {totalGrowthPages}
+                </Text>
+                <TouchableOpacity 
+                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: theme.border, opacity: growthPage === totalGrowthPages ? 0.5 : 1 }}
+                  disabled={growthPage === totalGrowthPages}
+                  onPress={() => setGrowthPage(p => Math.min(totalGrowthPages, p + 1))}
+                >
+                  <Text variant="xs" weight="bold">Trang sau →</Text>
+                </TouchableOpacity>
+              </View>
             </Widget>
 
             <Widget

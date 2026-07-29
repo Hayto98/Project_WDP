@@ -4,10 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Text } from './Text';
 import { analyticsApi, aiApi } from '../lib/api';
 
-const isFabric = (global as any)._IS_FABRIC === true;
-if (Platform.OS === 'android' && !isFabric && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+
 
 export function CorpusGapPanel() {
   const { theme } = useTheme();
