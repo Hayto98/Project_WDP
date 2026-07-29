@@ -108,18 +108,7 @@ export function OverviewPage({ theme, toggle }: Props) {
         </div>
 
         <div className="topbar__controls">
-          <div className="seg" role="group" aria-label="Khoảng thời gian phân tích">
-            {RANGES.map((r) => (
-              <button
-                key={r.id}
-                className={`seg__btn ${range === r.id ? "is-active" : ""}`}
-                aria-pressed={range === r.id}
-                onClick={() => setRange(r.id)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+
 
           <button
             className="icon-btn"
