@@ -3,10 +3,15 @@ require('dotenv').config();
 const nodeEnv = process.env.NODE_ENV || 'development';
 const productionFrontendUrl = 'https://scientificresearchtrendmonitoringsystem.up.railway.app';
 const defaultFrontendUrl = nodeEnv === 'production' ? productionFrontendUrl : 'http://localhost:5173';
+const configuredTrustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS, 10);
+const trustProxyHops = Number.isInteger(configuredTrustProxyHops) && configuredTrustProxyHops >= 0
+  ? configuredTrustProxyHops
+  : (nodeEnv === 'production' ? 1 : 0);
 
 module.exports = {
   port: parseInt(process.env.PORT, 10) || 5000,
   nodeEnv,
+  trustProxyHops,
 
   // MongoDB
   mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/wdp_research',

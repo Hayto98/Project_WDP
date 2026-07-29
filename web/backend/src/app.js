@@ -12,6 +12,7 @@ const {
   productionFrontendUrl,
   nodeEnv,
   redisEnabled,
+  trustProxyHops,
 } = require('./config/env');
 const { apiLimiter } = require('./middleware/rateLimiter.middleware');
 const { logAction } = require('./utils/systemLogger');
@@ -36,6 +37,10 @@ const feedbackRoutes = require('./routes/feedback.routes');
 const { startScheduler } = require('./services/scheduler.service');
 
 const app = express();
+
+if (trustProxyHops > 0) {
+  app.set('trust proxy', trustProxyHops);
+}
 
 /* ── Global Middleware ── */
 app.use(helmet());
