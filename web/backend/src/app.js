@@ -45,7 +45,14 @@ const corsOptions = {
   credentials: true,
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+// Avoid using app.options('*', ...) which can break on some path-to-regexp versions.
+// Use a lightweight middleware to handle preflight requests safely.
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return cors(corsOptions)(req, res, next);
+  }
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (nodeEnv !== 'test') {
