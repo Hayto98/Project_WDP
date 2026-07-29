@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.41:5000/api/v1';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://betrendtracking-production.up.railway.app/api/v1';
 
 interface UserProfile {
   id: string;
