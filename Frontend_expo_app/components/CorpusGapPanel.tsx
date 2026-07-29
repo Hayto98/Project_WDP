@@ -4,7 +4,8 @@ import { useTheme } from '../context/ThemeContext';
 import { Text } from './Text';
 import { analyticsApi, aiApi } from '../lib/api';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+const isFabric = (global as any)._IS_FABRIC === true;
+if (Platform.OS === 'android' && !isFabric && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
