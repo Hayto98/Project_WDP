@@ -1,3 +1,4 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const AnalysisReport = require('../models/AnalysisReport');
 const Paper = require('../models/Paper');
 const { llm, sources } = require('../config/env');

@@ -1,3 +1,4 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const DataSource = require('../models/DataSource');
 const { getEffectiveAuth } = require('./sourceCredentials.service');
 const { expandSearchQuery, normalizeTitle, upsertCleanPaper, toImportedPaperSummary } = require('./paperCleaning.service');

@@ -1,3 +1,4 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const { sources: sourceConfig } = require('../config/env');
 const { getEffectiveAuth } = require('./sourceCredentials.service');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');

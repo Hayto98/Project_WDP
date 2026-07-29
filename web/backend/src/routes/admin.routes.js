@@ -3,7 +3,6 @@ const ctrl = require('../controllers/admin.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { rbac } = require('../middleware/rbac.middleware');
 const { validate } = require('../middleware/validate.middleware');
-<<<<<<< HEAD
 const {
   updateUserSchema,
   createUserSchema,
@@ -13,9 +12,6 @@ const {
   testDataSourceSchema,
   broadcastNotificationSchema,
 } = require('../validators/admin.validator');
-=======
-const { updateUserSchema, createUserSchema, createJobSchema, updateDataSourceSchema, broadcastNotificationSchema } = require('../validators/admin.validator');
->>>>>>> Minh/feat
 
 const router = Router();
 router.use(authenticate);

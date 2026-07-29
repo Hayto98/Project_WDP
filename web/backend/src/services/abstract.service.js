@@ -1,3 +1,4 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const { llm, sources: sourceConfig } = require('../config/env');
 
 function authorNames(authors = []) {

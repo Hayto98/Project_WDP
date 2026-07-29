@@ -1,3 +1,4 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
 const { normalizeTitle, expandSearchQuery, upsertCleanPaper, toImportedPaperSummary } = require('./paperCleaning.service');
 

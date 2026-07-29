@@ -1,3 +1,4 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const crypto = require('crypto');
 const DataSource = require('../models/DataSource');
 const { sources: sourceConfig, jwt } = require('../config/env');
