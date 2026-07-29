@@ -21,12 +21,6 @@ import {
 import { dashboardApi } from "../lib/api";
 import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 
-const RANGES: { id: TimeRange; label: string }[] = [
-  { id: "12m", label: "12 tháng" },
-  { id: "24m", label: "24 tháng" },
-  { id: "5y", label: "5 năm" },
-];
-
 const EMPTY_DASHBOARD: DashboardData = {
   updatedAt: "chưa có dữ liệu",
   kpis: [],
@@ -49,7 +43,7 @@ interface Props {
 }
 
 export function OverviewPage({ theme, toggle }: Props) {
-  const [range, setRange] = useState<TimeRange>("12m");
+  const [range] = useState<TimeRange>("12m");
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewState>("default");
   const [remoteData, setRemoteData] = useState<DashboardData | null>(null);
