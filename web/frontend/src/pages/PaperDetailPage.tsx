@@ -130,6 +130,8 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [aiSummary, setAiSummary] = useState("");
+  const [aiProvider, setAiProvider] = useState("");
+  const [aiExpanded, setAiExpanded] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [related, setRelated] = useState<PaperResult[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
@@ -139,6 +141,10 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
     let alive = true;
     setLoading(true);
     setError("");
+    setAiSummary("");
+    setAiProvider("");
+    setAiExpanded(true);
+    setRelated([]);
     paperApi
       .getById(paperId, source)
       .then((result) => {
@@ -163,6 +169,7 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
   const summarize = async () => {
     if (!paper || aiLoading) return;
     setAiLoading(true);
+    setAiExpanded(true);
     try {
       const result = await aiApi.summarize({
         title: paper.title,
@@ -172,8 +179,10 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
         keywords: paper.keywords,
       });
       setAiSummary(result.summary);
+      setAiProvider(result.provider || "");
     } catch (err) {
       setAiSummary(err instanceof Error ? err.message : "Không tóm tắt được bài báo.");
+      setAiProvider("");
     } finally {
       setAiLoading(false);
     }
@@ -270,12 +279,37 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
             </section>
 
             {aiSummary && (
-              <section className="paper-detail__ai">
-                <div>
-                  <IconSparkle width={18} height={18} />
-                  <h2>Tóm tắt bằng AI</h2>
+              <section className={`paper-detail__ai ${aiExpanded ? "is-expanded" : "is-collapsed"}`}>
+                <div className="paper-detail__ai-head">
+                  <div>
+                    <IconSparkle width={18} height={18} />
+                    <h2>Tóm tắt bằng AI</h2>
+                  </div>
+                  {aiSummary.length > 320 && (
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      type="button"
+                      onClick={() => setAiExpanded((value) => !value)}
+                    >
+                      {aiExpanded ? "Thu gọn" : "Xem đầy đủ"}
+                    </button>
+                  )}
                 </div>
-                <p>{aiSummary}</p>
+                {aiProvider === "fallback" && (
+                  <p className="paper-detail__ai-note">
+                    AI chưa phản hồi đầy đủ — đang hiển thị nội dung thay thế đầy đủ (không cắt giữa chừng).
+                  </p>
+                )}
+                <p className="paper-detail__ai-body">{aiSummary}</p>
+                {!aiExpanded && aiSummary.length > 320 && (
+                  <button
+                    className="paper-detail__ai-more"
+                    type="button"
+                    onClick={() => setAiExpanded(true)}
+                  >
+                    Xem toàn bộ tóm tắt
+                  </button>
+                )}
               </section>
             )}
 

@@ -47,6 +47,18 @@ function uniqueStrings(values = [], limit = 12) {
   return result;
 }
 
+/** Expand CamelCase so APIs (Crossref, etc.) match spaced titles. */
+function expandSearchQuery(query) {
+  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
+  if (!cleaned) return '';
+  const spaced = cleaned
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return spaced || cleaned;
+}
+
 function preparePaper(rawPaper) {
   const title = cleanText(rawPaper.title, 500);
   const publicationYear = Number(rawPaper.publication_year) || new Date().getFullYear();
@@ -81,7 +93,7 @@ function preparePaper(rawPaper) {
 async function upsertCleanPaper(rawPaper) {
   const paper = preparePaper(rawPaper);
   if (paper.status === 'Rejected' || !paper.original_url) {
-    return { imported: false, skipped: true, reason: 'invalid_record' };
+    return { imported: false, skipped: true, reason: 'invalid_record', paper: null };
   }
 
   const existing = await Paper.findOne({
@@ -106,22 +118,35 @@ async function upsertCleanPaper(rawPaper) {
       if (!existing.abstract && paper.abstract) existing.abstract = paper.abstract;
       await existing.save();
       await notifyFollowersForPaper(existing);
-      return { imported: true, skipped: false, merged: true };
+      return { imported: true, skipped: false, merged: true, paper: existing };
     }
 
-    return { imported: false, skipped: true, reason: 'duplicate' };
+    return { imported: false, skipped: true, reason: 'duplicate', paper: existing };
   }
 
   const created = await Paper.create(paper);
   await notifyFollowersForPaper(created);
-  return { imported: true, skipped: false, merged: false };
+  return { imported: true, skipped: false, merged: false, paper: created };
+}
+
+function toImportedPaperSummary(outcome) {
+  if (!outcome?.imported || !outcome.paper) return null;
+  const doc = outcome.paper;
+  return {
+    id: String(doc._id || ''),
+    title: doc.title || 'Untitled',
+    year: doc.publication_year || null,
+    source: doc.source_name || null,
+  };
 }
 
 module.exports = {
   cleanText,
+  expandSearchQuery,
   normalizeDoi,
   normalizeTitle,
   preparePaper,
   uniqueStrings,
   upsertCleanPaper,
+  toImportedPaperSummary,
 };

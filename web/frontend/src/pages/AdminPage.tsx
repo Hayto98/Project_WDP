@@ -748,9 +748,9 @@ export function AdminPage({ theme, toggle }: Props) {
         )}
 
         {tab === "sources" && (
-          <section className="admin-panel">
-            <PanelHead title="Cấu hình nguồn dữ liệu" meta="Bật/tắt nguồn học thuật và theo dõi độ ổn định" />
-            <div className="admin-read-actions" aria-label="Kiểm tra nguồn dữ liệu">
+          <section className="admin-panel admin-sources-panel">
+            <div className="admin-sources-toolbar">
+              <PanelHead title="Cấu hình nguồn dữ liệu" meta="Bật/tắt nguồn, cấu hình API key/mailto và kiểm tra kết nối" />
               <button className="btn btn--primary" type="button" onClick={checkSourceApis} disabled={checkingSources}>
                 <IconRefresh width={15} height={15} /> {checkingSources ? "Đang kiểm tra..." : "Kiểm tra API nguồn"}
               </button>
@@ -758,7 +758,15 @@ export function AdminPage({ theme, toggle }: Props) {
             {sourceNotice && <p className="invite-notice admin-read-notice" role="status">{sourceNotice}</p>}
             <div className="admin-source-grid">
               {sources.map((source) => (
-                <SourceCard key={source.id} source={source} onToggle={toggleSource} />
+                <SourceCard
+                  key={source.id}
+                  source={source}
+                  onToggle={toggleSource}
+                  onCredentialsSaved={(updated) => {
+                    setSources((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+                  }}
+                  onNotice={setSourceNotice}
+                />
               ))}
             </div>
           </section>
@@ -1363,16 +1371,164 @@ function JobRow({ job, onRerun, compact = false }: { job: AdminJob; onRerun: (id
   );
 }
 
-function SourceCard({ source, onToggle }: { source: DataSource; onToggle: (id: string) => void }) {
+function humanizeApiMessage(raw?: string | null): string {
+  if (!raw) return "";
+  let text = String(raw).trim();
+  if (!text) return "";
+  if (/developer\s+inactive/i.test(text)) {
+    return "API key chưa được kích hoạt (Developer Inactive)";
+  }
+  if (/not configured|is not configured/i.test(text)) {
+    return "Chưa cấu hình API key cho nguồn này";
+  }
+  if (/too many requests|rate limit/i.test(text)) {
+    return "Đã vượt rate limit — thử lại sau vài giây";
+  }
+  if (/forbidden/i.test(text)) {
+    return "API từ chối truy cập (Forbidden) — kiểm tra lại key";
+  }
+  text = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object") {
+      const msg = (parsed as { message?: string; error?: string }).message
+        || (parsed as { error?: string }).error;
+      if (msg) return humanizeApiMessage(String(msg));
+    }
+  } catch {
+    // keep cleaned text
+  }
+  if (text.length > 120) return `${text.slice(0, 117)}…`;
+  return text;
+}
+
+function sourceInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function SourceCard({
+  source,
+  onToggle,
+  onCredentialsSaved,
+  onNotice,
+}: {
+  source: DataSource;
+  onToggle: (id: string) => void;
+  onCredentialsSaved: (source: DataSource) => void;
+  onNotice: (message: string) => void;
+}) {
+  const creds = source.credentials;
+  const authMode = creds?.authMode ?? "none";
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState<"save" | "clear" | "test" | null>(null);
+  const [localTestOk, setLocalTestOk] = useState<boolean | null>(null);
+  const [localTestMsg, setLocalTestMsg] = useState("");
+
+  const keyChip =
+    authMode === "none"
+      ? { tone: "neutral" as const, label: "Không cần key" }
+      : authMode === "mailto"
+        ? creds?.keySource === "database"
+          ? { tone: "ok" as const, label: creds.mailto ? `Mailto · ${creds.mailto}` : "Mailto · DB" }
+          : creds?.keySource === "env"
+            ? { tone: "info" as const, label: creds.mailto ? `Mailto · .env · ${creds.mailto}` : "Mailto · .env" }
+            : { tone: "warn" as const, label: "Chưa cấu hình mailto" }
+        : creds?.keySource === "database"
+          ? { tone: "ok" as const, label: `Key DB · ${creds.apiKeyMasked || "••••"}` }
+          : creds?.keySource === "env"
+            ? { tone: "info" as const, label: "Key · .env" }
+            : { tone: "warn" as const, label: "Chưa cấu hình key" };
+
+  const testOk = localTestOk ?? creds?.lastTestOk ?? null;
+  const testMessage = humanizeApiMessage(localTestMsg || creds?.lastTestMessage || "");
+  const errorMessage = humanizeApiMessage(source.errorMessage);
+  const hasHealthIssue = source.status === "degraded" || Boolean(errorMessage);
+
+  const saveCredentials = async () => {
+    const value = draft.trim();
+    if (!value || busy) return;
+    setBusy("save");
+    setLocalTestOk(null);
+    setLocalTestMsg("");
+    try {
+      const updated =
+        authMode === "mailto"
+          ? await adminApi.updateDataSourceCredentials(source.id, { mailto: value })
+          : await adminApi.updateDataSourceCredentials(source.id, { apiKey: value });
+      onCredentialsSaved(updated);
+      setDraft("");
+      onNotice(`${source.name}: đã lưu ${authMode === "mailto" ? "mailto" : "API key"}.`);
+    } catch (err) {
+      onNotice(err instanceof Error ? err.message : "Không lưu được credential.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const clearCredentials = async () => {
+    if (busy) return;
+    setBusy("clear");
+    setLocalTestOk(null);
+    setLocalTestMsg("");
+    try {
+      const updated = await adminApi.clearDataSourceCredentials(source.id);
+      onCredentialsSaved(updated);
+      onNotice(`${source.name}: đã xóa credential trong DB (có thể fallback .env).`);
+    } catch (err) {
+      onNotice(err instanceof Error ? err.message : "Không xóa được credential.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const testCredentials = async () => {
+    if (busy) return;
+    setBusy("test");
+    try {
+      const patch =
+        draft.trim()
+          ? authMode === "mailto"
+            ? { mailto: draft.trim() }
+            : authMode === "api_key"
+              ? { apiKey: draft.trim() }
+              : {}
+          : {};
+      const result = await adminApi.testDataSource(source.id, patch);
+      if (result.source) onCredentialsSaved(mapMaybeSource(result.source, source));
+      const clean = humanizeApiMessage(result.message);
+      setLocalTestOk(result.ok);
+      setLocalTestMsg(`${clean} (${result.latencyMs}ms)`);
+      onNotice(`${source.name}: ${result.ok ? "OK" : "Fail"} — ${clean}`);
+    } catch (err) {
+      const message = humanizeApiMessage(err instanceof Error ? err.message : "Không test được API.");
+      setLocalTestOk(false);
+      setLocalTestMsg(message);
+      onNotice(`${source.name}: ${message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
-    <article className="admin-source-card">
+    <article className={`admin-source-card admin-source-card--${source.status}`} data-status={source.status}>
       <div className="admin-source-card__head">
-        <span>
-          <strong>{source.name}</strong>
-          <small>Đồng bộ {source.lastSync}</small>
-        </span>
+        <div className="admin-source-card__identity">
+          <span className="admin-source-card__avatar" aria-hidden>
+            {sourceInitials(source.name)}
+          </span>
+          <span>
+            <strong>{source.name}</strong>
+            <small>Đồng bộ {source.lastSync}</small>
+          </span>
+        </div>
         <StatusPill status={source.status} label={SOURCE_STATUS_LABEL[source.status]} />
       </div>
+
       <dl className="admin-source-metrics">
         <div>
           <dt>Coverage</dt>
@@ -1382,17 +1538,118 @@ function SourceCard({ source, onToggle }: { source: DataSource; onToggle: (id: s
           <dt>Latency</dt>
           <dd>{source.latency}</dd>
         </div>
-        <div>
+        <div className={source.errorRate !== "0%" && source.errorRate !== "—" ? "is-bad" : undefined}>
           <dt>Error</dt>
           <dd>{source.errorRate}</dd>
         </div>
       </dl>
-      {source.errorMessage && <p className="admin-read-note">{source.errorMessage}</p>}
-      <button className="btn btn--ghost" type="button" onClick={() => onToggle(source.id)}>
+
+      {hasHealthIssue && errorMessage && (
+        <p className="admin-source-alert" role="status">
+          {errorMessage}
+        </p>
+      )}
+
+      <div className="admin-source-creds">
+        <div className="admin-source-creds__meta">
+          <span className={`admin-source-chip admin-source-chip--${keyChip.tone}`}>{keyChip.label}</span>
+          <span
+            className={`admin-source-chip admin-source-chip--${
+              testOk === true ? "ok" : testOk === false ? "bad" : "neutral"
+            }`}
+          >
+            {testOk === true ? "Test OK" : testOk === false ? "Test fail" : "Chưa test"}
+          </span>
+        </div>
+        {testMessage && <p className="admin-source-creds__test">{testMessage}</p>}
+
+        {authMode === "none" ? (
+          <p className="admin-source-creds__hint">Nguồn công khai — chỉ cần bật/tắt và kiểm tra kết nối.</p>
+        ) : (
+          <div className="admin-source-creds__form">
+            <label className="admin-source-creds__label" htmlFor={`cred-${source.id}`}>
+              {authMode === "mailto" ? "Mailto liên hệ" : "API key mới"}
+            </label>
+            <input
+              id={`cred-${source.id}`}
+              className="input admin-source-creds__input"
+              type={authMode === "mailto" ? "email" : "password"}
+              autoComplete="off"
+              placeholder={authMode === "mailto" ? "research@example.com" : "Dán key mới để thay key hết hạn"}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              disabled={Boolean(busy)}
+            />
+          </div>
+        )}
+
+        <div className="admin-source-creds__actions">
+          {authMode !== "none" && (
+            <>
+              <button
+                className="btn btn--primary btn--sm"
+                type="button"
+                onClick={saveCredentials}
+                disabled={!draft.trim() || Boolean(busy)}
+              >
+                {busy === "save" ? "Đang lưu…" : "Lưu"}
+              </button>
+              <button
+                className="btn btn--ghost btn--sm"
+                type="button"
+                onClick={clearCredentials}
+                disabled={Boolean(busy) || creds?.keySource !== "database"}
+              >
+                {busy === "clear" ? "Đang xóa…" : "Xóa DB"}
+              </button>
+            </>
+          )}
+          <button className="btn btn--ghost btn--sm" type="button" onClick={testCredentials} disabled={Boolean(busy)}>
+            {busy === "test" ? "Đang test…" : "Test API"}
+          </button>
+        </div>
+      </div>
+
+      <button
+        className={`btn btn--sm admin-source-card__toggle ${source.enabled ? "btn--ghost" : "btn--primary"}`}
+        type="button"
+        onClick={() => onToggle(source.id)}
+      >
         {source.enabled ? "Tạm dừng nguồn" : "Bật lại nguồn"}
       </button>
     </article>
   );
+}
+
+function mapMaybeSource(raw: any, fallback: DataSource): DataSource {
+  if (!raw) return fallback;
+  return {
+    id: raw._id ? String(raw._id) : fallback.id,
+    name: raw.name ?? fallback.name,
+    status: raw.enabled
+      ? raw.last_sync_status === "failed" || raw.last_sync_status === "Failed"
+        ? "degraded"
+        : "active"
+      : "paused",
+    coverage: raw.coverage ?? fallback.coverage,
+    lastSync: fallback.lastSync,
+    latency: raw.latency ?? fallback.latency,
+    errorRate: raw.error_rate ?? fallback.errorRate,
+    enabled: raw.enabled ?? fallback.enabled,
+    errorMessage: raw.last_error ?? fallback.errorMessage,
+    credentials: raw.credentials
+      ? {
+          authMode: raw.credentials.authMode ?? "none",
+          hasApiKey: Boolean(raw.credentials.hasApiKey),
+          apiKeyMasked: raw.credentials.apiKeyMasked ?? null,
+          keySource: raw.credentials.keySource ?? "none",
+          mailto: raw.credentials.mailto ?? null,
+          lastTestedAt: raw.credentials.lastTestedAt ?? null,
+          lastTestOk: raw.credentials.lastTestOk ?? null,
+          lastTestMessage: raw.credentials.lastTestMessage ?? null,
+        }
+      : fallback.credentials,
+  };
 }
 
 function UserRow({ user, onToggleLock }: { user: AdminUser; onToggleLock: (id: string) => void }) {

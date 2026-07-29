@@ -25,6 +25,17 @@ export interface AdminJob {
   errorMessage?: string;
 }
 
+export interface DataSourceCredentials {
+  authMode: "api_key" | "mailto" | "none";
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
+  keySource: "database" | "env" | "none";
+  mailto: string | null;
+  lastTestedAt?: string | null;
+  lastTestOk?: boolean | null;
+  lastTestMessage?: string | null;
+}
+
 export interface DataSource {
   id: string;
   name: string;
@@ -35,6 +46,7 @@ export interface DataSource {
   errorRate: string;
   enabled: boolean;
   errorMessage?: string;
+  credentials?: DataSourceCredentials;
 }
 
 export interface AdminUser {

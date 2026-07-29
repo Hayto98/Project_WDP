@@ -24,6 +24,7 @@ const router = Router();
  *         description: Search results
  */
 router.get('/search', optionalAuth, ctrl.search);
+router.get('/sources', optionalAuth, ctrl.listSources);
 
 /**
  * @swagger

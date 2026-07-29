@@ -1,6 +1,6 @@
 const DataSource = require('../models/DataSource');
-const { sources: sourceConfig } = require('../config/env');
-const { normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
+const { getEffectiveAuth } = require('./sourceCredentials.service');
+const { expandSearchQuery, normalizeTitle, upsertCleanPaper, toImportedPaperSummary } = require('./paperCleaning.service');
 
 const IEEE_API_URL = 'https://ieeexploreapi.ieee.org/api/v1/search/articles';
 
@@ -83,7 +83,8 @@ function mapArticleToPaper(article, query) {
 }
 
 async function fetchIEEEArticles(query, maxRecords = 25) {
-  const apiKey = sourceConfig.ieeeXploreApiKey;
+  const auth = await getEffectiveAuth('IEEE Xplore');
+  const apiKey = auth.apiKey;
   if (!apiKey) {
     throw Object.assign(new Error('IEEE_XPLORE_API_KEY is not configured'), { statusCode: 500 });
   }
@@ -91,19 +92,44 @@ async function fetchIEEEArticles(query, maxRecords = 25) {
   const url = new URL(IEEE_API_URL);
   url.searchParams.set('apikey', apiKey);
   url.searchParams.set('format', 'json');
-  url.searchParams.set('querytext', query);
+  url.searchParams.set('querytext', expandSearchQuery(query));
   url.searchParams.set('max_records', String(clampMaxRecords(maxRecords)));
   url.searchParams.set('start_record', '1');
   url.searchParams.set('sort_order', 'desc');
   url.searchParams.set('sort_field', 'publication_year');
 
   const res = await fetch(url);
-  const body = await res.json().catch(() => ({}));
+  const raw = await res.text();
+  const inactive = /developer\s+inactive/i.test(raw);
+  if (inactive || res.status === 403) {
+    throw Object.assign(
+      new Error(
+        'IEEE API key chưa được kích hoạt (Developer Inactive). Đợi email xác nhận từ IEEE (8am–5pm ET, T2–T6) rồi thử lại.',
+      ),
+      { statusCode: 403 },
+    );
+  }
+
+  let body = {};
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw Object.assign(
+      new Error(raw?.slice(0, 200) || `IEEE API returned non-JSON response (${res.status})`),
+      { statusCode: res.status || 502 },
+    );
+  }
+
   if (!res.ok) {
-    throw Object.assign(new Error(body.message || `IEEE API error: ${res.status}`), { statusCode: res.status });
+    throw Object.assign(new Error(body.message || body.error || `IEEE API error: ${res.status}`), {
+      statusCode: res.status,
+    });
   }
   if (body.error) {
-    throw Object.assign(new Error(Array.isArray(body.error) ? body.error.join('; ') : body.error), { statusCode: 502 });
+    throw Object.assign(
+      new Error(Array.isArray(body.error) ? body.error.join('; ') : body.error),
+      { statusCode: 502 },
+    );
   }
 
   return {
@@ -121,11 +147,16 @@ async function importIEEEByQuery(query, maxRecords = 25) {
   const { articles, total } = await fetchIEEEArticles(trimmed, maxRecords);
   let imported = 0;
   let skipped = 0;
+  const importedPapers = [];
 
   for (const article of articles) {
     const paper = mapArticleToPaper(article, trimmed);
     const outcome = await upsertCleanPaper(paper);
-    if (outcome.imported) imported += 1;
+    if (outcome.imported) {
+      imported += 1;
+      const summary = toImportedPaperSummary(outcome);
+      if (summary) importedPapers.push(summary);
+    }
     if (outcome.skipped) skipped += 1;
   }
 
@@ -142,7 +173,7 @@ async function importIEEEByQuery(query, maxRecords = 25) {
     },
   );
 
-  return { imported, skipped, sourceTotal: total };
+  return { imported, skipped, sourceTotal: total, importedPapers };
 }
 
 module.exports = {

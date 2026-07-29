@@ -1,10 +1,12 @@
 const { sources: sourceConfig } = require('../config/env');
+const { getEffectiveAuth } = require('./sourceCredentials.service');
 const {
   cleanText,
   normalizeDoi,
   normalizeTitle,
   uniqueStrings,
   upsertCleanPaper,
+  toImportedPaperSummary,
 } = require('./paperCleaning.service');
 
 function clampMaxRecords(value) {
@@ -86,7 +88,8 @@ function buildQuery(query, options = {}) {
 }
 
 async function fetchExaResults(query, maxRecords = 10, options = {}) {
-  if (!sourceConfig.exaApiKey) {
+  const auth = await getEffectiveAuth('Exa');
+  if (!auth.apiKey) {
     throw Object.assign(new Error('EXA_API_KEY is not configured'), { statusCode: 500 });
   }
 
@@ -94,11 +97,11 @@ async function fetchExaResults(query, maxRecords = 10, options = {}) {
   const timeout = setTimeout(() => controller.abort(), sourceConfig.externalApiTimeoutMs || 30000);
 
   try {
-    const res = await fetch(new URL('/search', sourceConfig.exaApiUrl), {
+    const res = await fetch(new URL('/search', auth.endpoint || sourceConfig.exaApiUrl), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': sourceConfig.exaApiKey,
+        'x-api-key': auth.apiKey,
       },
       signal: controller.signal,
       body: JSON.stringify({
@@ -144,11 +147,16 @@ async function importExaByQuery(query, maxRecords = 10, options = {}) {
   const { total, results } = await fetchExaResults(query, maxRecords, options);
   let imported = 0;
   let skipped = 0;
+  const importedPapers = [];
 
   for (const result of results) {
     const paper = mapResultToPaper(result);
     const outcome = await upsertCleanPaper(paper);
-    if (outcome.imported) imported += 1;
+    if (outcome.imported) {
+      imported += 1;
+      const summary = toImportedPaperSummary(outcome);
+      if (summary) importedPapers.push(summary);
+    }
     if (outcome.skipped) skipped += 1;
   }
 
@@ -156,6 +164,7 @@ async function importExaByQuery(query, maxRecords = 10, options = {}) {
     imported,
     skipped,
     sourceTotal: total,
+    importedPapers,
   };
 }
 

@@ -251,6 +251,18 @@ function mapAdminJob(job: any): AdminJob {
 }
 
 function mapDataSource(source: any): DataSource {
+  const credentials = source.credentials
+    ? {
+        authMode: source.credentials.authMode ?? "none",
+        hasApiKey: Boolean(source.credentials.hasApiKey),
+        apiKeyMasked: source.credentials.apiKeyMasked ?? null,
+        keySource: source.credentials.keySource ?? "none",
+        mailto: source.credentials.mailto ?? null,
+        lastTestedAt: source.credentials.lastTestedAt ?? null,
+        lastTestOk: source.credentials.lastTestOk ?? null,
+        lastTestMessage: source.credentials.lastTestMessage ?? null,
+      }
+    : undefined;
   return {
     id: asId(source._id),
     name: source.name,
@@ -261,6 +273,7 @@ function mapDataSource(source: any): DataSource {
     errorRate: source.error_rate ?? "0%",
     enabled: Boolean(source.enabled),
     errorMessage: source.last_error ?? "",
+    credentials,
   };
 }
 
@@ -502,11 +515,24 @@ export const paperApi = {
   } = {}) {
     return request<{
       records_processed?: number;
-      result?: { imported?: number; skipped?: number; source_total?: number };
+      result?: {
+        imported?: number;
+        skipped?: number;
+        source_total?: number;
+        imported_papers?: Array<{ id: string; title: string; year?: number | null; source?: string | null }>;
+      };
     }>("/papers/sync-request", {
       method: "POST",
       body: JSON.stringify({ query, sourceName, maxRecords, ...filters }),
     });
+  },
+  listSources() {
+    return request<Array<{
+      name: string;
+      enabled: boolean;
+      status: "active" | "degraded" | "paused";
+      message: string | null;
+    }>>("/papers/sources");
   },
 };
 
@@ -1014,6 +1040,30 @@ export const adminApi = {
       body: JSON.stringify(patch),
     });
     return mapDataSource(source);
+  },
+  async updateDataSourceCredentials(id: string, patch: { apiKey?: string; mailto?: string }): Promise<DataSource> {
+    const source = await request<any>(`/admin/data-sources/${id}/credentials`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+    return mapDataSource(source);
+  },
+  async clearDataSourceCredentials(id: string): Promise<DataSource> {
+    const source = await request<any>(`/admin/data-sources/${id}/credentials`, {
+      method: "DELETE",
+    });
+    return mapDataSource(source);
+  },
+  async testDataSource(id: string, patch: { apiKey?: string; mailto?: string } = {}) {
+    return request<{
+      ok: boolean;
+      message: string;
+      latencyMs: number;
+      source: any;
+    }>(`/admin/data-sources/${id}/test`, {
+      method: "POST",
+      body: JSON.stringify(patch),
+    });
   },
   async checkDataSources() {
     await request("/admin/data-sources/check", { method: "POST" });

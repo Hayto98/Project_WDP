@@ -19,6 +19,8 @@ services:
     restart: unless-stopped
     ports:
       - "5001:5001"
+    env_file:
+      - ./web/backend/.env
     environment:
       PORT: 5001
       NODE_ENV: production
@@ -37,14 +39,10 @@ services:
       OPENALEX_MAILTO: local@example.com
       EXTERNAL_API_TIMEOUT_MS: 90000
       SEMANTIC_SCHOLAR_API_URL: https://api.semanticscholar.org/graph/v1
-      SEMANTIC_SCHOLAR_API_KEY: ""
       CROSSREF_API_URL: https://api.crossref.org
       CROSSREF_MAILTO: local@example.com
       IEEE_API_URL: https://ieeexploreapi.ieee.org
-      IEEE_API_KEY: ""
-      IEEE_XPLORE_API_KEY: ""
       EXA_API_URL: https://api.exa.ai
-      EXA_API_KEY: ""
     depends_on:
       mongo:
         condition: service_healthy

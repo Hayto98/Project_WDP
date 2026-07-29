@@ -3,7 +3,15 @@ const ctrl = require('../controllers/admin.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 const { rbac } = require('../middleware/rbac.middleware');
 const { validate } = require('../middleware/validate.middleware');
-const { updateUserSchema, createUserSchema, createJobSchema, updateDataSourceSchema, broadcastNotificationSchema } = require('../validators/admin.validator');
+const {
+  updateUserSchema,
+  createUserSchema,
+  createJobSchema,
+  updateDataSourceSchema,
+  updateDataSourceCredentialsSchema,
+  testDataSourceSchema,
+  broadcastNotificationSchema,
+} = require('../validators/admin.validator');
 
 const router = Router();
 router.use(authenticate);
@@ -115,6 +123,18 @@ router.post('/data-sources/check', ctrl.checkDataSourceApis);
  *         description: Data source updated
  */
 router.put('/data-sources/:id', validate(updateDataSourceSchema), ctrl.updateDataSource);
+
+router.put(
+  '/data-sources/:id/credentials',
+  validate(updateDataSourceCredentialsSchema),
+  ctrl.updateDataSourceCredentials,
+);
+router.delete('/data-sources/:id/credentials', ctrl.clearDataSourceCredentials);
+router.post(
+  '/data-sources/:id/test',
+  validate(testDataSourceSchema),
+  ctrl.testDataSource,
+);
 
 // Crawler Jobs
 

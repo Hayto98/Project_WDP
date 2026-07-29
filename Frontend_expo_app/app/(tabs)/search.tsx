@@ -40,7 +40,7 @@ const RELATED_KEYWORDS = [
 ];
 
 const YEAR_MIN = 2015;
-const YEAR_MAX = 2025;
+const YEAR_MAX = new Date().getFullYear();
 const PAGE_SIZE = 5;
 
 type Scope = "all" | "title" | "author";

@@ -710,7 +710,12 @@ function LibraryDetail({
           {aiLoading ? "Đang tóm tắt..." : "AI tóm tắt"}
         </button>
         {aiError && <p className="invite-notice" role="alert">{aiError}</p>}
-        {aiSummary && <p className="invite-notice">{aiSummary}</p>}
+        {aiSummary && (
+          <div className="libdetail__ai">
+            <span className="libdetail__label">Tóm tắt bằng AI</span>
+            <p className="libdetail__ai-body">{aiSummary}</p>
+          </div>
+        )}
       </div>
 
       <div className="libdetail__actions">

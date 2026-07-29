@@ -69,11 +69,15 @@ function reasonCode(err) {
 
 function fallbackSummary(title, abstract) {
   const cleanTitle = cleanPublicText(title, 180) || 'Bài báo';
-  const cleanAbstract = cleanPublicText(abstract, 900);
+  const cleanAbstract = cleanPublicText(abstract, 5000);
   if (!cleanAbstract) {
     return `${cleanTitle}: chưa có abstract công khai để tóm tắt.`;
   }
-  return `${cleanTitle}: ${cleanAbstract.slice(0, 260)}${cleanAbstract.length > 260 ? '...' : ''}`;
+  return [
+    'AI tạm thời không khả dụng — hiển thị abstract đầy đủ để bạn đọc:',
+    '',
+    cleanAbstract,
+  ].join('\n');
 }
 
 async function callGemini(prompt, options = {}) {
@@ -145,11 +149,12 @@ async function summarizePaper({ title, abstract, year, source, keywords = [] }) 
       [
         'Bạn là trợ lý nghiên cứu khoa học. Chỉ dùng metadata/abstract công khai dưới đây.',
         'Không bịa kết quả, không suy đoán ngoài dữ liệu.',
-        'Viết tiếng Việt, 3-5 câu, nêu mục tiêu, phương pháp/chủ đề chính và đóng góp/ý nghĩa nếu có.',
+        'Viết tiếng Việt, 4-8 câu đầy đủ, nêu mục tiêu, phương pháp/chủ đề chính và đóng góp/ý nghĩa nếu có.',
+        'Không cắt cụt giữa chừng; hoàn thành toàn bộ đoạn tóm tắt.',
         '',
         JSON.stringify(publicContext, null, 2),
       ].join('\n'),
-      { maxOutputTokens: 500 },
+      { maxOutputTokens: 1200 },
     );
     return setCached(key, { summary: text, provider: 'gemini', model: llm.geminiModel });
   } catch (err) {
