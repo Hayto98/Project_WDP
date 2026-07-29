@@ -1,4 +1,12 @@
 import type { PaperResult } from "../data/searchSample";
+
+// Minimal typing shim for socket.io-client usage in the app.
+declare module "socket.io-client" {
+  export interface Socket {
+    id: string | undefined;
+  }
+  export function io(_url?: string, _opts?: unknown): Socket;
+}
 import type { AiInsight, AxisOption, DashboardData, GapCell, TrendPoint, TrendSeries } from "../data/types";
 import type {
   CoocEdge,
@@ -26,7 +34,7 @@ import type {
   WorkspaceMember,
 } from "../data/workspaceSample";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api/v1";
 const TOKEN_KEY = "wdp_access_token";
 const REFRESH_TOKEN_KEY = "wdp_refresh_token";
 const USER_KEY = "wdp_user";
