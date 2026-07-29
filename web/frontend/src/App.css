@@ -5362,6 +5362,9 @@ mark.hl {
 .gaprank {
   display: flex;
   flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 .gaprank__row {
   border-bottom: 1px solid var(--border);
