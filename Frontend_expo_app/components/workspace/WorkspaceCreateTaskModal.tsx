@@ -140,28 +140,17 @@ export function WorkspaceCreateTaskModal({ visible, onClose, workspaceId, worksp
 
             {/* Assignee & Deadline Row */}
             <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 8, position: 'relative' }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
                 <Text variant="sm" weight="bold" style={styles.label}>Phụ trách</Text>
                 <TouchableOpacity 
                   style={[styles.dropdownBtn, { borderColor: theme.border }]} 
-                  onPress={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+                  onPress={() => setShowAssigneeDropdown(true)}
                 >
-                  <Text color={assigneeId ? "ink" : "inkMuted"}>
+                  <Text color={assigneeId ? "ink" : "inkMuted"} numberOfLines={1} style={{ flex: 1 }}>
                     {assigneeId ? (members.find(m => m.id === assigneeId)?.name || assigneeId) : "+ Thêm"}
                   </Text>
+                  <Text color="inkMuted" variant="xs" style={{ marginLeft: 6 }}>▼</Text>
                 </TouchableOpacity>
-                {showAssigneeDropdown && (
-                  <View style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                    <TouchableOpacity style={styles.dropdownItem} onPress={() => { setAssigneeId(''); setShowAssigneeDropdown(false); }}>
-                      <Text>Bỏ trống</Text>
-                    </TouchableOpacity>
-                    {members.map(m => (
-                      <TouchableOpacity key={m.id} style={styles.dropdownItem} onPress={() => { setAssigneeId(m.id); setShowAssigneeDropdown(false); }}>
-                        <Text>{m.name || m.id}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
               </View>
 
               <View style={{ flex: 1, marginLeft: 8 }}>
@@ -298,6 +287,66 @@ export function WorkspaceCreateTaskModal({ visible, onClose, workspaceId, worksp
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Assignee Selector Popup Overlay */}
+        {showAssigneeDropdown && (
+          <View style={[StyleSheet.absoluteFill, styles.assigneeBackdrop]}>
+            <TouchableOpacity 
+              style={StyleSheet.absoluteFill} 
+              activeOpacity={1} 
+              onPress={() => setShowAssigneeDropdown(false)} 
+            />
+            <View style={[styles.assigneePopup, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.assigneePopupHeader, { borderBottomColor: theme.border }]}>
+                <Text variant="sm" weight="bold">Chọn người phụ trách</Text>
+                <TouchableOpacity onPress={() => setShowAssigneeDropdown(false)} style={{ paddingVertical: 4, paddingHorizontal: 8 }}>
+                  <Text color="inkMuted" weight="bold">✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                <TouchableOpacity 
+                  style={[styles.assigneeOption, !assigneeId && { backgroundColor: theme.surface2 }]} 
+                  onPress={() => { setAssigneeId(''); setShowAssigneeDropdown(false); }}
+                >
+                  <View style={[styles.avatarCircle, { backgroundColor: theme.surface2, borderColor: theme.border, borderWidth: 1 }]}>
+                    <Text variant="xs" color="inkMuted" weight="bold">--</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text variant="sm" weight={!assigneeId ? "bold" : "normal"} color="ink">Bỏ trống (Chưa giao cho ai)</Text>
+                  </View>
+                  {!assigneeId && <Text color="primary" weight="bold">✓</Text>}
+                </TouchableOpacity>
+
+                {members.map(m => {
+                  const isSelected = assigneeId === m.id;
+                  const displayName = m.name || m.id;
+                  const initials = displayName.slice(0, 2).toUpperCase();
+                  return (
+                    <TouchableOpacity 
+                      key={m.id} 
+                      style={[styles.assigneeOption, isSelected && { backgroundColor: theme.primaryWeak || theme.surface2 }]} 
+                      onPress={() => { setAssigneeId(m.id); setShowAssigneeDropdown(false); }}
+                    >
+                      <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
+                        <Text variant="xs" color="surface" weight="bold">{initials}</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text variant="sm" weight={isSelected ? "bold" : "normal"} color={isSelected ? "primary" : "ink"} numberOfLines={1}>
+                          {displayName}
+                        </Text>
+                        {m.role ? (
+                          <Text variant="xs" color="inkMuted" numberOfLines={1}>{m.role}</Text>
+                        ) : null}
+                      </View>
+                      {isSelected && <Text color="primary" weight="bold">✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -352,8 +401,11 @@ const styles = StyleSheet.create({
   dropdownBtn: {
     borderWidth: 1,
     borderRadius: 8,
-    padding: 12,
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     height: 46,
   },
   dropdownMenu: {
@@ -366,6 +418,48 @@ const styles = StyleSheet.create({
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+  },
+  assigneeBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 9999,
+  },
+  assigneePopup: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  assigneePopupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  assigneeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  avatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   textArea: {
     minHeight: 120,
