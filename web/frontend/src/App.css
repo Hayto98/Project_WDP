@@ -4473,6 +4473,23 @@ mark.hl {
   gap: 7px;
 }
 
+.paper-detail__actions .btn.is-saved {
+  color: var(--primary-ink);
+  border-color: var(--primary);
+  background: var(--primary-weak);
+}
+
+.paper-detail__actions .btn:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.paper-detail__save-notice {
+  margin-top: var(--s-2);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
 .paper-detail__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;

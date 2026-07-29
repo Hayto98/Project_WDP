@@ -3,6 +3,7 @@ import type { Theme } from "../hooks/useTheme";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { formatInt } from "../lib/format";
 import { libraryApi, paperApi, searchApi } from "../lib/api";
+import { loadSearchSession, saveSearchSession } from "../lib/searchSession";
 import type { LibraryCollection } from "../data/librarySample";
 import {
   RELATED_KEYWORDS,
@@ -61,23 +62,30 @@ interface Props {
 }
 
 export function SearchPage({ theme, toggle }: Props) {
-  const [query, setQuery] = useState("");
-  const [submitted, setSubmitted] = useState("");
-  const [scope, setScope] = useState<Scope>("all");
-  const [conditions, setConditions] = useState<Condition[]>([]);
-  const [sources, setSources] = useState<Set<string>>(new Set());
-  const [types, setTypes] = useState<Set<string>>(new Set());
-  const [yearFrom, setYearFrom] = useState(YEAR_MIN);
-  const [yearTo, setYearTo] = useState(YEAR_MAX);
-  const [sort, setSort] = useState<SortKey>("relevance");
-  const [page, setPage] = useState(1);
-  const [saved, setSaved] = useState<Set<string>>(new Set());
-  const [hasSearched, setHasSearched] = useState(false);
+  const restored = useRef(loadSearchSession());
+  const [query, setQuery] = useState(() => restored.current?.query ?? "");
+  const [submitted, setSubmitted] = useState(() => restored.current?.submitted ?? "");
+  const [scope, setScope] = useState<Scope>(() => restored.current?.scope ?? "all");
+  const [conditions, setConditions] = useState<Condition[]>(() => restored.current?.conditions ?? []);
+  const [sources, setSources] = useState<Set<string>>(
+    () => new Set(restored.current?.sources ?? []),
+  );
+  const [types, setTypes] = useState<Set<string>>(() => new Set(restored.current?.types ?? []));
+  const [yearFrom, setYearFrom] = useState(() => restored.current?.yearFrom ?? YEAR_MIN);
+  const [yearTo, setYearTo] = useState(() => restored.current?.yearTo ?? YEAR_MAX);
+  const [sort, setSort] = useState<SortKey>(() => restored.current?.sort ?? "relevance");
+  const [page, setPage] = useState(() => restored.current?.page ?? 1);
+  const [saved, setSaved] = useState<Set<string>>(
+    () => new Set(restored.current?.savedIds ?? []),
+  );
+  const [hasSearched, setHasSearched] = useState(() => restored.current?.hasSearched ?? false);
   const [loading, setLoading] = useState(false);
   const [searchNonce, setSearchNonce] = useState(0);
   const [facetsOpen, setFacetsOpen] = useState(false);
-  const [remoteResults, setRemoteResults] = useState<PaperResult[]>([]);
-  const [totalResults, setTotalResults] = useState(0);
+  const [remoteResults, setRemoteResults] = useState<PaperResult[]>(
+    () => restored.current?.remoteResults ?? [],
+  );
+  const [totalResults, setTotalResults] = useState(() => restored.current?.totalResults ?? 0);
   const [searchError, setSearchError] = useState("");
   const [syncNotice, setSyncNotice] = useState("");
   const [syncImportedPapers, setSyncImportedPapers] = useState<
@@ -88,15 +96,21 @@ export function SearchPage({ theme, toggle }: Props) {
   const [savingPaperId, setSavingPaperId] = useState("");
   const [savingSearch, setSavingSearch] = useState(false);
   const [collections, setCollections] = useState<LibraryCollection[]>([]);
-  const [selectedCollectionId, setSelectedCollectionId] = useState("");
+  const [selectedCollectionId, setSelectedCollectionId] = useState(
+    () => restored.current?.selectedCollectionId ?? "",
+  );
   const [collectionsLoading, setCollectionsLoading] = useState(false);
   const [sourceAvailability, setSourceAvailability] = useState<
     Record<string, { enabled: boolean; message: string | null }>
   >({});
 
-  const condId = useRef(1);
+  const condId = useRef(restored.current?.condId ?? 1);
   const searchRunId = useRef(0);
   const autoSyncKeys = useRef(new Set<string>());
+  const scrollYRef = useRef(restored.current?.scrollY ?? 0);
+  const pendingScrollY = useRef(restored.current?.scrollY ?? 0);
+  const pageRef = useRef(restored.current?.page ?? 1);
+  pageRef.current = page;
 
   const isSourceEnabled = (name: string) => sourceAvailability[name]?.enabled !== false;
 
@@ -162,19 +176,99 @@ export function SearchPage({ theme, toggle }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceAvailability]);
 
-  // Re-filter briefly when facets/sort change after an initial search.
-  useEffect(() => {
-    if (!hasSearched) return;
-    setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sources, types, yearFrom, yearTo, conditions, sort]);
-
   const andTerms = useMemo(() => conditions.filter((c) => c.op === "AND" && c.term.trim()), [conditions]);
   const orTerms = useMemo(() => conditions.filter((c) => c.op === "OR" && c.term.trim()), [conditions]);
   const notTerms = useMemo(() => conditions.filter((c) => c.op === "NOT" && c.term.trim()), [conditions]);
   const andTermsParam = useMemo(() => andTerms.map((condition) => condition.term.trim()).join(","), [andTerms]);
   const orTermsParam = useMemo(() => orTerms.map((condition) => condition.term.trim()).join(","), [orTerms]);
   const notTermsParam = useMemo(() => notTerms.map((condition) => condition.term.trim()).join(","), [notTerms]);
+
+  const persistSearchNow = (overrides: Partial<{ page: number; scrollY: number }> = {}) => {
+    saveSearchSession({
+      query,
+      submitted,
+      scope,
+      conditions,
+      sources: [...sources],
+      types: [...types],
+      yearFrom,
+      yearTo,
+      sort,
+      page: overrides.page ?? pageRef.current,
+      hasSearched,
+      remoteResults,
+      totalResults,
+      savedIds: [...saved],
+      selectedCollectionId,
+      scrollY: overrides.scrollY ?? scrollYRef.current,
+      condId: condId.current,
+    });
+  };
+
+  const resetPageForFilterChange = () => {
+    if (!hasSearched) return;
+    setPage(1);
+    pageRef.current = 1;
+  };
+
+  const openPaperDetail = (paperId: string) => {
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    scrollYRef.current = scrollY;
+    persistSearchNow({ page: pageRef.current, scrollY });
+    window.location.hash = `paper/${encodeURIComponent(paperId)}?source=Search_Result`;
+  };
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY || window.pageYOffset || 0;
+      // Hash router forces scrollTop=0 on route change; keep last search position.
+      if (y === 0 && scrollYRef.current > 0) return;
+      scrollYRef.current = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => persistSearchNow(), 250);
+    return () => {
+      window.clearTimeout(timer);
+      persistSearchNow();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    query,
+    submitted,
+    scope,
+    conditions,
+    sources,
+    types,
+    yearFrom,
+    yearTo,
+    sort,
+    page,
+    hasSearched,
+    remoteResults,
+    totalResults,
+    saved,
+    selectedCollectionId,
+  ]);
+
+  useEffect(() => {
+    if (!hasSearched || loading || pendingScrollY.current <= 0) return;
+    const y = pendingScrollY.current;
+    pendingScrollY.current = 0;
+    const restore = () => window.scrollTo(0, y);
+    // Hash router resets scroll to 0; restore after paint / results settle.
+    const t1 = window.setTimeout(restore, 0);
+    const t2 = window.setTimeout(restore, 150);
+    const t3 = window.setTimeout(restore, 400);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
+  }, [hasSearched, loading, remoteResults, page]);
 
   useEffect(() => {
     if (!hasSearched) return;
@@ -317,6 +411,7 @@ export function SearchPage({ theme, toggle }: Props) {
       next.add(key);
     }
     apply(next);
+    resetPageForFilterChange();
   };
 
   const clearFilters = () => {
@@ -324,6 +419,7 @@ export function SearchPage({ theme, toggle }: Props) {
     setTypes(new Set());
     setYearFrom(YEAR_MIN);
     setYearTo(YEAR_MAX);
+    resetPageForFilterChange();
   };
 
   const addCondition = () =>
@@ -640,7 +736,13 @@ export function SearchPage({ theme, toggle }: Props) {
             <div className="yearrange">
               <label>
                 <span>Từ</span>
-                <select value={yearFrom} onChange={(e) => setYearFrom(Number(e.target.value))}>
+                <select
+                  value={yearFrom}
+                  onChange={(e) => {
+                    setYearFrom(Number(e.target.value));
+                    resetPageForFilterChange();
+                  }}
+                >
                   {yearOptions(YEAR_MIN, yearTo)}
                 </select>
               </label>
@@ -649,7 +751,13 @@ export function SearchPage({ theme, toggle }: Props) {
               </span>
               <label>
                 <span>Đến</span>
-                <select value={yearTo} onChange={(e) => setYearTo(Number(e.target.value))}>
+                <select
+                  value={yearTo}
+                  onChange={(e) => {
+                    setYearTo(Number(e.target.value));
+                    resetPageForFilterChange();
+                  }}
+                >
                   {yearOptions(yearFrom, YEAR_MAX)}
                 </select>
               </label>
@@ -729,7 +837,13 @@ export function SearchPage({ theme, toggle }: Props) {
 
             <label className="results__sort">
               <span className="results__sortlabel">Sắp xếp</span>
-              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              <select
+                value={sort}
+                onChange={(e) => {
+                  setSort(e.target.value as SortKey);
+                  resetPageForFilterChange();
+                }}
+              >
                 {SORTS.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.label}
@@ -786,6 +900,7 @@ export function SearchPage({ theme, toggle }: Props) {
                   onRemove={() => {
                     setYearFrom(YEAR_MIN);
                     setYearTo(YEAR_MAX);
+                    resetPageForFilterChange();
                   }}
                 />
               )}
@@ -798,7 +913,15 @@ export function SearchPage({ theme, toggle }: Props) {
               <ul className="sync-imported__list">
                 {syncImportedPapers.map((paper) => (
                   <li key={paper.id}>
-                    <a href={`#paper/${paper.id}?source=Search_Result`}>{paper.title}</a>
+                    <a
+                      href={`#paper/${encodeURIComponent(paper.id)}?source=Search_Result`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openPaperDetail(paper.id);
+                      }}
+                    >
+                      {paper.title}
+                    </a>
                     <small>
                       {[paper.year, paper.source].filter(Boolean).join(" · ")}
                     </small>
@@ -882,7 +1005,15 @@ export function SearchPage({ theme, toggle }: Props) {
                   <ul className="sync-imported__list">
                     {syncImportedPapers.map((paper) => (
                       <li key={paper.id}>
-                        <a href={`#paper/${paper.id}?source=Search_Result`}>{paper.title}</a>
+                        <a
+                          href={`#paper/${encodeURIComponent(paper.id)}?source=Search_Result`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            openPaperDetail(paper.id);
+                          }}
+                        >
+                          {paper.title}
+                        </a>
                         <small>
                           {[paper.year, paper.source].filter(Boolean).join(" · ")}
                         </small>
@@ -906,6 +1037,7 @@ export function SearchPage({ theme, toggle }: Props) {
                     saving={savingPaperId === p.id}
                     onToggleSave={() => savePaperToLibrary(p)}
                     onOpenSource={() => paperApi.recordView(p.id).catch(() => undefined)}
+                    onOpenDetail={() => openPaperDetail(p.id)}
                   />
                 ))}
               </ol>
@@ -1022,6 +1154,7 @@ function ResultItem({
   saving,
   onToggleSave,
   onOpenSource,
+  onOpenDetail,
 }: {
   paper: PaperResult;
   terms: string[];
@@ -1029,6 +1162,7 @@ function ResultItem({
   saving: boolean;
   onToggleSave: () => void;
   onOpenSource: () => void;
+  onOpenDetail: () => void;
 }) {
   const authors =
     paper.authors.length > 3
@@ -1040,7 +1174,13 @@ function ResultItem({
     <li className="rcard">
       <div className="rcard__main">
         <h3 className="rcard__title">
-          <a href={`#paper/${paper.id}?source=Search_Result`}>
+          <a
+            href={`#paper/${encodeURIComponent(paper.id)}?source=Search_Result`}
+            onClick={(e) => {
+              e.preventDefault();
+              onOpenDetail();
+            }}
+          >
             {highlight(paper.title, terms)}
           </a>
         </h3>
@@ -1091,7 +1231,14 @@ function ResultItem({
             <IconBookmark width={16} height={16} />
             {saving ? "Đang lưu" : saved ? "Đã lưu" : "Lưu"}
           </button>
-          <a className="iconpill" href={`#paper/${paper.id}?source=Search_Result`}>
+          <a
+            className="iconpill"
+            href={`#paper/${encodeURIComponent(paper.id)}?source=Search_Result`}
+            onClick={(e) => {
+              e.preventDefault();
+              onOpenDetail();
+            }}
+          >
             <IconSearch width={16} height={16} />
             Chi tiết
           </a>
