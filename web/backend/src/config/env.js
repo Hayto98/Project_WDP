@@ -1,9 +1,8 @@
 require('dotenv').config();
 
 const nodeEnv = process.env.NODE_ENV || 'development';
-const defaultFrontendUrl = nodeEnv === 'production'
-  ? 'https://scientificresearchtrendmonitoringsystem.up.railway.app'
-  : 'http://localhost:5173';
+const productionFrontendUrl = 'https://scientificresearchtrendmonitoringsystem.up.railway.app';
+const defaultFrontendUrl = nodeEnv === 'production' ? productionFrontendUrl : 'http://localhost:5173';
 
 module.exports = {
   port: parseInt(process.env.PORT, 10) || 5000,
@@ -27,6 +26,7 @@ module.exports = {
   // CORS and URLs
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   frontendUrl: process.env.FRONTEND_URL || defaultFrontendUrl,
+  productionFrontendUrl,
 
   // Email / SMTP
   email: {

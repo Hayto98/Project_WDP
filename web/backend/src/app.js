@@ -9,6 +9,7 @@ const {
   port,
   corsOrigin,
   frontendUrl,
+  productionFrontendUrl,
   nodeEnv,
   redisEnabled,
 } = require('./config/env');
@@ -40,7 +41,7 @@ const app = express();
 app.use(helmet());
 
 const allowedOrigins = [...new Set(
-  [corsOrigin, frontendUrl]
+  [corsOrigin, frontendUrl, productionFrontendUrl]
     .flatMap(value => value.split(','))
     .map(origin => origin.trim().replace(/\/$/, ''))
     .filter(Boolean)
@@ -51,6 +52,7 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
+      console.warn(`CORS rejected origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
