@@ -167,14 +167,65 @@ export default function OverviewScreen() {
         </Widget>
 
         <Widget
-          title="Bản đồ khoảng trống"
-          subtitle="Mật độ công bố theo lĩnh vực × khía cạnh"
+          title="Cơ hội nghiên cứu nổi bật"
+          subtitle="Top các khoảng trống tiềm năng"
           icon={<IconGap color={(theme as any).accent1} />}
           iconBgColor={(theme as any).accent1Weak}
           status={status}
           onRetry={() => setView('default')}
         >
-          <ResearchGapHeatmap fields={data.gapFields.map(f => f.label)} aspects={data.gapAspects.map(a => a.label)} gaps={data.gaps || []} />
+          <View style={{ padding: 16 }}>
+            {(() => {
+              const items = (data.gaps || [])
+                .filter(i => i.gap || i.density <= 0.35)
+                .sort((a, b) => (b.score || 0) - (a.score || 0))
+                .slice(0, 5);
+              
+              if (items.length === 0) return <Text variant="sm" color="inkMuted">Chưa có dữ liệu khoảng trống</Text>;
+
+              function withOpacity(color: string, opacity: number) {
+                if (color.startsWith('hsl(')) return color.replace('hsl(', 'hsla(').replace(')', `, ${opacity})`);
+                if (color.startsWith('#') && color.length === 7) return color + Math.round(opacity * 255).toString(16).padStart(2, '0');
+                return color;
+              }
+
+              function degreeFor(score: number) {
+                if (score >= 0.7) return { label: "Rất cao", color: theme.success || '#10b981' };
+                if (score >= 0.5) return { label: "Cao", color: theme.primary };
+                if (score >= 0.3) return { label: "Trung bình", color: theme.warning || '#f59e0b' };
+                return { label: "Thấp", color: theme.danger || '#ef4444' };
+              }
+
+              return items.map((g, idx) => {
+                const degree = degreeFor(g.score || 0);
+                return (
+                  <TouchableOpacity 
+                    key={`${g.field}-${g.aspect}`} 
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: idx === items.length - 1 ? 0 : 1, borderBottomColor: theme.border }}
+                    onPress={() => router.push('/(tabs)/gap')}
+                  >
+                    <Text variant="sm" color="inkMuted" style={{ width: 24, textAlign: 'center' }}>{idx + 1}</Text>
+                    <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                      <Text variant="sm" weight="bold">{g.field}</Text>
+                      <Text variant="xs" color="inkMuted">{g.aspect}</Text>
+                    </View>
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: withOpacity(degree.color, 0.2), marginRight: 12 }}>
+                      <Text variant="xs" weight="bold" style={{ color: degree.color }}>{degree.label}</Text>
+                    </View>
+                    <View style={{ width: 60, alignItems: 'flex-end' }}>
+                      <Text variant="xs" weight="bold" style={{ marginBottom: 4 }}>Điểm {Math.round((g.score || 0) * 100)}</Text>
+                      <View style={{ width: '100%', height: 4, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden' }}>
+                        <View style={{ height: '100%', borderRadius: 2, width: `${Math.round((g.score || 0) * 100)}%`, backgroundColor: theme.primary }} />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              });
+            })()}
+            <TouchableOpacity style={{ marginTop: 12, paddingVertical: 8, alignItems: 'center' }} onPress={() => router.push('/(tabs)/gap')}>
+              <Text variant="sm" weight="bold" color="primary">Xem toàn bộ →</Text>
+            </TouchableOpacity>
+          </View>
         </Widget>
 
         <Widget

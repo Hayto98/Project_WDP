@@ -758,18 +758,21 @@ function normalizeTrendSeries(values: unknown): TrendSeries[] {
 function normalizeGapCells(values: unknown): GapCell[] {
   if (!Array.isArray(values)) return [];
   return values
-    .map((value) => {
+    .map((value): GapCell | null => {
       if (!value || typeof value !== "object") return null;
       const raw = value as Record<string, unknown>;
       const field = axisLabel(raw.field);
       const aspect = axisLabel(raw.aspect);
       if (!field || !aspect) return null;
       const density = clamp01(numberValue(raw.density ?? raw.d));
+      const interest = clamp01(numberValue(raw.interest ?? raw.i));
       const papers = Math.max(0, Math.round(numberValue(raw.papers ?? raw.p)));
       return {
         field,
         aspect,
         density,
+        interest,
+        score: clamp01(numberValue(raw.score ?? interest * (1 - density))),
         papers,
         gap: Boolean(raw.gap),
       };
