@@ -18,17 +18,10 @@ import { FollowedRail } from '../../components/FollowedRail';
 
 import { useNotifications } from '../../context/NotificationContext';
 
-const RANGES: { id: TimeRange; label: string }[] = [
-  { id: '12m', label: '12 tháng' },
-  { id: '24m', label: '24 tháng' },
-  { id: '5y', label: '5 năm' },
-];
-
 export default function OverviewScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const { unreadCount } = useNotifications();
-  const [range, setRange] = useState<TimeRange>('12m');
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'default' | 'loading' | 'empty' | 'error'>('loading');
   const [data, setData] = useState<DashboardData | null>(null);
@@ -88,8 +81,8 @@ export default function OverviewScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top', 'left', 'right']}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
@@ -127,23 +120,11 @@ export default function OverviewScreen() {
 
         {/* Controls */}
         <View style={styles.controlsRow}>
-          <View style={[styles.seg, { backgroundColor: theme.surface2 }]}>
-            {RANGES.map(r => (
-              <TouchableOpacity
-                key={r.id}
-                style={[
-                  styles.segBtn, 
-                  range === r.id && { backgroundColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 3 }
-                ]}
-                onPress={() => setRange(r.id)}
-              >
-                <Text variant="sm" weight={range === r.id ? 'bold' : 'normal'} color={range === r.id ? 'surface' : 'inkMuted'}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.success || '#10b981' }} />
+            <Text variant="sm" color="inkMuted" weight="bold">Dữ liệu thời gian thực</Text>
           </View>
-          
+
           <View style={styles.actions}>
             <TouchableOpacity style={styles.iconBtn} onPress={handleRefresh}>
               <IconRefresh color={theme.ink} />
@@ -180,7 +161,7 @@ export default function OverviewScreen() {
                 .filter(i => i.gap || i.density <= 0.35)
                 .sort((a, b) => (b.score || 0) - (a.score || 0))
                 .slice(0, 5);
-              
+
               if (items.length === 0) return <Text variant="sm" color="inkMuted">Chưa có dữ liệu khoảng trống</Text>;
 
               function withOpacity(color: string, opacity: number) {
@@ -199,8 +180,8 @@ export default function OverviewScreen() {
               return items.map((g, idx) => {
                 const degree = degreeFor(g.score || 0);
                 return (
-                  <TouchableOpacity 
-                    key={`${g.field}-${g.aspect}`} 
+                  <TouchableOpacity
+                    key={`${g.field}-${g.aspect}`}
                     style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: idx === items.length - 1 ? 0 : 1, borderBottomColor: theme.border }}
                     onPress={() => router.push('/(tabs)/gap')}
                   >
@@ -260,7 +241,7 @@ export default function OverviewScreen() {
         >
           <FollowedRail followed={data.followed} notifications={data.notifications} />
         </Widget>
-        
+
         <View style={{ height: 60 }} />
       </ScrollView>
     </SafeAreaView>
@@ -285,16 +266,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
-  },
-  seg: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    padding: 4,
-  },
-  segBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
   },
   actions: {
     flexDirection: 'row',
