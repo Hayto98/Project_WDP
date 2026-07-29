@@ -1,4 +1,12 @@
 import type { PaperResult } from "../data/searchSample";
+
+// Minimal typing shim for socket.io-client usage in the app.
+declare module "socket.io-client" {
+  export interface Socket {
+    id: string | undefined;
+  }
+  export function io(_url?: string, _opts?: unknown): Socket;
+}
 import type { AiInsight, AxisOption, DashboardData, GapCell, TrendPoint, TrendSeries } from "../data/types";
 import type {
   CoocEdge,
@@ -600,18 +608,21 @@ function normalizeTrendSeries(values: unknown): TrendSeries[] {
 function normalizeGapCells(values: unknown): GapCell[] {
   if (!Array.isArray(values)) return [];
   return values
-    .map((value) => {
+    .map((value): GapCell | null => {
       if (!value || typeof value !== "object") return null;
       const raw = value as Record<string, unknown>;
       const field = axisLabel(raw.field);
       const aspect = axisLabel(raw.aspect);
       if (!field || !aspect) return null;
       const density = clamp01(numberValue(raw.density ?? raw.d));
+      const interest = clamp01(numberValue(raw.interest ?? raw.i));
       const papers = Math.max(0, Math.round(numberValue(raw.papers ?? raw.p)));
       return {
         field,
         aspect,
         density,
+        interest,
+        score: clamp01(numberValue(raw.score ?? interest * (1 - density))),
         papers,
         gap: Boolean(raw.gap),
       };
@@ -753,6 +764,7 @@ export const analyticsApi = {
     hasReport: boolean;
     generatedAt: string | null;
     gapCount: number;
+    thresholds: { density: number; interest: number };
     ai: { summary: string; directions: { topic: string; rationale: string }[]; evidence: { label: string; papers: number }[] };
   }> {
     const data = await request<{
@@ -762,6 +774,7 @@ export const analyticsApi = {
       hasReport?: boolean;
       generatedAt?: string | null;
       gapCount?: number;
+      thresholds?: { density?: number; interest?: number };
       ai?: {
         summary?: string;
         directions?: { topic?: string; rationale?: string }[];
@@ -776,6 +789,10 @@ export const analyticsApi = {
         hasReport,
         generatedAt: data.generatedAt ? String(data.generatedAt) : null,
         gapCount: Number(data.gapCount ?? 0),
+        thresholds: {
+          density: Number(data.thresholds?.density ?? threshold),
+          interest: Number(data.thresholds?.interest ?? 0.55),
+        },
         ai: {
           summary: data.ai?.summary ?? "",
           directions: (data.ai?.directions ?? []).map((row) => ({
@@ -840,6 +857,10 @@ export const analyticsApi = {
       hasReport,
       generatedAt: data.generatedAt ? String(data.generatedAt) : null,
       gapCount: Number(data.gapCount ?? items.length),
+      thresholds: {
+        density: Number(data.thresholds?.density ?? threshold),
+        interest: Number(data.thresholds?.interest ?? 0.55),
+      },
       ai: {
         summary: data.ai?.summary ?? "",
         directions: (data.ai?.directions ?? []).map((row) => ({

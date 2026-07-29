@@ -382,7 +382,11 @@ async function broadcastNotification(req, res) {
 
 module.exports = {
   getUsers, updateUser, createUser,
+<<<<<<< HEAD
   getDataSources, updateDataSource, updateDataSourceCredentials, clearDataSourceCredentials, testDataSource, checkDataSourceApis,
+=======
+  getDataSources, updateDataSource, checkDataSourceApis,
+>>>>>>> Minh/feat
   getJobs, createJob, runJob,
   refreshReports,
   getAuditLogs,

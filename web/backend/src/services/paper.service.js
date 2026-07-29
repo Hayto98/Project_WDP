@@ -34,6 +34,7 @@ async function searchPapers(query, userId = null) {
     return pattern ? new RegExp(pattern, 'i') : null;
   };
   const regexFor = (value) => phraseRegex(value) || new RegExp('a^'); // never-match fallback
+<<<<<<< HEAD
   // "HarnessEngineering" → also try "Harness Engineering" so corpus search matches OpenAlex titles.
   const expandQueryVariants = (value) => {
     const cleaned = String(value || '').trim().replace(/^"+|"+$/g, '').trim();
@@ -45,6 +46,8 @@ async function searchPapers(query, userId = null) {
       .trim();
     return [...new Set([cleaned, spaced].filter(Boolean))];
   };
+=======
+>>>>>>> Minh/feat
   // Main query matches content the user can see — not research_fields alone
   // (e.g. field "Quantum Machine Learning" must not pull titles that only say "Learning").
   const contentFields = ['title', 'abstract', 'keywords', 'authors.name'];
@@ -52,12 +55,15 @@ async function searchPapers(query, userId = null) {
   const textLikeClause = (term, fields = searchableFields) => ({
     $or: fields.map((field) => ({ [field]: regexFor(term) })),
   });
+<<<<<<< HEAD
   const variantsClause = (raw, fields = contentFields) => {
     const variants = expandQueryVariants(raw);
     if (!variants.length) return null;
     if (variants.length === 1) return textLikeClause(variants[0], fields);
     return { $or: variants.map((term) => textLikeClause(term, fields)) };
   };
+=======
+>>>>>>> Minh/feat
   let phraseQuery = '';
   const fieldAliases = {
     'Large Language Models': [
@@ -113,6 +119,7 @@ async function searchPapers(query, userId = null) {
       if (clause) andClauses.push(clause);
     } else if (query.scope === 'author') {
       andClauses.push({ 'authors.name': regexFor(cleanedQuery) });
+<<<<<<< HEAD
     } else if (isMultiWord || hasCamelCase) {
       // CamelCase like HarnessEngineering must also match "Harness Engineering".
       phraseQuery = cleanedQuery;
@@ -123,6 +130,15 @@ async function searchPapers(query, userId = null) {
       // which misses titles that only contain a morphological variant).
       phraseQuery = cleanedQuery;
       andClauses.push(textLikeClause(cleanedQuery, contentFields));
+=======
+    } else if (isMultiWord) {
+      phraseQuery = cleanedQuery;
+      andClauses.push(textLikeClause(cleanedQuery, contentFields));
+    } else {
+      // Quoted phrase form forces Mongo text index to treat the token as one term unit.
+      filter.$text = { $search: `"${cleanedQuery.replace(/"/g, '')}"` };
+      usesTextSearch = true;
+>>>>>>> Minh/feat
     }
   }
 
@@ -208,19 +224,28 @@ async function searchPapers(query, userId = null) {
   let rawPapers;
   let total;
   if (preferTitlePhrase) {
+<<<<<<< HEAD
     const titlePatterns = expandQueryVariants(phraseQuery)
       .map((variant) => phrasePattern(variant))
       .filter(Boolean);
+=======
+    const titlePattern = phrasePattern(phraseQuery);
+>>>>>>> Minh/feat
     const pipeline = [
       { $match: filter },
       {
         $addFields: {
+<<<<<<< HEAD
           _titleHit: titlePatterns.length
             ? {
               $or: titlePatterns.map((pattern) => ({
                 $regexMatch: { input: { $ifNull: ['$title', ''] }, regex: pattern, options: 'i' },
               })),
             }
+=======
+          _titleHit: titlePattern
+            ? { $regexMatch: { input: { $ifNull: ['$title', ''] }, regex: titlePattern, options: 'i' } }
+>>>>>>> Minh/feat
             : false,
         },
       },

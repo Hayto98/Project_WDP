@@ -1,8 +1,12 @@
 require('dotenv').config();
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const productionFrontendUrl = 'https://scientificresearchtrendmonitoringsystem.up.railway.app';
+const defaultFrontendUrl = nodeEnv === 'production' ? productionFrontendUrl : 'http://localhost:5173';
+
 module.exports = {
   port: parseInt(process.env.PORT, 10) || 5000,
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
 
   // MongoDB
   mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/wdp_research',
@@ -21,7 +25,8 @@ module.exports = {
 
   // CORS and URLs
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  frontendUrl: process.env.FRONTEND_URL || (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',')[0] : 'http://localhost:5173'),
+  frontendUrl: process.env.FRONTEND_URL || defaultFrontendUrl,
+  productionFrontendUrl,
 
   // Email / SMTP
   email: {

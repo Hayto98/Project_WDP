@@ -18,7 +18,7 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/backend/package-lock.json
-      - run: npm ci
+      - run: npm install
       - run: npm run test:unit
 
   backend-integration:
@@ -52,7 +52,7 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/backend/package-lock.json
-      - run: npm ci
+      - run: npm install
       - run: npm run test:integration
 
   frontend-build:
@@ -68,5 +68,5 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/frontend/package-lock.json
-      - run: npm ci
+      - run: npm install
       - run: npm run build
