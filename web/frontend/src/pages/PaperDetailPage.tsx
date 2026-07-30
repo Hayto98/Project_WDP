@@ -379,11 +379,7 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
                     </button>
                   )}
                 </div>
-                {aiProvider === "fallback" && (
-                  <p className="paper-detail__ai-note">
-                    AI chưa phản hồi đầy đủ — đang hiển thị nội dung thay thế đầy đủ (không cắt giữa chừng).
-                  </p>
-                )}
+
                 <p className="paper-detail__ai-body">{aiSummary}</p>
                 {!aiExpanded && aiSummary.length > 320 && (
                   <button

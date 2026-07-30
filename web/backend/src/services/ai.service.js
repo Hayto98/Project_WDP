@@ -106,13 +106,7 @@ function fallbackSummary(title, abstract) {
     return `${cleanTitle}: chưa có abstract công khai để tóm tắt.`;
   }
   
-  const extracted = extractiveSummary(cleanAbstract, 4);
-  
-  return [
-    'AI tạm thời không khả dụng — hệ thống trích xuất nội dung chính tự động (extractive summary):',
-    '',
-    extracted,
-  ].join('\n');
+  return extractiveSummary(cleanAbstract, 4);
 }
 
 async function callGemini(prompt, options = {}) {
@@ -162,6 +156,9 @@ async function callGemini(prompt, options = {}) {
 
     if (!text) throw new Error('Gemini returned an empty response');
     return text;
+  } catch (err) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
