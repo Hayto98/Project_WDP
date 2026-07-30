@@ -68,16 +68,50 @@ function reasonCode(err) {
   return 'LLM_UNAVAILABLE';
 }
 
+function extractiveSummary(text, numSentences = 4) {
+  if (!text) return '';
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  if (sentences.length <= numSentences) return text.trim();
+
+  const stopWords = new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','as','is','are','was','were','be','been','this','that','these','those','it','its','from','which','who','whom','whose','we','our','us','they','their','them']);
+  const words = text.toLowerCase().match(/\b[a-z]{2,}\b/g) || [];
+  const freq = {};
+  for (const w of words) {
+    if (!stopWords.has(w)) {
+      freq[w] = (freq[w] || 0) + 1;
+    }
+  }
+
+  const scoredSentences = sentences.map((sentence, index) => {
+    const sWords = sentence.toLowerCase().match(/\b[a-z]{2,}\b/g) || [];
+    let score = 0;
+    for (const w of sWords) {
+      if (freq[w]) score += freq[w];
+    }
+    const normalizedScore = sWords.length > 0 ? score / sWords.length : 0;
+    return { text: sentence.trim(), score: normalizedScore, index };
+  });
+
+  scoredSentences.sort((a, b) => b.score - a.score);
+  const topSentences = scoredSentences.slice(0, numSentences);
+  topSentences.sort((a, b) => a.index - b.index);
+
+  return topSentences.map(s => s.text).join(' ');
+}
+
 function fallbackSummary(title, abstract) {
   const cleanTitle = cleanPublicText(title, 180) || 'Bài báo';
   const cleanAbstract = cleanPublicText(abstract, 5000);
   if (!cleanAbstract) {
     return `${cleanTitle}: chưa có abstract công khai để tóm tắt.`;
   }
+  
+  const extracted = extractiveSummary(cleanAbstract, 4);
+  
   return [
-    'AI tạm thời không khả dụng — hiển thị abstract đầy đủ để bạn đọc:',
+    'AI tạm thời không khả dụng — hệ thống trích xuất nội dung chính tự động (extractive summary):',
     '',
-    cleanAbstract,
+    extracted,
   ].join('\n');
 }
 
