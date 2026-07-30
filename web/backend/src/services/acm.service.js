@@ -1,6 +1,6 @@
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
 const { fetchCrossrefWorks, mapItemToPaper } = require('./crossref.service');
-const { cleanText, normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
+const { cleanText, normalizeTitle, upsertCleanPaper, toImportedPaperSummary } = require('./paperCleaning.service');
 
 function mapAcmItemToPaper(item) {
   const paper = mapItemToPaper(item);
@@ -29,6 +29,7 @@ async function importAcmByQuery(query, maxRecords = 25, options = {}) {
   const { total, items } = await fetchAcmWorks(query, maxRecords, options);
   let imported = 0;
   let skipped = 0;
+  const importedPapers = [];
 
   for (const item of items) {
     const publisher = String(item.publisher || item.member || '').toLowerCase();
@@ -49,11 +50,15 @@ async function importAcmByQuery(query, maxRecords = 25, options = {}) {
       paper.abstract = await findOriginalAbstractWithLlm(paper);
     }
     const outcome = await upsertCleanPaper(paper);
-    if (outcome.imported) imported += 1;
+    if (outcome.imported) {
+      imported += 1;
+      const summary = toImportedPaperSummary(outcome);
+      if (summary) importedPapers.push(summary);
+    }
     if (outcome.skipped) skipped += 1;
   }
 
-  return { imported, skipped, sourceTotal: total };
+  return { imported, skipped, sourceTotal: total, importedPapers };
 }
 
 module.exports = {

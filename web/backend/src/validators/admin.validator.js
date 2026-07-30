@@ -21,6 +21,16 @@ const updateDataSourceSchema = Joi.object({
   api_endpoint: Joi.string().uri().allow('').optional(),
 }).min(1);
 
+const updateDataSourceCredentialsSchema = Joi.object({
+  apiKey: Joi.string().trim().min(4).max(500).optional(),
+  mailto: Joi.string().trim().email({ tlds: { allow: false } }).max(200).optional(),
+}).xor('apiKey', 'mailto');
+
+const testDataSourceSchema = Joi.object({
+  apiKey: Joi.string().trim().min(4).max(500).optional().allow(''),
+  mailto: Joi.string().trim().email({ tlds: { allow: false } }).max(200).optional().allow(''),
+});
+
 const broadcastNotificationSchema = Joi.object({
   title: Joi.string().trim().min(1).max(200).required(),
   content: Joi.string().trim().min(1).max(2000).required(),
@@ -40,5 +50,7 @@ module.exports = {
   createUserSchema,
   createJobSchema,
   updateDataSourceSchema,
+  updateDataSourceCredentialsSchema,
+  testDataSourceSchema,
   broadcastNotificationSchema,
 };

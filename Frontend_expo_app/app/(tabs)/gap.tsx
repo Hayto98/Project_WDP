@@ -17,10 +17,10 @@ export default function GapScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]} edges={['top']}>
       <View style={styles.header}>
-        <Text variant="heading" weight="bold">Research Gap</Text>
+        <Text variant="heading" weight="bold">Cơ hội nghiên cứu</Text>
         <Text variant="sm" color="inkMuted" style={{ marginTop: 4 }}>
           {mode === "corpus" 
-            ? "Phân tích khoảng trống từ corpus nội bộ — quan tâm cao nhưng công bố còn thưa"
+            ? "Các tổ hợp có mật độ công bố thấp cần ưu tiên xem xét"
             : "Phân tích live từ OpenAlex / Crossref / arXiv — không cần import trước vào DB"
           }
         </Text>

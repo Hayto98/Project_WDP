@@ -23,7 +23,7 @@ const systemLogSchema = new Schema(
     meta: {
       action_type: {
         type: String,
-        enum: ['Search', 'Login', 'ApiError', 'BatchJob', 'SystemError'],
+        enum: ['Search', 'Login', 'ApiError', 'BatchJob', 'SystemError', 'SourceCredential'],
         required: true,
       },
       user_id: { type: Schema.Types.ObjectId, ref: 'User', default: null },

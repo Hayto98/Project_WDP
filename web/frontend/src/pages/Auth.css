@@ -95,6 +95,49 @@
   color: var(--ink);
 }
 
+.auth-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-forgot-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.auth-forgot-link:hover {
+  text-decoration: underline;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.auth-success {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, #10b981 35%, var(--border));
+  background: color-mix(in oklab, #10b981 8%, var(--surface));
+}
+
 .auth-input {
   width: 100%;
   padding: 14px 16px;

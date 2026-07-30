@@ -8,6 +8,13 @@ const Paper = require('../models/Paper');
 const ApiResponse = require('../utils/apiResponse');
 const { parsePagination } = require('../utils/pagination');
 const { checkSourceApis } = require('../services/sourceHealth.service');
+const {
+  toPublicDataSource,
+  setApiKey,
+  setMailto,
+  clearCredentials,
+  testSourceById,
+} = require('../services/sourceCredentials.service');
 const { generateAllReports } = require('../services/report.service');
 const { runCrawlerJob } = require('../services/scheduler.service');
 const { broadcastSystemSignal } = require('../services/notification.service');
@@ -145,7 +152,8 @@ async function createUser(req, res) {
 async function getDataSources(req, res) {
   try {
     const sources = await DataSource.find().sort({ name: 1 }).lean();
-    return ApiResponse.success(res, sources);
+    const publicSources = await Promise.all(sources.map((source) => toPublicDataSource(source)));
+    return ApiResponse.success(res, publicSources);
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
   }
@@ -158,11 +166,46 @@ async function updateDataSource(req, res) {
     if (req.body.sync_schedule) allowed.sync_schedule = req.body.sync_schedule;
     if (req.body.api_endpoint) allowed.api_endpoint = req.body.api_endpoint;
 
-    const source = await DataSource.findByIdAndUpdate(req.params.id, allowed, { returnDocument: 'after' });
+    const source = await DataSource.findByIdAndUpdate(req.params.id, allowed, { returnDocument: 'after' }).lean();
     if (!source) return ApiResponse.notFound(res);
-    return ApiResponse.success(res, source);
+    return ApiResponse.success(res, await toPublicDataSource(source));
   } catch (err) {
     return ApiResponse.error(res, err.message, 500);
+  }
+}
+
+async function updateDataSourceCredentials(req, res) {
+  try {
+    let source;
+    if (req.body.apiKey !== undefined) {
+      source = await setApiKey(req.params.id, req.body.apiKey, req.user?.id || null);
+    } else {
+      source = await setMailto(req.params.id, req.body.mailto, req.user?.id || null);
+    }
+    return ApiResponse.success(res, source);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function clearDataSourceCredentials(req, res) {
+  try {
+    const source = await clearCredentials(req.params.id, req.user?.id || null);
+    return ApiResponse.success(res, source);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
+  }
+}
+
+async function testDataSource(req, res) {
+  try {
+    const overrides = {};
+    if (req.body?.apiKey !== undefined) overrides.apiKey = req.body.apiKey;
+    if (req.body?.mailto !== undefined) overrides.mailto = req.body.mailto;
+    const result = await testSourceById(req.params.id, overrides, req.user?.id || null);
+    return ApiResponse.success(res, result);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500);
   }
 }
 
@@ -339,7 +382,7 @@ async function broadcastNotification(req, res) {
 
 module.exports = {
   getUsers, updateUser, createUser,
-  getDataSources, updateDataSource, checkDataSourceApis,
+  getDataSources, updateDataSource, updateDataSourceCredentials, clearDataSourceCredentials, testDataSource, checkDataSourceApis,
   getJobs, createJob, runJob,
   refreshReports,
   getAuditLogs,

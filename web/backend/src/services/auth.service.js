@@ -1,8 +1,18 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { jwt: jwtConfig } = require('../config/env');
+const { jwt: jwtConfig, frontendUrl, nodeEnv } = require('../config/env');
 const { logAction } = require('../utils/systemLogger');
+const { sendPasswordResetEmail } = require('./email.service');
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const GENERIC_FORGOT_MESSAGE =
+  'If an account exists for this email, a password reset link has been sent.';
+
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 /**
  * Generate JWT tokens for a user.
@@ -245,6 +255,87 @@ async function updateDashboardLayout(userId, layout) {
   return user.dashboard_layout;
 }
 
+/**
+ * Request a password reset email. Always returns a generic message.
+ */
+async function forgotPassword({ email }) {
+  const normalizedEmail = email.toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+
+  if (!user || user.status === 'Banned') {
+    return { message: GENERIC_FORGOT_MESSAGE };
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  user.password_reset_token = hashResetToken(rawToken);
+  user.password_reset_expires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+  await user.save();
+
+  const resetUrl = `${frontendUrl.replace(/\/$/, '')}/#reset-password?token=${rawToken}`;
+  const mailResult = await sendPasswordResetEmail(user, resetUrl).catch((err) => ({
+    sent: false,
+    skipped: false,
+    reason: err.message || 'EMAIL_SEND_FAILED',
+  }));
+
+  if (!mailResult.sent) {
+    const allowDevFallback = nodeEnv !== 'production';
+    if (allowDevFallback) {
+      console.info('[auth] Password reset link (email not delivered):', resetUrl, mailResult.reason || '');
+    } else {
+      user.password_reset_token = null;
+      user.password_reset_expires = null;
+      await user.save();
+      throw Object.assign(new Error('Failed to send password reset email'), {
+        statusCode: 503,
+        code: 'EMAIL_UNAVAILABLE',
+      });
+    }
+  }
+
+  logAction('PasswordResetRequest', user._id, null, {
+    email: normalizedEmail,
+    emailed: Boolean(mailResult.sent),
+  });
+
+  const payload = { message: GENERIC_FORGOT_MESSAGE };
+  if (nodeEnv !== 'production' && !mailResult.sent) {
+    payload.resetUrl = resetUrl;
+  }
+  return payload;
+}
+
+/**
+ * Reset password using a one-time token from email.
+ */
+async function resetPassword({ token, newPassword }) {
+  const hashedToken = hashResetToken(token);
+  const user = await User.findOne({
+    password_reset_token: hashedToken,
+    password_reset_expires: { $gt: new Date() },
+  }).select('+password_reset_token +password_reset_expires');
+
+  if (!user) {
+    throw Object.assign(new Error('Invalid or expired reset token'), {
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+
+  if (user.status === 'Banned') {
+    throw Object.assign(new Error('Account is banned'), { statusCode: 403 });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  user.password_hash = await bcrypt.hash(newPassword, salt);
+  user.password_reset_token = null;
+  user.password_reset_expires = null;
+  await user.save();
+
+  logAction('PasswordReset', user._id, null, { email: user.email, success: true });
+  return { message: 'Password has been reset successfully' };
+}
+
 module.exports = {
   register,
   login,
@@ -253,4 +344,6 @@ module.exports = {
   getProfile,
   updateProfile,
   updateDashboardLayout,
+  forgotPassword,
+  resetPassword,
 };

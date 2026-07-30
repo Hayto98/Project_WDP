@@ -1,5 +1,6 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
-const { normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
+const { normalizeTitle, expandSearchQuery, upsertCleanPaper, toImportedPaperSummary } = require('./paperCleaning.service');
 
 function clampMaxRecords(value) {
   const parsed = parseInt(value, 10) || 25;
@@ -28,7 +29,7 @@ function allMatches(xml, pattern) {
 }
 
 function buildSearchQuery(query, options = {}) {
-  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
+  const cleaned = expandSearchQuery(query);
   const phrase = /\s/.test(cleaned) ? `"${cleaned}"` : cleaned;
   const parts = [`all:${phrase}`];
   const yearFrom = parseInt(options.yearFrom, 10);
@@ -110,6 +111,7 @@ async function importArxivByQuery(query, maxRecords = 25, options = {}) {
   const { total, entries } = await fetchArxivPapers(query, maxRecords, options);
   let imported = 0;
   let skipped = 0;
+  const importedPapers = [];
 
   for (const entry of entries) {
     const paper = mapEntryToPaper(entry);
@@ -122,7 +124,11 @@ async function importArxivByQuery(query, maxRecords = 25, options = {}) {
     }
 
     const outcome = await upsertCleanPaper(paper);
-    if (outcome.imported) imported += 1;
+    if (outcome.imported) {
+      imported += 1;
+      const summary = toImportedPaperSummary(outcome);
+      if (summary) importedPapers.push(summary);
+    }
     if (outcome.skipped) skipped += 1;
   }
 
@@ -130,6 +136,7 @@ async function importArxivByQuery(query, maxRecords = 25, options = {}) {
     imported,
     skipped,
     sourceTotal: total,
+    importedPapers,
   };
 }
 

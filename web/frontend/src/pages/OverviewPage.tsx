@@ -21,12 +21,6 @@ import {
 import { dashboardApi } from "../lib/api";
 import { SHOW_DEMO_CONTROLS, USE_SAMPLE_FALLBACK } from "../lib/flags";
 
-const RANGES: { id: TimeRange; label: string }[] = [
-  { id: "12m", label: "12 tháng" },
-  { id: "24m", label: "24 tháng" },
-  { id: "5y", label: "5 năm" },
-];
-
 const EMPTY_DASHBOARD: DashboardData = {
   updatedAt: "chưa có dữ liệu",
   kpis: [],
@@ -49,7 +43,7 @@ interface Props {
 }
 
 export function OverviewPage({ theme, toggle }: Props) {
-  const [range, setRange] = useState<TimeRange>("12m");
+  const [range] = useState<TimeRange>("12m");
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<ViewState>("default");
   const [remoteData, setRemoteData] = useState<DashboardData | null>(null);
@@ -108,18 +102,7 @@ export function OverviewPage({ theme, toggle }: Props) {
         </div>
 
         <div className="topbar__controls">
-          <div className="seg" role="group" aria-label="Khoảng thời gian phân tích">
-            {RANGES.map((r) => (
-              <button
-                key={r.id}
-                className={`seg__btn ${range === r.id ? "is-active" : ""}`}
-                aria-pressed={range === r.id}
-                onClick={() => setRange(r.id)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+
 
           <button
             className="icon-btn"
@@ -178,8 +161,8 @@ export function OverviewPage({ theme, toggle }: Props) {
 
           <Widget
             className="w-gap"
-            title="Bản đồ khoảng trống nghiên cứu"
-            subtitle="Mật độ công bố theo lĩnh vực × khía cạnh"
+            title="Cơ hội nghiên cứu nổi bật"
+            subtitle="Các tổ hợp có mật độ công bố thấp cần ưu tiên xem xét"
             icon={<IconGap />}
             status={status}
             onRetry={() => setView("default")}

@@ -72,6 +72,8 @@ const userSchema = new Schema(
       enum: ['Active', 'Inactive', 'Banned'],
       default: 'Active',
     },
+    password_reset_token: { type: String, default: null, select: false },
+    password_reset_expires: { type: Date, default: null, select: false },
 
     // Embedded arrays
     roles: {

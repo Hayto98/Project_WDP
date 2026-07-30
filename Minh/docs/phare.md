@@ -3565,3 +3565,103 @@ Lenh commit goi y:
 git add Minh/docs/phare.md Minh/docs/research-gap-backend-summary.md
 git commit -m "docs: summarize research gap backend implementation"
 ```
+
+## Cap nhat 2026-07-24 - Cai thien UI Ban do khoang trong
+
+Muc tieu:
+
+- Giu heatmap toi gian nhung de hieu ngay tu lan nhin dau.
+- Dong bo cach doc ban do o Overview va trang Research Gap.
+- Chi thay doi frontend, khong doi API hay thuat toan Research Gap.
+
+Da sua file:
+
+- `web/frontend/src/components/GapMatrix.tsx`
+- `web/frontend/src/components/ResearchGapHeatmap.tsx`
+- `web/frontend/src/App.css`
+- `web/frontend/e2e/smoke.spec.ts`
+
+Chi tiet:
+
+- Them huong dan doc theo `Linh vuc x Khia canh`.
+- Thay o goc trong bang nhan truc `Khia canh ->` va `Linh vuc ->`.
+- Don gian hoa legend mat do thanh `Thap`, `Trung binh`, `Cao`.
+- Giai thich ro ky hieu gap la `mat do thap + muc quan tam cao`.
+- Hover/focus chi preview; click moi giu lua chon.
+- Them readout luon hien thi field, aspect, so bai, mat do va quan tam.
+- Overview tu chon gap dau tien khi co du lieu.
+- Them vung cuon ngang va row label sticky cho mobile.
+- Hoan thien selected/focus/gap state cho light va dark mode.
+- Gap van co ky hieu va nhan text, khong chi truyen dat bang mau.
+
+Da test:
+
+- `cd web/frontend && npm run build`: pass.
+- `cd web/frontend && npm run lint`: pass, con 6 warning cu ngoai pham vi.
+- Playwright E2E Research Gap: pass `1/1`.
+- Kiem tra screenshot:
+  - Overview desktop.
+  - Research Gap desktop.
+  - Research Gap mobile `390x844`.
+  - Research Gap dark mode.
+- Seed local tao lai bao cao Corpus ResearchGap va tai khoan test.
+
+Lenh commit goi y:
+
+```bash
+git add Minh/docs/phare.md web/frontend/src/App.css web/frontend/src/components/GapMatrix.tsx web/frontend/src/components/ResearchGapHeatmap.tsx web/frontend/e2e/smoke.spec.ts
+git commit -m "feat: improve research gap heatmap usability"
+```
+
+## Cap nhat 2026-07-24 - Doi concept va bieu dat muc do Research Gap
+
+Ly do:
+
+- Heatmap mau lien tuc van yeu cau nguoi dung tu giai ma.
+- Nhan `Co hoi` chi cho biet co/khong, chua cho biet co hoi manh den dau.
+- UI can phan anh dung cach backend tinh Research Gap.
+
+Cach backend van hanh:
+
+- `density = so paper cua khia canh / quy mo field`.
+- `interest = 35% nen + ty le paper 2 nam gan day + tin hieu citation`.
+- `score = interest * (1 - density)`.
+- Mot to hop la gap khi:
+  - `density <= densityThreshold` (mac dinh 35%).
+  - `interest >= interestThreshold` (mac dinh 55%).
+
+Concept UI moi:
+
+- Overview chi hien cac gap that, xep theo `score`.
+- Trang Research Gap mac dinh hien `Co hoi uu tien`.
+- Moi co hoi hien:
+  - diem co hoi `0-100`.
+  - muc `Thap / Trung binh / Cao / Rat cao`.
+  - thanh `Quan tam`.
+  - thanh `Khan hiem = 1 - density`.
+- Tab `Toan bo ban do` hien toan bo to hop voi:
+  - trang thai.
+  - diem va muc do.
+  - thanh cuong do.
+  - mat do va so paper.
+- Mobile mac dinh chi hien danh sach gap uu tien, khong bat nguoi dung cuon qua 25 o.
+- Dashboard mapper giu lai `interest` va `score` tu API de UI dung du lieu that.
+
+Da them/sua:
+
+- `web/frontend/src/components/ResearchOpportunityMap.tsx`
+- `web/frontend/src/components/GapMatrix.tsx`
+- `web/frontend/src/components/ResearchGapHeatmap.tsx`
+- `web/frontend/src/pages/GapPage.tsx`
+- `web/frontend/src/pages/OverviewPage.tsx`
+- `web/frontend/src/data/types.ts`
+- `web/frontend/src/lib/api.ts`
+- `web/frontend/src/App.css`
+- `web/frontend/e2e/smoke.spec.ts`
+
+Da test:
+
+- Frontend build: pass.
+- Frontend lint: khong co loi moi; con 6 warning cu ngoai pham vi.
+- Playwright Research Opportunity Map: pass `1/1`.
+- Visual QA: Overview, Priority, Full Map, mobile va dark mode.

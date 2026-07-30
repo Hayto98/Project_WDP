@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconBookmark, IconExternal, IconQuote, IconSparkle } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import type { Theme } from "../hooks/useTheme";
-import { aiApi, paperApi } from "../lib/api";
+import { aiApi, libraryApi, paperApi } from "../lib/api";
 import { formatInt } from "../lib/format";
 import type { PaperResult } from "../data/searchSample";
+import type { LibraryCollection } from "../data/librarySample";
 
 type ViewSource = "Search_Result" | "Library" | "Recommendation" | "Dashboard";
 
@@ -130,15 +131,27 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [aiSummary, setAiSummary] = useState("");
+  const [aiProvider, setAiProvider] = useState("");
+  const [aiExpanded, setAiExpanded] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [related, setRelated] = useState<PaperResult[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [collections, setCollections] = useState<LibraryCollection[]>([]);
   const { elapsedSeconds, tracking } = useReadingSession(paperId, source);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setError("");
+    setAiSummary("");
+    setAiProvider("");
+    setAiExpanded(true);
+    setRelated([]);
+    setSaved(false);
+    setSaveNotice("");
     paperApi
       .getById(paperId, source)
       .then((result) => {
@@ -155,14 +168,64 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
     };
   }, [paperId, source]);
 
+  useEffect(() => {
+    let alive = true;
+    Promise.all([libraryApi.collections(), libraryApi.papers()])
+      .then(([cols, entries]) => {
+        if (!alive) return;
+        setCollections(cols);
+        setSaved(entries.some((entry) => entry.paperId === paperId || entry.paper?.id === paperId));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [paperId]);
+
   const authors = useMemo(() => paper?.authors.join(", ") || "Chưa rõ tác giả", [paper]);
   const doiHref = paper?.doi
     ? `https://doi.org/${paper.doi.replace(/^https?:\/\/doi\.org\//i, "")}`
     : paper?.url || "#";
 
+  const ensureSaveCollection = async () => {
+    if (collections[0]?.id) return collections[0].id;
+    const rows = await libraryApi.collections();
+    if (rows[0]?.id) {
+      setCollections(rows);
+      return rows[0].id;
+    }
+    const created = await libraryApi.createCollection("Đọc sau", "Bài lưu nhanh từ trang chi tiết");
+    const id = String(created._id ?? created.id ?? "");
+    const next = {
+      id,
+      name: created.collection_name ?? created.name ?? "Đọc sau",
+      description: created.description ?? "",
+    };
+    setCollections([next]);
+    return id;
+  };
+
+  const savePaperToLibrary = async () => {
+    if (!paper || saved || saving) return;
+    setSaving(true);
+    setSaveNotice("");
+    try {
+      const collectionId = await ensureSaveCollection();
+      await libraryApi.savePaper(paper.id, [collectionId]);
+      setSaved(true);
+      const collectionName = collections.find((c) => c.id === collectionId)?.name ?? "thư viện";
+      setSaveNotice(`Đã lưu vào ${collectionName}.`);
+    } catch (err) {
+      setSaveNotice(err instanceof Error ? err.message : "Không lưu được bài vào thư viện.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const summarize = async () => {
     if (!paper || aiLoading) return;
     setAiLoading(true);
+    setAiExpanded(true);
     try {
       const result = await aiApi.summarize({
         title: paper.title,
@@ -172,8 +235,10 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
         keywords: paper.keywords,
       });
       setAiSummary(result.summary);
+      setAiProvider(result.provider || "");
     } catch (err) {
       setAiSummary(err instanceof Error ? err.message : "Không tóm tắt được bài báo.");
+      setAiProvider("");
     } finally {
       setAiLoading(false);
     }
@@ -216,7 +281,11 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
         <div className="state state--error">
           <p className="state__title">Không mở được bài báo</p>
           <p className="state__body">{error || "Bài báo không tồn tại trong corpus."}</p>
-          <a className="btn btn--primary" href="#search">Quay lại tìm kiếm</a>
+          <a className="btn btn--primary" href="#search" onClick={(e) => {
+            e.preventDefault();
+            if (window.history.length > 1) window.history.back();
+            else window.location.hash = "search";
+          }}>Quay lại tìm kiếm</a>
         </div>
       </main>
     );
@@ -225,7 +294,19 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
   return (
     <main className="main paper-detail">
       <header className="paper-detail__toolbar">
-        <a className="btn btn--ghost" href="#search">← Quay lại kết quả</a>
+        <button
+          className="btn btn--ghost"
+          type="button"
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.hash = "search";
+            }
+          }}
+        >
+          ← Quay lại kết quả
+        </button>
         <div className="paper-detail__tracking" role="status">
           <span className={`paper-detail__tracking-dot ${tracking === "active" ? "is-active" : ""}`} aria-hidden />
           <span>
@@ -253,11 +334,23 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
             <a className="btn btn--primary" href={paper.url} target="_blank" rel="noreferrer noopener">
               <IconExternal width={16} height={16} /> Mở tại nguồn
             </a>
+            <button
+              className={`btn btn--ghost ${saved ? "is-saved" : ""}`}
+              type="button"
+              onClick={() => void savePaperToLibrary()}
+              disabled={saved || saving}
+              aria-pressed={saved}
+              title={saved ? "Đã có trong thư viện" : "Lưu vào thư viện"}
+            >
+              <IconBookmark width={16} height={16} />
+              {saving ? "Đang lưu…" : saved ? "Đã lưu" : "Lưu"}
+            </button>
             <button className="btn btn--ghost" type="button" onClick={() => void summarize()} disabled={aiLoading}>
               <IconSparkle width={16} height={16} />
               {aiLoading ? "Đang tóm tắt…" : "AI tóm tắt"}
             </button>
           </div>
+          {saveNotice && <p className="paper-detail__save-notice">{saveNotice}</p>}
         </div>
 
         <div className="paper-detail__layout">
@@ -270,12 +363,37 @@ export function PaperDetailPage({ paperId, source, theme, toggle }: Props) {
             </section>
 
             {aiSummary && (
-              <section className="paper-detail__ai">
-                <div>
-                  <IconSparkle width={18} height={18} />
-                  <h2>Tóm tắt bằng AI</h2>
+              <section className={`paper-detail__ai ${aiExpanded ? "is-expanded" : "is-collapsed"}`}>
+                <div className="paper-detail__ai-head">
+                  <div>
+                    <IconSparkle width={18} height={18} />
+                    <h2>Tóm tắt bằng AI</h2>
+                  </div>
+                  {aiSummary.length > 320 && (
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      type="button"
+                      onClick={() => setAiExpanded((value) => !value)}
+                    >
+                      {aiExpanded ? "Thu gọn" : "Xem đầy đủ"}
+                    </button>
+                  )}
                 </div>
-                <p>{aiSummary}</p>
+                {aiProvider === "fallback" && (
+                  <p className="paper-detail__ai-note">
+                    AI chưa phản hồi đầy đủ — đang hiển thị nội dung thay thế đầy đủ (không cắt giữa chừng).
+                  </p>
+                )}
+                <p className="paper-detail__ai-body">{aiSummary}</p>
+                {!aiExpanded && aiSummary.length > 320 && (
+                  <button
+                    className="paper-detail__ai-more"
+                    type="button"
+                    onClick={() => setAiExpanded(true)}
+                  >
+                    Xem toàn bộ tóm tắt
+                  </button>
+                )}
               </section>
             )}
 

@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, LayoutAnimation, UIManager, Platform } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { Text } from './Text';
 import { analyticsApi, aiApi } from '../lib/api';
 import { formatInt } from '../lib/format';
+
+
 
 const LIVE_SOURCES = ["OpenAlex", "Crossref", "arXiv"];
 
@@ -11,10 +13,11 @@ export function LiveGapPanel() {
   const { theme } = useTheme();
   
   const [topic, setTopic] = useState("federated learning medical imaging");
-  const [sources, setSources] = useState<string[]>(["OpenAlex"]);
+  const [sources, setSources] = useState<string[]>(["OpenAlex", "Crossref", "arXiv"]);
   const [yearFrom, setYearFrom] = useState("2021");
   const [yearTo, setYearTo] = useState("2026");
   const [maxRecords, setMaxRecords] = useState("20");
+  const [topK, setTopK] = useState("20");
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -22,12 +25,11 @@ export function LiveGapPanel() {
   const [error, setError] = useState("");
   
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState("");
 
-  const selectedItem = useMemo(() => {
-    return result?.gaps?.find((g: any) => g.id === selectedId) || result?.gaps?.[0] || null;
-  }, [result, selectedId]);
+  const toggleExpand = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSelectedId(prev => (prev === id ? null : id));
+  };
 
   const toggleSource = (src: string) => {
     setSources(prev => {
@@ -46,7 +48,7 @@ export function LiveGapPanel() {
     setLoading(true);
     setError("");
     setResult(null);
-    setAiSuggestion("");
+    setSelectedId(null);
     
     try {
       const data = await analyticsApi.liveGaps({
@@ -55,7 +57,7 @@ export function LiveGapPanel() {
         yearFrom: parseInt(yearFrom, 10),
         yearTo: parseInt(yearTo, 10),
         maxRecordsPerSource: parseInt(maxRecords, 10),
-        topK: 12
+        topK: parseInt(topK, 10) || 20
       });
       setResult(data);
       if (data.gaps?.length) {
@@ -80,37 +82,6 @@ export function LiveGapPanel() {
       Alert.alert("Lỗi", "Không lưu được phân tích.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const requestAiSuggestion = async () => {
-    if (!selectedItem) return;
-    setAiLoading(true);
-    setAiSuggestion("");
-    try {
-      const fakeGapItem = {
-        id: selectedItem.id,
-        fieldKey: selectedItem.id,
-        fieldLabel: selectedItem.field,
-        token: "--c1",
-        aspect: selectedItem.aspect,
-        fi: 0, ai: 0,
-        density: 1 - selectedItem.metrics.scarcityScore,
-        interest: selectedItem.metrics.adjacencyScore,
-        papers: selectedItem.metrics.directCount,
-        keywords: [selectedItem.field, selectedItem.aspect],
-        direction: selectedItem.reasons[0] || "",
-        trend: [],
-        score: selectedItem.gapScore / 100,
-        evidence: []
-      };
-      const res = await aiApi.suggestDirections({ field: `${selectedItem.field} / ${selectedItem.aspect}`, gaps: [fakeGapItem] });
-      const first = res.directions[0];
-      setAiSuggestion(first ? `${first.topic}: ${first.rationale}` : "AI chưa có gợi ý thêm.");
-    } catch (err) {
-      setAiSuggestion("Lỗi tải gợi ý AI.");
-    } finally {
-      setAiLoading(false);
     }
   };
 
@@ -156,13 +127,26 @@ export function LiveGapPanel() {
           </View>
         </View>
 
-        <Text variant="sm" weight="bold" style={{ marginBottom: 8, marginTop: 8 }}>Số bài mỗi nguồn</Text>
-        <TextInput 
-          style={[styles.input, { borderColor: theme.border, color: theme.ink }]} 
-          value={maxRecords}
-          onChangeText={setMaxRecords}
-          keyboardType="numeric"
-        />
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Text variant="sm" weight="bold" style={{ marginBottom: 8, marginTop: 8 }}>Số bài mỗi nguồn</Text>
+            <TextInput 
+              style={[styles.input, { borderColor: theme.border, color: theme.ink }]} 
+              value={maxRecords}
+              onChangeText={setMaxRecords}
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={styles.half}>
+            <Text variant="sm" weight="bold" style={{ marginBottom: 8, marginTop: 8 }}>Số gap hiển thị</Text>
+            <TextInput 
+              style={[styles.input, { borderColor: theme.border, color: theme.ink }]} 
+              value={topK}
+              onChangeText={setTopK}
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
 
         <Text variant="sm" weight="bold" style={{ marginBottom: 8, marginTop: 8 }}>Nguồn dữ liệu</Text>
         <View style={styles.chipsRow}>
@@ -214,103 +198,34 @@ export function LiveGapPanel() {
 
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text variant="body" weight="bold" style={{ marginBottom: 12 }}>Ứng viên gap (Live)</Text>
-            {result.gaps.map((g: any, idx: number) => (
-              <TouchableOpacity 
-                key={`${g.id}-${idx}`} 
-                style={[
-                  styles.rankItem, 
-                  { borderBottomColor: theme.border },
-                  selectedItem?.id === g.id && { backgroundColor: theme.surface2, borderRadius: 8, paddingHorizontal: 8, marginHorizontal: -8 }
-                ]}
-                onPress={() => setSelectedId(g.id)}
-              >
-                <Text variant="sm" weight="bold" style={{ width: 24 }}>{idx + 1}.</Text>
-                <View style={{ backgroundColor: theme.primary, width: 10, height: 10, borderRadius: 5, marginRight: 10 }} />
-                <View style={styles.rankContent}>
-                  <Text variant="sm" weight="bold">{g.field} · {g.aspect}</Text>
-                  <Text variant="xs" color="inkMuted">
-                    {levelLabel(g.level)} · Trực tiếp {g.metrics.directCount} bài
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ width: 48, height: 4, backgroundColor: theme.border, borderRadius: 2, marginRight: 8, overflow: 'hidden' }}>
-                    <View style={{ width: `${g.gapScore}%`, height: '100%', backgroundColor: theme.primary }} />
-                  </View>
-                  <Text variant="sm" weight="bold" color="primary" style={{ width: 24, textAlign: 'right' }}>{g.gapScore}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {selectedItem && (
-            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, marginTop: 16 }]}>
-              <View style={styles.gapHeader}>
-                <View>
-                  <Text variant="body" weight="bold">{selectedItem.field}</Text>
-                  <Text variant="sm" color="inkMuted">{selectedItem.aspect}</Text>
-                </View>
-                <Text variant="sm" weight="bold" color="primary">{levelLabel(selectedItem.level)} · {selectedItem.gapScore}</Text>
-              </View>
-              
-              <View style={styles.metricsRow}>
-                <View style={styles.metric}>
-                  <Text variant="heading" weight="bold">{selectedItem.metrics.directCount}</Text>
-                  <Text variant="xs" color="inkMuted">Trực tiếp</Text>
-                </View>
-                <View style={styles.metric}>
-                  <Text variant="heading" weight="bold">{Math.round(selectedItem.metrics.expectedCount)}</Text>
-                  <Text variant="xs" color="inkMuted">Kỳ vọng</Text>
-                </View>
-                <View style={styles.metric}>
-                  <Text variant="heading" weight="bold">{Math.round(selectedItem.metrics.growthRate * 100)}%</Text>
-                  <Text variant="xs" color="inkMuted">Tăng trưởng</Text>
-                </View>
-                <View style={styles.metric}>
-                  <Text variant="heading" color="primary" weight="bold">{selectedItem.gapScore}</Text>
-                  <Text variant="xs" color="inkMuted">Điểm gap</Text>
-                </View>
-              </View>
-
-              <View style={{ marginTop: 16 }}>
-                <Text variant="sm" weight="bold" style={{ marginBottom: 4 }}>Lý do</Text>
-                {selectedItem.reasons.map((r: string, idx: number) => (
-                  <Text key={idx} variant="sm" color="inkMuted" style={{ marginBottom: 4 }}>• {r}</Text>
-                ))}
-              </View>
-
-              <View style={{ marginTop: 16 }}>
-                <Text variant="sm" weight="bold" style={{ marginBottom: 4 }}>Paper bằng chứng ({selectedItem.evidence.length})</Text>
-                {selectedItem.evidence.slice(0, 3).map((p: any, idx: number) => (
-                  <Text key={idx} variant="xs" color="inkMuted" style={{ marginBottom: 4, lineHeight: 16 }}>
-                    • {p.title} ({p.year || "?"}) - {p.source}
-                  </Text>
-                ))}
-              </View>
-
-              <View style={{ marginTop: 16 }}>
-                <Text variant="sm" weight="bold" style={{ marginBottom: 4 }}>Gợi ý đề tài bằng AI</Text>
-                
+            {result.gaps.map((g: any, idx: number) => {
+              const isExpanded = selectedId === g.id;
+              return (
+              <View key={`${g.id}-${idx}`}>
                 <TouchableOpacity 
-                  style={[styles.btnOutline, { borderColor: theme.border, marginTop: 8 }]} 
-                  onPress={requestAiSuggestion}
-                  disabled={aiLoading}
+                  style={[
+                    styles.rankItem, 
+                    { borderBottomColor: theme.border },
+                    isExpanded && { backgroundColor: theme.surface2, borderRadius: 8, paddingHorizontal: 8, marginHorizontal: -8 }
+                  ]}
+                  onPress={() => toggleExpand(g.id)}
                 >
-                  {aiLoading ? (
-                    <ActivityIndicator size="small" color={theme.ink} />
-                  ) : (
-                    <Text variant="sm" weight="bold">AI Gợi ý thêm</Text>
-                  )}
-                </TouchableOpacity>
-                
-                {!!aiSuggestion && (
-                  <View style={[styles.aiSummary, { backgroundColor: theme.surface2, marginTop: 12 }]}>
-                    <Text variant="sm">{aiSuggestion}</Text>
+                  <Text variant="sm" color="inkMuted" style={{ width: 24 }}>{idx + 1}.</Text>
+                  <View style={styles.rankContent}>
+                    <Text variant="sm" weight="bold">{g.field} × {g.aspect}</Text>
+                    <Text variant="xs" color="inkMuted">
+                      {levelLabel(g.level)} · độ tin cậy {g.confidence || 'low'} · {g.metrics.directCount}/{Math.round(g.metrics.expectedCount)} bài
+                    </Text>
                   </View>
+                  <Text variant="sm" weight="bold">{g.gapScore}</Text>
+                </TouchableOpacity>
+
+                {isExpanded && (
+                  <LiveGapDetail item={g} theme={theme} levelLabel={levelLabel} />
                 )}
               </View>
-
-            </View>
-          )}
+            )})}
+          </View>
 
           {!!result.sourceErrors?.length && (
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border, marginTop: 16 }]}>
@@ -325,6 +240,105 @@ export function LiveGapPanel() {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+function LiveGapDetail({ item, theme, levelLabel }: { item: any, theme: any, levelLabel: any }) {
+  const [aiText, setAiText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const requestAiSuggestion = async () => {
+    setAiLoading(true);
+    setAiError("");
+    setAiText("");
+    try {
+      const fakeGapItem = {
+        id: item.id,
+        fieldKey: item.id,
+        fieldLabel: item.field,
+        token: "--c1",
+        aspect: item.aspect,
+        fi: 0, ai: 0,
+        density: 1 - item.metrics.scarcityScore,
+        interest: item.metrics.adjacencyScore,
+        papers: item.metrics.directCount,
+        keywords: [item.field, item.aspect],
+        direction: item.reasons[0] || "",
+        trend: [],
+        score: item.gapScore / 100,
+        evidence: []
+      };
+      const res = await aiApi.suggestDirections({ field: `${item.field} / ${item.aspect}`, gaps: [fakeGapItem] });
+      const first = res.directions[0];
+      setAiText(first ? `${first.topic}: ${first.rationale}` : "AI chưa có gợi ý thêm.");
+    } catch (err) {
+      setAiError("Lỗi tải gợi ý AI.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  return (
+    <View style={[styles.detailContainer, { backgroundColor: theme.surface2 }]}>
+      <View style={styles.metricsRow}>
+        <View style={[styles.metric, { backgroundColor: theme.surface }]}>
+          <Text variant="heading" weight="bold">{item.metrics.directCount}</Text>
+          <Text variant="xs" color="inkMuted">Trực tiếp</Text>
+        </View>
+        <View style={[styles.metric, { backgroundColor: theme.surface }]}>
+          <Text variant="heading" weight="bold">{Math.round(item.metrics.expectedCount)}</Text>
+          <Text variant="xs" color="inkMuted">Kỳ vọng</Text>
+        </View>
+        <View style={[styles.metric, { backgroundColor: theme.surface }]}>
+          <Text variant="heading" weight="bold">{Math.round(item.metrics.growthRate * 100)}%</Text>
+          <Text variant="xs" color="inkMuted">Tăng trưởng</Text>
+        </View>
+        <View style={[styles.metric, { backgroundColor: theme.surface }]}>
+          <Text variant="heading" color="primary" weight="bold">{item.gapScore}</Text>
+          <Text variant="xs" color="inkMuted">Điểm gap</Text>
+        </View>
+      </View>
+
+      <View style={{ marginTop: 16 }}>
+        <Text variant="sm" weight="bold" style={{ marginBottom: 4 }}>Lý do</Text>
+        {item.reasons.map((r: string, idx: number) => (
+          <Text key={idx} variant="sm" color="inkMuted" style={{ marginBottom: 4 }}>• {r}</Text>
+        ))}
+      </View>
+
+      <View style={{ marginTop: 16 }}>
+        <Text variant="sm" weight="bold" style={{ marginBottom: 4 }}>Paper bằng chứng ({item.evidence.length})</Text>
+        {item.evidence.slice(0, 3).map((p: any, idx: number) => (
+          <Text key={idx} variant="xs" color="inkMuted" style={{ marginBottom: 4, lineHeight: 16 }}>
+            • {p.title} ({p.year || "?"}) - {p.source}
+          </Text>
+        ))}
+      </View>
+
+      <View style={{ marginTop: 16 }}>
+        <Text variant="sm" weight="bold" style={{ marginBottom: 4 }}>Gợi ý đề tài bằng AI</Text>
+        
+        <TouchableOpacity 
+          style={[styles.btnOutline, { borderColor: theme.border, marginTop: 8 }]} 
+          onPress={requestAiSuggestion}
+          disabled={aiLoading}
+        >
+          {aiLoading ? (
+            <ActivityIndicator size="small" color={theme.ink} />
+          ) : (
+            <Text variant="sm" weight="bold" style={{ color: theme.primary }}>✨ AI Gợi ý thêm</Text>
+          )}
+        </TouchableOpacity>
+        
+        {!!aiError && <Text variant="sm" color="danger" style={{ marginTop: 8 }}>{aiError}</Text>}
+        {!!aiText && (
+          <View style={[styles.aiSummary, { backgroundColor: theme.surface, marginTop: 12, borderColor: theme.border, borderWidth: 1 }]}>
+            <Text variant="sm">{aiText}</Text>
+          </View>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -357,7 +371,15 @@ const styles = StyleSheet.create({
   rankItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
   rankContent: { flex: 1 },
   gapHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  metricsRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
-  metric: { alignItems: 'center', width: '25%' },
+  metricsRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
+  metric: { flex: 1, alignItems: 'center', padding: 8, borderRadius: 8, minWidth: '22%' },
   aiSummary: { padding: 12, borderRadius: 8, marginBottom: 4 },
+  detailContainer: { 
+    padding: 16, 
+    borderBottomLeftRadius: 8, 
+    borderBottomRightRadius: 8, 
+    marginHorizontal: -8, 
+    marginTop: -8, 
+    marginBottom: 8 
+  },
 });

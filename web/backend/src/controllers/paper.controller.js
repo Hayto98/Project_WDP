@@ -8,10 +8,11 @@ const { importCrossrefByQuery } = require('../services/crossref.service');
 const { importExaByQuery } = require('../services/exa.service');
 const { importSemanticScholarByQuery } = require('../services/semanticScholar.service');
 const { importAcmByQuery } = require('../services/acm.service');
+const { importIEEEByQuery } = require('../services/ieee.service');
 const { logAction } = require('../utils/systemLogger');
 const { notifyJobComplete } = require('../services/notification.service');
 
-const IMMEDIATE_SYNC_SOURCES = ['OpenAlex', 'Semantic Scholar', 'arXiv', 'Crossref', 'ACM Digital Library', 'Exa'];
+const IMMEDIATE_SYNC_SOURCES = ['OpenAlex', 'Semantic Scholar', 'arXiv', 'Crossref', 'IEEE Xplore', 'ACM Digital Library', 'Exa'];
 
 const SOURCE_ENDPOINTS = {
   OpenAlex: 'https://api.openalex.org',
@@ -86,6 +87,31 @@ async function getTrending(req, res) {
   }
 }
 
+async function listSources(_req, res) {
+  try {
+    const rows = await DataSource.find()
+      .select('name enabled last_error last_sync_status')
+      .sort({ name: 1 })
+      .lean();
+    const payload = rows.map((row) => {
+      const enabled = row.enabled !== false;
+      return {
+        name: row.name,
+        enabled,
+        status: enabled
+          ? (row.last_sync_status === 'Failed' ? 'degraded' : 'active')
+          : 'paused',
+        message: enabled
+          ? null
+          : `Nguồn ${row.name} đang tạm dừng bởi quản trị viên. Không thể tải thêm bài báo từ nguồn này.`,
+      };
+    });
+    return ApiResponse.success(res, payload);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, 500);
+  }
+}
+
 async function requestCorpusSync(req, res) {
   try {
     const { query, sourceName = 'OpenAlex', maxRecords = 25 } = req.body;
@@ -96,6 +122,13 @@ async function requestCorpusSync(req, res) {
     };
 
     const source = await DataSource.findOne({ name: sourceName }).lean();
+    if (source && source.enabled === false) {
+      return ApiResponse.error(
+        res,
+        `Nguồn ${sourceName} đang tạm dừng bởi quản trị viên. Vui lòng chọn nguồn khác hoặc liên hệ admin để bật lại.`,
+        403,
+      );
+    }
     const existing = await CrawlerJob.findOne({
       source_name: sourceName,
       query,
@@ -120,9 +153,27 @@ async function requestCorpusSync(req, res) {
       source_name: sourceName,
       query,
       status: { $in: ['success', 'warning'] },
-    }).select('max_records').lean();
-    const previousFetched = previousJobs.reduce((sum, job) => sum + (job.max_records || maxRecords), 0);
-    const syncPage = Math.floor(previousFetched / maxRecords) + 1;
+    }).select('max_records result').lean();
+
+    // Count what was actually retrieved — never assume max_records were returned.
+    // Otherwise a 4-hit OpenAlex query still advances to page 2/3 and looks empty
+    // even though openalex.org shows the paper.
+    let previousFetched = 0;
+    let sourceExhausted = false;
+    for (const job of previousJobs) {
+      const imported = Number(job.result?.imported || 0);
+      const skipped = Number(job.result?.skipped || 0);
+      const got = imported + skipped;
+      const sourceTotal = Number(job.result?.source_total);
+      const requested = job.max_records || maxRecords;
+      if (got > 0) previousFetched += got;
+      else if (Number.isFinite(sourceTotal) && sourceTotal >= 0) previousFetched += Math.min(sourceTotal, requested);
+      if (Number.isFinite(sourceTotal) && sourceTotal <= requested) sourceExhausted = true;
+      if (got > 0 && got < requested) sourceExhausted = true;
+    }
+    // If prior syncs already covered the full source result set, refresh page 1
+    // (duplicates will be skipped) instead of requesting an empty next page.
+    const syncPage = sourceExhausted ? 1 : Math.floor(previousFetched / maxRecords) + 1;
     const now = new Date();
     const job = await CrawlerJob.create({
       name: `${sourceName} sync: ${query}`,
@@ -146,6 +197,8 @@ async function requestCorpusSync(req, res) {
           result = await importCrossrefByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         } else if (sourceName === 'Semantic Scholar') {
           result = await importSemanticScholarByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
+        } else if (sourceName === 'IEEE Xplore') {
+          result = await importIEEEByQuery(query, maxRecords);
         } else if (sourceName === 'ACM Digital Library') {
           result = await importAcmByQuery(query, maxRecords, { ...syncFilters, page: syncPage });
         } else if (sourceName === 'Exa') {
@@ -163,6 +216,9 @@ async function requestCorpusSync(req, res) {
           imported: result.imported,
           skipped: result.skipped,
           source_total: result.sourceTotal,
+          imported_papers: Array.isArray(result.importedPapers)
+            ? result.importedPapers.slice(0, 10)
+            : [],
         };
         await job.save();
         logAction('BatchJob', req.user?.id || null, sourceName, {
@@ -203,5 +259,6 @@ module.exports = {
   startReadingSession,
   updateReadingSession,
   getTrending,
+  listSources,
   requestCorpusSync,
 };

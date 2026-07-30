@@ -61,6 +61,7 @@ export function GapPage({ theme, toggle }: Props) {
     return values.length ? values : USE_SAMPLE_FALLBACK && !loadError ? GAP_ASPECTS : [];
   }, [allItems, loadError, mode]);
   const [threshold, setThreshold] = useState(0.35);
+  const [interestThreshold, setInterestThreshold] = useState(0.55);
   const [fields, setFields] = useState<Set<string>>(
     () => new Set(USE_SAMPLE_FALLBACK ? GAP_FIELDS.map((f) => f.key) : []),
   );
@@ -77,6 +78,7 @@ export function GapPage({ theme, toggle }: Props) {
       setRemoteItems(result.items);
       setHasReport(result.hasReport);
       setGeneratedAt(result.generatedAt);
+      setInterestThreshold(result.thresholds.interest);
       setCorpusAi(result.ai);
       setFields(new Set(result.items.map((item) => item.fieldKey)));
       setAspects(new Set(result.items.map((item) => item.aspect)));
@@ -307,8 +309,8 @@ export function GapPage({ theme, toggle }: Props) {
       <div className="gap-top">
         <Widget
           className="gw-map"
-          title="Bản đồ khoảng trống"
-          subtitle="Mật độ công bố theo Lĩnh vực × Khía cạnh · chọn ô để xem chi tiết"
+          title="Bản đồ cơ hội nghiên cứu"
+          subtitle="Trạng thái theo Lĩnh vực × Khía cạnh · ưu tiên các ô “Cơ hội”"
           icon={<IconGrid />}
           status={status}
           onRetry={() => void loadGaps()}
@@ -321,6 +323,7 @@ export function GapPage({ theme, toggle }: Props) {
             fields={shownFields}
             aspects={shownAspects}
             densityThreshold={threshold}
+            interestThreshold={interestThreshold}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />

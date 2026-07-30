@@ -127,10 +127,45 @@ async function sendInviteEmail({ to, inviteeName, workspaceName, senderName, top
   });
 }
 
+async function sendPasswordResetEmail(user, resetUrl) {
+  if (!user?.email) return { sent: false, skipped: true, reason: 'NO_RECIPIENT' };
+
+  const name = user.full_name || 'bạn';
+  const text = [
+    `Chào ${name},`,
+    '',
+    'Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản ResearchTrends của bạn.',
+    'Nhấn vào liên kết bên dưới để tạo mật khẩu mới (liên kết hết hạn sau 1 giờ):',
+    '',
+    resetUrl,
+    '',
+    'Nếu bạn không yêu cầu thao tác này, hãy bỏ qua email. Mật khẩu hiện tại vẫn được giữ nguyên.',
+    '',
+    'Trân trọng,',
+    'ResearchTrends Team',
+  ].join('\n');
+
+  const html = `
+    <p>Chào ${name},</p>
+    <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản ResearchTrends của bạn.</p>
+    <p><a href="${resetUrl}">Đặt lại mật khẩu</a> (liên kết hết hạn sau 1 giờ)</p>
+    <p>Nếu bạn không yêu cầu thao tác này, hãy bỏ qua email. Mật khẩu hiện tại vẫn được giữ nguyên.</p>
+    <p>Trân trọng,<br/>ResearchTrends Team</p>
+  `.trim();
+
+  return sendMail({
+    to: user.email,
+    subject: '[ResearchTrends] Đặt lại mật khẩu',
+    text,
+    html,
+  });
+}
+
 module.exports = {
   isConfigured,
   sendMail,
   sendFollowPaperEmail,
   sendFollowDigestEmail,
   sendInviteEmail,
+  sendPasswordResetEmail,
 };

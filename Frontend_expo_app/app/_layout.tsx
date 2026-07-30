@@ -3,6 +3,9 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
+
+LogBox.ignoreLogs(['setLayoutAnimationEnabledExperimental is currently a no-op']);
 
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';

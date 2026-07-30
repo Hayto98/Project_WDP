@@ -47,6 +47,24 @@ async function changePassword(req, res) {
   }
 }
 
+async function forgotPassword(req, res) {
+  try {
+    const result = await authService.forgotPassword(req.body);
+    return ApiResponse.success(res, result);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500, err.code);
+  }
+}
+
+async function resetPassword(req, res) {
+  try {
+    const result = await authService.resetPassword(req.body);
+    return ApiResponse.success(res, result);
+  } catch (err) {
+    return ApiResponse.error(res, err.message, err.statusCode || 500, err.code);
+  }
+}
+
 async function getMe(req, res) {
   try {
     const user = await authService.getProfile(req.user.id);
@@ -80,6 +98,8 @@ module.exports = {
   refresh,
   logout,
   changePassword,
+  forgotPassword,
+  resetPassword,
   getMe,
   updateProfile,
   updateDashboardLayout,

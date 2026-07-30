@@ -1,6 +1,8 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const { sources: sourceConfig } = require('../config/env');
+const { getEffectiveAuth } = require('./sourceCredentials.service');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
-const { cleanText, normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
+const { cleanText, expandSearchQuery, normalizeTitle, upsertCleanPaper, toImportedPaperSummary } = require('./paperCleaning.service');
 
 function clampMaxRecords(value) {
   const parsed = parseInt(value, 10) || 25;
@@ -101,15 +103,17 @@ function buildFilters(options = {}) {
 async function fetchCrossrefWorks(query, maxRecords = 25, options = {}) {
   const rows = clampMaxRecords(maxRecords);
   const page = Math.max(1, parseInt(options.page, 10) || 1);
-  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
-  const url = new URL('https://api.crossref.org/works');
+  // Crossref returns 0 for camelCase like "HarnessEngineering"; spaced form matches.
+  const searchQuery = expandSearchQuery(query);
+  const auth = await getEffectiveAuth('Crossref');
+  const url = new URL(`${String(auth.endpoint || 'https://api.crossref.org').replace(/\/$/, '')}/works`);
   // Prefer bibliographic phrase match so multi-word queries stay cohesive.
-  url.searchParams.set('query.bibliographic', cleaned);
+  url.searchParams.set('query.bibliographic', searchQuery);
   url.searchParams.set('rows', String(rows));
   url.searchParams.set('offset', String((page - 1) * rows));
   const filter = buildFilters(options);
   if (filter) url.searchParams.set('filter', filter);
-  if (sourceConfig.crossrefMailto) url.searchParams.set('mailto', sourceConfig.crossrefMailto);
+  if (auth.mailto) url.searchParams.set('mailto', auth.mailto);
 
   const res = await fetch(url);
   const text = await res.text();
@@ -136,6 +140,7 @@ async function importCrossrefByQuery(query, maxRecords = 25, options = {}) {
   const { total, items } = await fetchCrossrefWorks(query, maxRecords, options);
   let imported = 0;
   let skipped = 0;
+  const importedPapers = [];
 
   for (const item of items) {
     const paper = mapItemToPaper(item);
@@ -148,7 +153,11 @@ async function importCrossrefByQuery(query, maxRecords = 25, options = {}) {
     }
 
     const outcome = await upsertCleanPaper(paper);
-    if (outcome.imported) imported += 1;
+    if (outcome.imported) {
+      imported += 1;
+      const summary = toImportedPaperSummary(outcome);
+      if (summary) importedPapers.push(summary);
+    }
     if (outcome.skipped) skipped += 1;
   }
 
@@ -156,6 +165,7 @@ async function importCrossrefByQuery(query, maxRecords = 25, options = {}) {
     imported,
     skipped,
     sourceTotal: total,
+    importedPapers,
   };
 }
 

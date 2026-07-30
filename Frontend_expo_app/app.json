@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "Frontend_expo_app",
-    "slug": "Frontend_expo_app",
+    "name": "Scientific Journal",
+    "slug": "scientific-journal",
+    "owner": "phongtran123",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -44,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "607a466c-9515-4559-8f09-cc68c1bae68e"
+      },
+      "router": {}
     }
   }
 }

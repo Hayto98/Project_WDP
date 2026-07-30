@@ -34,6 +34,8 @@ export interface GapCell {
   field: string;
   aspect: string;
   density: number; // publication density 0..1 (normalized)
+  interest?: number; // recent publications + citation signal 0..1
+  score?: number; // interest * (1 - density)
   papers: number;
   gap: boolean; // high potential, low density
 }

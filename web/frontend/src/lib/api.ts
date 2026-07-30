@@ -1,4 +1,12 @@
 import type { PaperResult } from "../data/searchSample";
+
+// Minimal typing shim for socket.io-client usage in the app.
+declare module "socket.io-client" {
+  export interface Socket {
+    id: string | undefined;
+  }
+  export function io(_url?: string, _opts?: unknown): Socket;
+}
 import type { AiInsight, AxisOption, DashboardData, GapCell, TrendPoint, TrendSeries } from "../data/types";
 import type {
   CoocEdge,
@@ -128,7 +136,14 @@ async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   });
   const payload = (await res.json()) as ApiEnvelope<T>;
   if (!res.ok || !payload.success) {
-    if (res.status === 401 && !init._isRetry && path !== "/auth/refresh" && path !== "/auth/login") {
+    if (
+      res.status === 401 &&
+      !init._isRetry &&
+      path !== "/auth/refresh" &&
+      path !== "/auth/login" &&
+      path !== "/auth/forgot-password" &&
+      path !== "/auth/reset-password"
+    ) {
       const nextToken = await refreshAuthTokens().catch(() => null);
       if (nextToken) {
         return request<T>(path, { ...init, _isRetry: true });
@@ -244,6 +259,18 @@ function mapAdminJob(job: any): AdminJob {
 }
 
 function mapDataSource(source: any): DataSource {
+  const credentials = source.credentials
+    ? {
+        authMode: source.credentials.authMode ?? "none",
+        hasApiKey: Boolean(source.credentials.hasApiKey),
+        apiKeyMasked: source.credentials.apiKeyMasked ?? null,
+        keySource: source.credentials.keySource ?? "none",
+        mailto: source.credentials.mailto ?? null,
+        lastTestedAt: source.credentials.lastTestedAt ?? null,
+        lastTestOk: source.credentials.lastTestOk ?? null,
+        lastTestMessage: source.credentials.lastTestMessage ?? null,
+      }
+    : undefined;
   return {
     id: asId(source._id),
     name: source.name,
@@ -254,6 +281,7 @@ function mapDataSource(source: any): DataSource {
     errorRate: source.error_rate ?? "0%",
     enabled: Boolean(source.enabled),
     errorMessage: source.last_error ?? "",
+    credentials,
   };
 }
 
@@ -386,6 +414,18 @@ export const authApi = {
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   },
+  async forgotPassword(email: string) {
+    return request<{ message?: string; resetUrl?: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+  async resetPassword(token: string, newPassword: string) {
+    return request<{ message?: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
+    });
+  },
 };
 
 export const userApi = {
@@ -483,11 +523,24 @@ export const paperApi = {
   } = {}) {
     return request<{
       records_processed?: number;
-      result?: { imported?: number; skipped?: number; source_total?: number };
+      result?: {
+        imported?: number;
+        skipped?: number;
+        source_total?: number;
+        imported_papers?: Array<{ id: string; title: string; year?: number | null; source?: string | null }>;
+      };
     }>("/papers/sync-request", {
       method: "POST",
       body: JSON.stringify({ query, sourceName, maxRecords, ...filters }),
     });
+  },
+  listSources() {
+    return request<Array<{
+      name: string;
+      enabled: boolean;
+      status: "active" | "degraded" | "paused";
+      message: string | null;
+    }>>("/papers/sources");
   },
 };
 
@@ -555,18 +608,21 @@ function normalizeTrendSeries(values: unknown): TrendSeries[] {
 function normalizeGapCells(values: unknown): GapCell[] {
   if (!Array.isArray(values)) return [];
   return values
-    .map((value) => {
+    .map((value): GapCell | null => {
       if (!value || typeof value !== "object") return null;
       const raw = value as Record<string, unknown>;
       const field = axisLabel(raw.field);
       const aspect = axisLabel(raw.aspect);
       if (!field || !aspect) return null;
       const density = clamp01(numberValue(raw.density ?? raw.d));
+      const interest = clamp01(numberValue(raw.interest ?? raw.i));
       const papers = Math.max(0, Math.round(numberValue(raw.papers ?? raw.p)));
       return {
         field,
         aspect,
         density,
+        interest,
+        score: clamp01(numberValue(raw.score ?? interest * (1 - density))),
         papers,
         gap: Boolean(raw.gap),
       };
@@ -708,6 +764,7 @@ export const analyticsApi = {
     hasReport: boolean;
     generatedAt: string | null;
     gapCount: number;
+    thresholds: { density: number; interest: number };
     ai: { summary: string; directions: { topic: string; rationale: string }[]; evidence: { label: string; papers: number }[] };
   }> {
     const data = await request<{
@@ -717,6 +774,7 @@ export const analyticsApi = {
       hasReport?: boolean;
       generatedAt?: string | null;
       gapCount?: number;
+      thresholds?: { density?: number; interest?: number };
       ai?: {
         summary?: string;
         directions?: { topic?: string; rationale?: string }[];
@@ -731,6 +789,10 @@ export const analyticsApi = {
         hasReport,
         generatedAt: data.generatedAt ? String(data.generatedAt) : null,
         gapCount: Number(data.gapCount ?? 0),
+        thresholds: {
+          density: Number(data.thresholds?.density ?? threshold),
+          interest: Number(data.thresholds?.interest ?? 0.55),
+        },
         ai: {
           summary: data.ai?.summary ?? "",
           directions: (data.ai?.directions ?? []).map((row) => ({
@@ -795,6 +857,10 @@ export const analyticsApi = {
       hasReport,
       generatedAt: data.generatedAt ? String(data.generatedAt) : null,
       gapCount: Number(data.gapCount ?? items.length),
+      thresholds: {
+        density: Number(data.thresholds?.density ?? threshold),
+        interest: Number(data.thresholds?.interest ?? 0.55),
+      },
       ai: {
         summary: data.ai?.summary ?? "",
         directions: (data.ai?.directions ?? []).map((row) => ({
@@ -995,6 +1061,30 @@ export const adminApi = {
       body: JSON.stringify(patch),
     });
     return mapDataSource(source);
+  },
+  async updateDataSourceCredentials(id: string, patch: { apiKey?: string; mailto?: string }): Promise<DataSource> {
+    const source = await request<any>(`/admin/data-sources/${id}/credentials`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+    return mapDataSource(source);
+  },
+  async clearDataSourceCredentials(id: string): Promise<DataSource> {
+    const source = await request<any>(`/admin/data-sources/${id}/credentials`, {
+      method: "DELETE",
+    });
+    return mapDataSource(source);
+  },
+  async testDataSource(id: string, patch: { apiKey?: string; mailto?: string } = {}) {
+    return request<{
+      ok: boolean;
+      message: string;
+      latencyMs: number;
+      source: any;
+    }>(`/admin/data-sources/${id}/test`, {
+      method: "POST",
+      body: JSON.stringify(patch),
+    });
   },
   async checkDataSources() {
     await request("/admin/data-sources/check", { method: "POST" });

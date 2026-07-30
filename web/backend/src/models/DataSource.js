@@ -1,6 +1,20 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
+const credentialsSchema = new Schema(
+  {
+    api_key_encrypted: { type: String, default: null },
+    api_key_last4: { type: String, default: null },
+    mailto: { type: String, default: null, trim: true },
+    last_tested_at: { type: Date, default: null },
+    last_test_ok: { type: Boolean, default: null },
+    last_test_message: { type: String, default: null },
+    updated_at: { type: Date, default: null },
+    updated_by: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  },
+  { _id: false },
+);
+
 const dataSourceSchema = new Schema(
   {
     name: {
@@ -24,6 +38,7 @@ const dataSourceSchema = new Schema(
     coverage: { type: String, default: '0%' },
     latency: { type: String, default: '—' },
     error_rate: { type: String, default: '0%' },
+    credentials: { type: credentialsSchema, default: () => ({}) },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

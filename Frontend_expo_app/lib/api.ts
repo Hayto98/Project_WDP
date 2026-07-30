@@ -261,7 +261,7 @@ export interface NotificationItem {
 
 
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.41:5000/api/v1";
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://betrendtracking-production.up.railway.app/api/v1";
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -758,18 +758,21 @@ function normalizeTrendSeries(values: unknown): TrendSeries[] {
 function normalizeGapCells(values: unknown): GapCell[] {
   if (!Array.isArray(values)) return [];
   return values
-    .map((value) => {
+    .map((value): GapCell | null => {
       if (!value || typeof value !== "object") return null;
       const raw = value as Record<string, unknown>;
       const field = axisLabel(raw.field);
       const aspect = axisLabel(raw.aspect);
       if (!field || !aspect) return null;
       const density = clamp01(numberValue(raw.density ?? raw.d));
+      const interest = clamp01(numberValue(raw.interest ?? raw.i));
       const papers = Math.max(0, Math.round(numberValue(raw.papers ?? raw.p)));
       return {
         field,
         aspect,
         density,
+        interest,
+        score: clamp01(numberValue(raw.score ?? interest * (1 - density))),
         papers,
         gap: Boolean(raw.gap),
       };
@@ -843,7 +846,7 @@ function withTrendTokens(series: TrendSeries[]) {
   const tokens = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6"];
   return series.map((item, index) => ({
     ...item,
-    token: item.token ?? tokens[index % tokens.length],
+    token: item.token || tokens[index % tokens.length],
   }));
 }
 

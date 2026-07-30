@@ -1,6 +1,8 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const { sources: sourceConfig } = require('../config/env');
+const { getEffectiveAuth } = require('./sourceCredentials.service');
 const { findOriginalAbstractWithLlm } = require('./abstract.service');
-const { normalizeDoi, normalizeTitle, upsertCleanPaper } = require('./paperCleaning.service');
+const { normalizeDoi, normalizeTitle, upsertCleanPaper, toImportedPaperSummary } = require('./paperCleaning.service');
 
 
 function clampMaxRecords(value) {
@@ -88,14 +90,20 @@ function buildOpenAlexFilters(options = {}) {
 
 async function fetchOpenAlexWorks(query, maxRecords = 25, options = {}) {
   const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
+  // Do not force-quote camelCase tokens like "HarnessEngineering" — OpenAlex
+  // ranks those correctly as-is. Only quote genuine multi-word phrases.
   const searchQuery = /\s/.test(cleaned) ? `"${cleaned}"` : cleaned;
-  const url = new URL('/works', sourceConfig.openAlexApiUrl);
+  const auth = await getEffectiveAuth('OpenAlex');
+  const url = new URL('/works', auth.endpoint || sourceConfig.openAlexApiUrl);
   url.searchParams.set('search', searchQuery);
   url.searchParams.set('per-page', String(clampMaxRecords(maxRecords)));
-  if (options.page) url.searchParams.set('page', String(Math.max(1, parseInt(options.page, 10) || 1)));
+  if (options.page) {
+    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    url.searchParams.set('page', String(page));
+  }
   const filter = buildOpenAlexFilters(options);
   if (filter) url.searchParams.set('filter', filter);
-  if (sourceConfig.openAlexMailto) url.searchParams.set('mailto', sourceConfig.openAlexMailto);
+  if (auth.mailto) url.searchParams.set('mailto', auth.mailto);
 
   const res = await fetch(url);
   const text = await res.text();
@@ -122,6 +130,7 @@ async function importOpenAlexByQuery(query, maxRecords = 25, options = {}) {
   const { total, works } = await fetchOpenAlexWorks(query, maxRecords, options);
   let imported = 0;
   let skipped = 0;
+  const importedPapers = [];
 
   for (const work of works) {
     const paper = mapWorkToPaper(work);
@@ -134,7 +143,11 @@ async function importOpenAlexByQuery(query, maxRecords = 25, options = {}) {
     }
 
     const outcome = await upsertCleanPaper(paper);
-    if (outcome.imported) imported += 1;
+    if (outcome.imported) {
+      imported += 1;
+      const summary = toImportedPaperSummary(outcome);
+      if (summary) importedPapers.push(summary);
+    }
     if (outcome.skipped) skipped += 1;
   }
 
@@ -142,6 +155,7 @@ async function importOpenAlexByQuery(query, maxRecords = 25, options = {}) {
     imported,
     skipped,
     sourceTotal: total,
+    importedPapers,
   };
 }
 

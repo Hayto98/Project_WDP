@@ -1,10 +1,14 @@
+const { loggedFetch: fetch } = require('../utils/loggedFetch');
 const { sources: sourceConfig } = require('../config/env');
+const { getEffectiveAuth } = require('./sourceCredentials.service');
 const {
   cleanText,
+  expandSearchQuery,
   normalizeDoi,
   normalizeTitle,
   uniqueStrings,
   upsertCleanPaper,
+  toImportedPaperSummary,
 } = require('./paperCleaning.service');
 
 function clampMaxRecords(value) {
@@ -59,7 +63,7 @@ function mapSemanticPaperToPaper(paper) {
 }
 
 function buildSearchQuery(query, options = {}) {
-  const cleaned = String(query || '').trim().replace(/^"+|"+$/g, '').trim();
+  const cleaned = expandSearchQuery(query);
   const phrase = /\s/.test(cleaned) ? `"${cleaned}"` : cleaned;
   const yearFrom = parseInt(options.yearFrom, 10);
   const yearTo = parseInt(options.yearTo, 10);
@@ -88,7 +92,8 @@ async function fetchSemanticScholarPapers(query, maxRecords = 25, options = {}) 
   ].join(','));
 
   const headers = {};
-  if (sourceConfig.semanticScholarApiKey) headers['x-api-key'] = sourceConfig.semanticScholarApiKey;
+  const auth = await getEffectiveAuth('Semantic Scholar');
+  if (auth.apiKey) headers['x-api-key'] = auth.apiKey;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), sourceConfig.externalApiTimeoutMs || 30000);
@@ -127,15 +132,20 @@ async function importSemanticScholarByQuery(query, maxRecords = 25, options = {}
   const { total, papers } = await fetchSemanticScholarPapers(query, maxRecords, options);
   let imported = 0;
   let skipped = 0;
+  const importedPapers = [];
 
   for (const item of papers) {
     const paper = mapSemanticPaperToPaper(item);
     const outcome = await upsertCleanPaper(paper);
-    if (outcome.imported) imported += 1;
+    if (outcome.imported) {
+      imported += 1;
+      const summary = toImportedPaperSummary(outcome);
+      if (summary) importedPapers.push(summary);
+    }
     if (outcome.skipped) skipped += 1;
   }
 
-  return { imported, skipped, sourceTotal: total };
+  return { imported, skipped, sourceTotal: total, importedPapers };
 }
 
 module.exports = {

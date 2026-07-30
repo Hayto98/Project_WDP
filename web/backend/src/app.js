@@ -5,7 +5,15 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const connectDB = require('./config/database');
-const { port, corsOrigin, nodeEnv, redisEnabled } = require('./config/env');
+const {
+  port,
+  corsOrigin,
+  frontendUrl,
+  productionFrontendUrl,
+  nodeEnv,
+  redisEnabled,
+  trustProxyHops,
+} = require('./config/env');
 const { apiLimiter } = require('./middleware/rateLimiter.middleware');
 const { logAction } = require('./utils/systemLogger');
 const swaggerUi = require('swagger-ui-express');
@@ -30,20 +38,40 @@ const { startScheduler } = require('./services/scheduler.service');
 
 const app = express();
 
+if (trustProxyHops > 0) {
+  app.set('trust proxy', trustProxyHops);
+}
+
 /* ── Global Middleware ── */
 app.use(helmet());
 
-const allowedOrigins = corsOrigin.split(',').map(o => o.trim());
-app.use(cors({
+const allowedOrigins = [...new Set(
+  [corsOrigin, frontendUrl, productionFrontendUrl]
+    .flatMap(value => value.split(','))
+    .map(origin => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+)];
+const corsOptions = {
   origin: function(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    const normalizedOrigin = origin?.replace(/\/$/, '');
+    if (!origin || allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
+      console.warn(`CORS rejected origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
-}));
+  credentials: true,
+};
+app.use(cors(corsOptions));
+// Avoid using app.options('*', ...) which can break on some path-to-regexp versions.
+// Use a lightweight middleware to handle preflight requests safely.
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return cors(corsOptions)(req, res, next);
+  }
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (nodeEnv !== 'test') {
